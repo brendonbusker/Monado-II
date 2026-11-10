@@ -3515,6 +3515,10 @@
       "sha256": "d6e2f1e3aeec7acb6570c07cd5edd2a3b436b8139222efca9b1c96917ed45970",
       "bytes": 8753
     },
+    "docs/WINDOWS_PORT_HANDOFF.md": {
+      "sha256": "fa96fa625fdea5336ea036633e12fe528ab60470b2d70aecddeca7f17a95edee",
+      "bytes": 18213
+    },
     "publication-policy.json": {
       "sha256": "8f08c5c695dd1a771a6359d59697019813e29754a2af567ad52e0b79414df6ff",
       "bytes": 792
