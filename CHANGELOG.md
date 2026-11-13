@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.18 — November 13, 2026
+
+- Fix Linux updates that fail during `package-appimage` with
+  `source already contains generated release-only files`, after the game and
+  native launcher have already compiled successfully. This affects full
+  AppImage packaging from a downloaded source kit, including long-standing
+  installations migrated to the persistent private Python environment.
+- Verify the source kit and its generated distribution metadata before creating
+  a normalized temporary source export for packaging. Keep the strict
+  clean-source packaging checks; installed source, input, saves and settings
+  are not rewritten as part of that normalization.
+- Fresh graphical setup uses a separate initial-build path and did not exercise
+  the failing update packaging step. No game feature or native save format
+  changes are included. Windows remains the unchanged original implementation.
+
 ## 0.1.17 — November 13, 2026
 
 - Add a graphical Linux builder AppImage. Select your own extracted DE 2.0.0

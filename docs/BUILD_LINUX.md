@@ -1,6 +1,6 @@
 # Build and play on Linux
 
-The recommended download is **`monado-ii-0.1.17-linux-builder-x86_64.AppImage`** from
+The recommended download is **`monado-ii-0.1.18-linux-builder-x86_64.AppImage`** from
 [Releases](https://github.com/brendonbusker/Monado-II/releases/latest). It provides
 folder selection, local build progress and the normal settings launcher after
 building. The source/setup archive and terminal route remain available below.
@@ -25,8 +25,8 @@ building. The source/setup archive and terminal route remain available below.
 If FUSE is unavailable, extraction mode works without installing it:
 
 ```sh
-chmod +x monado-ii-0.1.17-linux-builder-x86_64.AppImage
-./monado-ii-0.1.17-linux-builder-x86_64.AppImage --appimage-extract-and-run
+chmod +x monado-ii-0.1.18-linux-builder-x86_64.AppImage
+./monado-ii-0.1.18-linux-builder-x86_64.AppImage --appimage-extract-and-run
 ```
 
 **Use an existing installation** links a checked installation in place, preserving
@@ -50,7 +50,7 @@ Distrobox. No universal distro or handheld-gameplay compatibility is implied.
 
 ## Terminal/source setup
 
-Download and extract **`monado-ii-0.1.17-linux-setup.tar.gz`** into its final folder.
+Download and extract **`monado-ii-0.1.18-linux-setup.tar.gz`** into its final folder.
 This route additionally requires a host **CPython 3.14**. Open a terminal in the
 extracted folder and follow the input/build instructions below. Neither ordinary
 builds nor background updates install system packages or run sudo.
@@ -463,6 +463,29 @@ the complete installed build remains a separate action requiring a fresh build
 at its destination.
 
 The updater remains Linux-only; no Windows updater/backport is included.
+
+### A 0.1.17 update fails at `package-appimage`
+
+Linux 0.1.17 can report `source already contains generated release-only files`
+while packaging its replacement AppImage, even after the game and native
+launcher build successfully. The downloaded source kit already contains checked
+distribution metadata; the full-image update path incorrectly passed it to a
+packager that accepts only clean authored source. This is a packaging defect,
+not evidence of missing game files or dependencies.
+
+Version 0.1.18 verifies that metadata and creates a normalized temporary export
+before repackaging. The strict source checks remain enabled. This also applies
+to older installations that have migrated to persistent private Python; it is
+not limited to users who first installed through the graphical AppImage. Fresh
+graphical setup follows a separate initial-build path.
+
+Use 0.1.18 or later for the next update attempt and keep the existing installation
+and profile in place. A failed candidate is not activated, so the previous
+working version remains selected. Preserve the reported build log if packaging
+still fails. Deleting a separate installation under `~/Games` does not cause or
+fix this specific error. Do not delete private Python caches or existing build
+directories as a workaround; they may support the active launcher. No save
+conversion or game feature change is needed for this correction.
 
 If a stage fails, use the log path printed by the builder. A successful local build
 and AppImage check do not establish full-game or other-GPU compatibility. The

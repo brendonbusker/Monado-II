@@ -71,8 +71,8 @@ one graphical builder AppImage. **The game is still built locally from your own 
 
 | Platform | Recommended download | Full instructions |
 |---|---|---|
-| Linux x86-64 | [Graphical builder AppImage](https://github.com/brendonbusker/Monado-II/releases/download/v0.1.17/monado-ii-0.1.17-linux-builder-x86_64.AppImage) | [Linux setup and build guide](docs/BUILD_LINUX.md) |
-| Windows x86-64 | [Original Windows implementation `.zip`](https://github.com/brendonbusker/Monado-II/releases/download/v0.1.17/monado-ii-windows-original-implementation-setup.zip) | [Windows build guide](docs/BUILD_WINDOWS.md) |
+| Linux x86-64 | [Graphical builder AppImage](https://github.com/brendonbusker/Monado-II/releases/download/v0.1.18/monado-ii-0.1.18-linux-builder-x86_64.AppImage) | [Linux setup and build guide](docs/BUILD_LINUX.md) |
+| Windows x86-64 | [Original Windows implementation `.zip`](https://github.com/brendonbusker/Monado-II/releases/download/v0.1.18/monado-ii-windows-original-implementation-setup.zip) | [Windows build guide](docs/BUILD_WINDOWS.md) |
 
 > **Windows is the original implementation.** Linux release numbers and the
 > Linux features shown above do not describe the Windows download. Its version-free
@@ -95,7 +95,7 @@ game. Keep the installed build folder and its input available. If you already
 have Monado II installed, **Use an existing installation** adopts it in place,
 including its settings, saves and current update. See the [graphical setup guide](docs/GRAPHICAL_BUILDER.md).
 
-The [Linux source/setup kit](https://github.com/brendonbusker/Monado-II/releases/download/v0.1.17/monado-ii-0.1.17-linux-setup.tar.gz)
+The [Linux source/setup kit](https://github.com/brendonbusker/Monado-II/releases/download/v0.1.18/monado-ii-0.1.18-linux-setup.tar.gz)
 remains available for terminal builds and existing updaters. After extracting it
 and arranging its `game_files/exefs` and `game_files/romfs` input, the established
 commands are still:
@@ -161,8 +161,9 @@ launcher. It never presses Play.
   rebuild the game locally.
 - Saves, settings and shared game input stay in the original installation.
   Failed or cancelled preparation keeps the previous version selected.
-- **Updating to 0.1.17 requires a full local game rebuild** for the updated build
-  runtime and build recipes. The updater handles this without converting, replacing or
+- **Updating to 0.1.18 requires a full local game rebuild** under the updater’s
+  conservative compatibility checks. This hotfix corrects update packaging without
+  changing gameplay code or the native save format. The updater handles this without converting, replacing or
   deleting your saves. Missing prerequisites leave the working version selected
   and show instructions for retrying.
 - Keep the **complete save folder, including hidden files**, when backing up or
@@ -194,8 +195,8 @@ Source-kit downloads use the **`-setup` kit**. A legacy Linux **`-source`** arch
 in releases solely for installed-updater compatibility. Both contain source, not
 precompiled playable games. No compiled game binary, private vendor SDK binary,
 game-derived cache or user data is distributed. The graphical AppImage contains
-only setup software and its reviewed startup dependencies. **0.1.17 is a regular
-release**; the optional Quick Step feature is stable, while frame generation
+only setup software and its reviewed startup dependencies. **0.1.18 is a regular
+hotfix release**; the optional Quick Step feature is stable, while frame generation
 remains experimental. Windows has no updater in this release.
 
 Version **0.1.14** targets severe AMD/RADV submission overhead with a

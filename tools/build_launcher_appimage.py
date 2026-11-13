@@ -344,6 +344,47 @@ def _load_authored_module(root, relative, name):
     return module
 
 
+def _normalize_template_sources(files, manifest, core):
+    """[XCDE] LINUX-088: unwrap only a verified Linux source-kit envelope.
+
+    The release packager accepts clean authored trees, not its own distribution
+    output. Installed bytes have already passed the unchanged source verifier;
+    this transformation applies only to the fresh in-memory template export.
+    """
+    generated = {'RELEASE_README.md', 'source-only-status.json'}
+    provenance = {'platform', 'release_version', 'release_kind',
+                  'source_release_version', 'windows_implementation', 'linux_feature_additions'}
+    present = generated.intersection(files)
+    if not present and not provenance.intersection(manifest):
+        return files  # A clean publication tree retains its exact manifest bytes.
+    if (present != generated or manifest.get('platform') != 'linux'
+            or manifest.get('release_kind') != 'source-only'
+            or provenance.intersection(manifest) != {'platform', 'release_version', 'release_kind'}
+            or 'update-version.json' not in files
+            or not any(name.startswith('Monado_Linux/') for name in files)
+            or any(name.startswith('Monado_Windows/') for name in files)):
+        raise AppImageError('Unsupported or incomplete Linux source-kit metadata')
+    version = core.installed_version.metadata(files['update-version.json'][0])['version']
+    status = dict(schema=1, project='Monado II', platform='linux', version=version,
+        kind='source-only', local_generation_required=True, contains_game_files=False,
+        contains_game_derived_code=False, contains_compiled_binaries=False,
+        runtime_validation='not performed by packaging', windows_backports='deferred')
+    heading = f'# Monado II — Linux source/setup kit ({version})\n\n'.encode('utf-8')
+    readme = files['RELEASE_README.md'][0]
+    # Exact authored prose emitted by package_source_release, after its versioned
+    # heading. Unknown/edited distribution metadata is never silently discarded.
+    body_sha256 = '5c4461d1f4f231e988eea16e66a1cf9f7c8535a28cf3dca353d20305d2dade7e'
+    if (manifest.get('release_version') != version
+            or files['source-only-status.json'][0] != encoded(status)
+            or not readme.startswith(heading) or digest(readme[len(heading):]) != body_sha256):
+        raise AppImageError('Inconsistent or unrecognized Linux source-kit metadata')
+    result = {name: value for name, value in files.items() if name not in generated}
+    document = {name: value for name, value in manifest.items() if name not in provenance}
+    document['files'] = {name: value for name, value in manifest['files'].items() if name not in generated}
+    result['publication-manifest.json'] = (encoded(document), files['publication-manifest.json'][1])
+    return result
+
+
 def reviewed_source_files(root):
     """Export an exact source allowlist, ignoring all input/build/runtime trees.
 
@@ -365,7 +406,7 @@ def reviewed_source_files(root):
     if json.loads(data) != manifest:
         raise AppImageError('Source manifest changed during template export')
     files['publication-manifest.json'] = (data, 0o644)
-    return files
+    return _normalize_template_sources(files, manifest, core)
 
 
 
