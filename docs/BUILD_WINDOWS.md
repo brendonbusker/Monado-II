@@ -1,16 +1,27 @@
 # Local Windows build
 
-Download **`monado-ii-0.1.11-windows-setup.zip`** from the GitHub Release. It contains
-reviewed source and build tools, not a ready-to-run Windows app. Quiver recognizing
-this archive does not establish Windows setup or gameplay compatibility.
+> **Windows parity branch:** read [WINDOWS_PORT_HANDOFF.md](WINDOWS_PORT_HANDOFF.md)
+> for the approved implementation plan based on Linux0.1.16. The inherited recipe
+> below describes the original implementation; the proposed root Windows Build/Play
+> scripts do not exist yet. This preparation is not a new Windows release.
 
-Windows source is inherited from Monado and has not been independently validated
-by this fork. This kit retains the existing Windows implementation. Expanded
-saves, faster scanning, the dedicated Quick Step slot and its 0.1.11 save/UI fixes,
-NPC trading correction, queued-rendering fixes and runtime compatibility work are
-Linux-only. The 0.1.11 Windows source implementation is unchanged. Backports are not currently
-planned; [TODO](../TODO.md) records deferred parity references. The release
-is a source/setup kit, not a playable executable or a bundled dependency installer.
+
+Download **`monado-ii-windows-original-implementation-setup.zip`** from the GitHub
+Release. **This is the original Windows implementation, without the Linux
+additions.** Linux release numbers do not indicate a Windows update. The filename
+and implementation identity remain unchanged until Windows itself is updated.
+
+The kit contains reviewed source and inherited build tools, not a ready-to-run
+Windows app. Quiver recognizing the archive does not establish Windows setup or
+gameplay compatibility. The original author reported playability; this fork has
+not independently built or validated Windows.
+
+The new Linux launcher, high-refresh corrections, expanded saves, dedicated Quick
+Step slot, Cheats tab, updater, controller/RADV corrections and other Linux work
+have **not** been backported. [TODO](../TODO.md) tracks the approved Windows development plan; implementation
+is pending.
+The containing source snapshot is recorded separately as provenance, not as a new
+Windows implementation version. Windows has no updater in this kit.
 
 You need your own legally dumped DE2.0.0 game files from your own legally obtained
 Switch and game. No game files, keys, acquisition links or dumping instructions are

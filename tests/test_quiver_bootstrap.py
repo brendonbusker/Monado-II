@@ -156,7 +156,8 @@ class QuiverObservedSelection(unittest.TestCase):
         # auxiliary word/extension filter and accepted .zip/.tar.gz formats.
         auxiliary = re.compile(r'\.(json|sha\d*|md5|sig|asc|minisig|pdb|txt)$|'
             r'(^|[._-])(checksums?|sha\d*sums?|source|src|debug|symbols)([._-]|$)', re.I)
-        for name in ('monado-ii-0.1.5-linux-setup.tar.gz', 'monado-ii-0.1.5-windows-setup.zip'):
+        for name in ('monado-ii-0.1.5-linux-setup.tar.gz',
+                     'monado-ii-windows-original-implementation-setup.zip'):
             self.assertIsNone(auxiliary.search(name))
             self.assertRegex(name, r'\.(zip|tar\.gz)$')
         for name in ('monado-ii-0.1.5-linux-source.tar.gz', 'SHA256SUMS'):

@@ -16,6 +16,8 @@
 #include "../nvn/renderer.h"
 #include "../settings.h"
 #include "../input_bind.h"
+#include "pad_modifier.h"
+#include "../platform/sdl_controller_diagnostics.h"  // [XCDE] LINUX-077
 
 enum {
     BTN_A = 0, BTN_B, BTN_X, BTN_Y, BTN_LSTICK, BTN_RSTICK, BTN_L, BTN_R, BTN_ZL, BTN_ZR, BTN_PLUS, BTN_MINUS,
@@ -34,7 +36,7 @@ static _Atomic int64_t sampling;
 static uint8_t test_keys[SDL_SCANCODE_COUNT];
 static _Atomic uint32_t test_pad;
 static _Atomic int32_t test_lx, test_ly;  // (a resting stick's drift: "lstick" in LARECOMP_HOST_INPUT)
-static bool host_test;  // (then a real controller is left out: the player's own pad must not spoil the test)
+static _Atomic bool host_test;  // (then a real controller is left out: the player's own pad must not spoil the test)
 
 // [XCDE] mouse buttons held (SDL_BUTTON_*), and the wheel: a notch is a short press (WHEEL_MS) of what it is bound to
 static uint8_t mouse_down[8];
@@ -88,7 +90,7 @@ static void recompute_keyboard(void) {
 // relative mode).
 static _Atomic int32_t mouse_dx, mouse_dy;  // (accumulated, 1/16 px)
 static SDL_Window *mouse_win;
-static bool mouse_looking;
+static _Atomic bool mouse_looking;
 static void mouse_look_set(bool on) {
     if (on == mouse_looking) return;
     mouse_looking = on;
@@ -170,14 +172,49 @@ static void mouse_stick(int32_t *rx, int32_t *ry) {
     *rx += sx, *ry += sy;
 }
 
-static bool g_lt_combo;                         // (party mod) a switch was made while L2 was held
-static _Atomic uint64_t lt_pulse_bits;          // the buttons L2 drives, sent briefly after a lone L2 press
-static _Atomic uint64_t lt_pulse_until;         // (SDL ticks, ms)
-static uint64_t lt_pulse(void) { return SDL_GetTicks() < lt_pulse_until ? lt_pulse_bits : 0; }
-
+// [XCDE] LINUX-055: the optional L2 party chord must coexist with held camera
+// controls. The native overlay may reset input from the render thread, so a
+// narrow lock serializes reducer changes/publication and selected-pad lifetime.
+// Guest readers use only the published atomic buttons/axes below.
+extern bool g_party_switch;
+extern bool menu_input_captured(void);
+static PadModifierState pad_modifier;
+static SDL_SpinLock pad_modifier_lock;
+static _Atomic bool pad_focus_lost;
 // Controller buttons (and the triggers as buttons) -> Switch buttons through g_bind_pad; the sticks stay the sticks.
 static void stick_deadzone(int32_t *x, int32_t *y);  // (below)
-static void recompute_pad(void) {
+static uint64_t map_pad_buttons(uint32_t host) {
+    uint64_t b = 0;
+    for (int i = 0; i < BIND_PAD_COUNT; i++)
+        if (g_bind_pad[i] >= 0 && g_bind_pad[i] < PADB_HOST_COUNT && (host >> g_bind_pad[i] & 1)) b |= 1ull << i;
+    return b;
+}
+static uint32_t pad_shoulders(uint32_t host) {
+    return ((host >> SDL_GAMEPAD_BUTTON_LEFT_SHOULDER) & 1u) |
+           (((host >> SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER) & 1u) << 1);
+}
+static void cancel_pad_modifier_locked(void) {
+    bool lt = pad && !host_test && SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > 16000;
+    uint32_t shoulders = 0;
+    if (pad && !host_test) {
+        if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER)) shoulders |= 1u;
+        if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER)) shoulders |= 2u;
+    }
+    pad_modifier_cancel(&pad_modifier, lt, shoulders);
+    if (g_party_switch && !host_test) {
+        uint64_t mask = map_pad_buttons(1u << PADB_LTRIGGER);
+        if (shoulders & 1u) mask |= map_pad_buttons(1u << SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
+        if (shoulders & 2u) mask |= map_pad_buttons(1u << SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
+        atomic_fetch_and(&pad_buttons, ~mask);
+    }
+}
+static void cancel_pad_modifier(void) {
+    SDL_LockSpinlock(&pad_modifier_lock);
+    cancel_pad_modifier_locked();
+    SDL_UnlockSpinlock(&pad_modifier_lock);
+}
+static void recompute_pad(uint32_t pressed_shoulders) {
+    SDL_LockSpinlock(&pad_modifier_lock);
     uint32_t host = test_pad;
     if (pad && !host_test) {
         for (int i = 0; i < SDL_GAMEPAD_BUTTON_COUNT; i++)
@@ -185,35 +222,41 @@ static void recompute_pad(void) {
         if (SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > 16000) host |= 1u << PADB_LTRIGGER;
         if (SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > 16000) host |= 1u << PADB_RTRIGGER;
     }
-    {   // [XCDE] party mod (L2 + L1 / R1, as Xenoblade 3): while L2 is held it is a modifier - L2, L1 and R1 don't reach
-        // the game (no camera-mode toggle, no target change); L2 let go without a switch reaches it as a short press.
-        extern bool g_party_switch;
-        static bool lt_was;
-        bool lt = host >> PADB_LTRIGGER & 1;
-        if (g_party_switch && !host_test) {
-            if (lt) host &= ~((1u << PADB_LTRIGGER) | (1u << SDL_GAMEPAD_BUTTON_LEFT_SHOULDER) | (1u << SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER));
-            if (lt_was && !lt) {
-                if (!g_lt_combo) {
-                    uint64_t pb = 0;
-                    for (int i = 0; i < BIND_PAD_COUNT; i++) if (g_bind_pad[i] == PADB_LTRIGGER) pb |= 1ull << i;
-                    lt_pulse_bits = pb;
-                    lt_pulse_until = SDL_GetTicks() + 80;
-                }
-                g_lt_combo = false;
-            }
-        }
-        lt_was = lt;
+    int32_t lx = test_lx, ly = test_ly, rx = 0, ry = 0;
+    if (pad && !host_test) {
+        lx = SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTX), ly = -SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTY);
+        rx = SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_RIGHTX), ry = -SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_RIGHTY);
+        stick_deadzone(&lx, &ly);
+        stick_deadzone(&rx, &ry);
     }
-    uint64_t b = 0;
-    for (int i = 0; i < BIND_PAD_COUNT; i++)
-        if (g_bind_pad[i] >= 0 && g_bind_pad[i] < PADB_HOST_COUNT && (host >> g_bind_pad[i] & 1)) b |= 1ull << i;
-    pad_buttons = b;
-    if (!pad || host_test) { pad_lx = test_lx, pad_ly = test_ly, pad_rx = pad_ry = 0; return; }
-    int32_t lx = SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTX), ly = -SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTY);
-    int32_t rx = SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_RIGHTX), ry = -SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_RIGHTY);
-    stick_deadzone(&lx, &ly);
-    stick_deadzone(&rx, &ry);
+    // [XCDE] LINUX-055 R2: native L2 reaches the game immediately, including
+    // the neutral hold that drives the HUD camera prompts. Party shortcuts
+    // consume their shoulders only; do not synthesize a second L2 tap.
+    PadModifierInput modifier_input = {
+        .enabled = g_party_switch && !host_test,
+        .captured = menu_input_captured() || pad_focus_lost,
+        .connected = pad != NULL,
+        .lt = (host >> PADB_LTRIGGER) & 1u,
+        .shoulders = pad_shoulders(host),
+        .pressed = pressed_shoulders,
+        .bindings = map_pad_buttons(1u << PADB_LTRIGGER),
+    };
+    PadModifierResult modifier = pad_modifier_step(&pad_modifier, &modifier_input);
+    if (!modifier.forward_lt) host &= ~(1u << PADB_LTRIGGER);
+    // SDL updates the sampled state before delivering all queued button edges.
+    // Hide a possible chord immediately, even if an axis/key event precedes its
+    // shoulder DOWN event; only that selected-pad edge may request the switch.
+    uint32_t hidden_shoulders = modifier.consumed;
+    if (modifier_input.enabled && modifier_input.lt) hidden_shoulders |= modifier_input.shoulders;
+    if (hidden_shoulders & 1u) host &= ~(1u << SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
+    if (hidden_shoulders & 2u) host &= ~(1u << SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
+    pad_buttons = map_pad_buttons(host);
     pad_lx = lx, pad_ly = ly, pad_rx = rx, pad_ry = ry;
+    SDL_UnlockSpinlock(&pad_modifier_lock);
+    if (modifier.party_step) {
+        extern void party_switch_request(int step);
+        party_switch_request(modifier.party_step);
+    }
 }
 
 // [XCDE] xcde.ini stick_deadzone: a worn stick that drifts reads as centred. Radial, and the travel past the dead zone
@@ -233,6 +276,7 @@ void input_reset(void) {
     memset(mouse_down, 0, sizeof mouse_down);
     mouse_look_set(false);
     recompute_keyboard();
+    cancel_pad_modifier();
 }
 
 volatile int g_debug_frame_request;  // F9: dump the next frame's passes (build/pass_*.png) + draw log
@@ -296,14 +340,43 @@ int input_pad_family(void) {
     return env >= 0 ? env : pad_family;
 }
 
+// [XCDE] LINUX-077: one failed open must not hide a second usable controller.
+// SDL enumeration, opening and closing stay on the existing SDL event thread.
+static bool input_open_available_pad(SDL_JoystickID removed) {
+    int count = 0;
+    SDL_JoystickID *ids = SDL_GetGamepads(&count);
+    bool opened = false;
+    static unsigned failures;
+    SDL_LockSpinlock(&pad_modifier_lock);
+    for (int i = 0; !pad && ids && i < count; ++i) {
+        if (ids[i] == removed) continue;
+        SDL_Gamepad *candidate = SDL_OpenGamepad(ids[i]);
+        if (!candidate) {
+            if (failures < 16) {
+                ++failures;
+                LOG("[input] cannot open gamepad id=%u: %.192s\n", (unsigned)ids[i], SDL_GetError());
+            }
+            continue;
+        }
+        pad = candidate;
+        char name[97];
+        LOG("[input] gamepad id=%u: %s\n", (unsigned)ids[i],
+            rt_input_log_name(SDL_GetGamepadName(pad), name));
+        note_family();
+        opened = true;
+    }
+    SDL_UnlockSpinlock(&pad_modifier_lock);
+    SDL_free(ids);
+    if (opened) recompute_pad(0);
+    return opened;
+}
+
 void input_handle_event(const SDL_Event *e) {
     static bool scanned;  // pads present at startup: their ADDED event may have gone to the start screen's loop
     if (!scanned) {
         scanned = true;
-        int n = 0;
-        SDL_JoystickID *ids = SDL_GetGamepads(&n);
-        if (n > 0 && !pad) { pad = SDL_OpenGamepad(ids[0]); LOG("[input] gamepad: %s\n", SDL_GetGamepadName(pad)); note_family(); }
-        SDL_free(ids);
+        rt_input_inventory(stderr, "game", "startup");
+        input_open_available_pad(0);
     }
     switch (e->type) {
     case SDL_EVENT_KEY_DOWN: case SDL_EVENT_KEY_UP:
@@ -318,6 +391,7 @@ void input_handle_event(const SDL_Event *e) {
         }
         if (e->key.scancode < SDL_SCANCODE_COUNT) keys_down[e->key.scancode] = e->type == SDL_EVENT_KEY_DOWN;
         recompute_keyboard();
+        recompute_pad(0);
         break;
     case SDL_EVENT_MOUSE_BUTTON_DOWN: case SDL_EVENT_MOUSE_BUTTON_UP:  // [XCDE] mouse: buttons bind like keys
         mouse_win = SDL_GetWindowFromID(e->button.windowID);
@@ -325,6 +399,7 @@ void input_handle_event(const SDL_Event *e) {
         if (e->button.button == SDL_BUTTON_RIGHT && g_mouse_look == 1) mouse_look_set(e->type == SDL_EVENT_MOUSE_BUTTON_DOWN);
         if (g_mouse_look == 2 && !mouse_looking) mouse_look_set(true);
         recompute_keyboard();
+        recompute_pad(0);
         break;
     case SDL_EVENT_MOUSE_WHEEL:
         if (e->wheel.y) {
@@ -333,6 +408,7 @@ void input_handle_event(const SDL_Event *e) {
             for (int i = BIND_ART1; i < BIND_KEY_COUNT; i++)  // (actions: one per notch)
                 if (g_bind_key[i] == (up ? BIND_WHEEL_UP : BIND_WHEEL_DOWN) || g_bind_key2[i] == (up ? BIND_WHEEL_UP : BIND_WHEEL_DOWN)) action_press(i);
             recompute_keyboard();
+            recompute_pad(0);
         }
         break;
     case SDL_EVENT_MOUSE_MOTION:
@@ -341,30 +417,43 @@ void input_handle_event(const SDL_Event *e) {
             mouse_win = SDL_GetWindowFromID(e->motion.windowID);
             if (mouse_win && (SDL_GetWindowFlags(mouse_win) & SDL_WINDOW_INPUT_FOCUS)) mouse_look_set(true);
         }
+        recompute_pad(0);
         break;
     case SDL_EVENT_WINDOW_FOCUS_LOST:
         memset(mouse_down, 0, sizeof mouse_down);
         mouse_look_set(false);
+        pad_focus_lost = true;
+        cancel_pad_modifier();
         break;
-    case SDL_EVENT_GAMEPAD_ADDED:
-        if (!pad) { pad = SDL_OpenGamepad(e->gdevice.which); LOG("[input] gamepad: %s\n", SDL_GetGamepadName(pad)); note_family(); }
+    case SDL_EVENT_WINDOW_FOCUS_GAINED:
+        pad_focus_lost = false;
+        cancel_pad_modifier();
         break;
+    case SDL_EVENT_GAMEPAD_ADDED: {
+        rt_input_inventory(stderr, "game", "gamepad added");
+        input_open_available_pad(0);
+        break;
+    }
     case SDL_EVENT_GAMEPAD_REMOVED:
-        if (pad && SDL_GetGamepadID(pad) == e->gdevice.which) { SDL_CloseGamepad(pad); pad = NULL; note_family(); }
-        recompute_pad();
-        break;
-    case SDL_EVENT_GAMEPAD_AXIS_MOTION: case SDL_EVENT_GAMEPAD_BUTTON_DOWN: case SDL_EVENT_GAMEPAD_BUTTON_UP:
-        recompute_pad();
-        // [XCDE] party mod, as Xenoblade 3: hold L2 and press L1 / R1 = the member above / below. (recompute_pad hides L1 /
-        // R1 from the game while L2 is held, so the target doesn't change too.)
-        if (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && pad &&
-            (e->gbutton.button == SDL_GAMEPAD_BUTTON_LEFT_SHOULDER || e->gbutton.button == SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER) &&
-            SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > 16000) {
-            extern void party_switch_request(int step);
-            party_switch_request(e->gbutton.button == SDL_GAMEPAD_BUTTON_LEFT_SHOULDER ? -1 : 1);
-            g_lt_combo = true;
+        SDL_LockSpinlock(&pad_modifier_lock);
+        if (pad && SDL_GetGamepadID(pad) == e->gdevice.which) {
+            cancel_pad_modifier_locked();
+            SDL_CloseGamepad(pad); pad = NULL; note_family();
         }
+        SDL_UnlockSpinlock(&pad_modifier_lock);
+        recompute_pad(0);
+        input_open_available_pad(e->gdevice.which);
+        rt_input_inventory(stderr, "game", "gamepad removed");
         break;
+    case SDL_EVENT_GAMEPAD_AXIS_MOTION: case SDL_EVENT_GAMEPAD_BUTTON_DOWN: case SDL_EVENT_GAMEPAD_BUTTON_UP: {
+        uint32_t pressed = 0;
+        if (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && pad && e->gbutton.which == SDL_GetGamepadID(pad)) {
+            if (e->gbutton.button == SDL_GAMEPAD_BUTTON_LEFT_SHOULDER) pressed = 1u;
+            if (e->gbutton.button == SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER) pressed = 2u;
+        }
+        recompute_pad(pressed);
+        break;
+    }
     }
 }
 
@@ -469,7 +558,7 @@ static void host_test_frame(uint64_t frame) {
         test_pad = padm;
         test_lx = sx, test_ly = sy;
         if (kch) recompute_keyboard();
-        if (pch) recompute_pad();
+        if (pch) recompute_pad(0);
     }
     if (bspec) {
         snprintf(buf, sizeof buf, "%s", bspec);
@@ -581,7 +670,7 @@ static uint64_t wheel_buttons(void) {
     return b;
 }
 
-uint64_t input_buttons_now(void) { return (menu_input_captured() ? 0 : key_buttons | pad_buttons | lt_pulse() | wheel_buttons()) | script_buttons; }
+uint64_t input_buttons_now(void) { return (menu_input_captured() ? 0 : key_buttons | pad_buttons | wheel_buttons()) | script_buttons; }
 
 static int32_t clamp_axis(int32_t v) { return v > 32767 ? 32767 : v < -32767 ? -32767 : v; }
 
@@ -622,7 +711,7 @@ static void fill_state(Cpu *c) {
         LOG("[input] watching controller object %llx\n", c->x[1] - 8);
     }
     bool menu = menu_input_captured();  // the overlay menu / name entry has the controls (typing there isn't for the game)
-    uint64_t b = menu ? script_buttons : key_buttons | pad_buttons | lt_pulse() | wheel_buttons() | script_buttons;
+    uint64_t b = menu ? script_buttons : key_buttons | pad_buttons | wheel_buttons() | script_buttons;
     {   // injected Plus: held for ~10 presented frames (the game polls several times per frame)
         extern uint64_t renderer_present_count(void);
         static uint64_t until;
@@ -642,8 +731,9 @@ static void fill_state(Cpu *c) {
     }
     // d-pad / arrow keys walk (setting) while the stick is at rest. "At rest" has a dead zone: a controller's stick
     // never reads exactly 0 (a DualSense rests at a few hundred), which used to turn the d-pad off altogether.
-    if (!menu && g_settings.dpad_move && (int64_t)lx * lx + (int64_t)ly * ly < 8000ll * 8000) {
-        uint64_t d = key_buttons | pad_buttons | lt_pulse() | script_buttons;
+    if (!menu && g_settings.dpad_move && !(b & (1ull << BTN_ZL)) &&
+        (int64_t)lx * lx + (int64_t)ly * ly < 8000ll * 8000) {
+        uint64_t d = key_buttons | pad_buttons | script_buttons;
         int dx = (int)((d >> BTN_RIGHT) & 1) - (int)((d >> BTN_LEFT) & 1);
         if (mirrored) dx = -dx;
         int dy = (int)((d >> BTN_UP) & 1) - (int)((d >> BTN_DOWN) & 1);

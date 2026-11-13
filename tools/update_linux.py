@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Monado II Linux updates: immutable local builds and durable version selection.
+"""Monado II Linux updates: one retained version and durable activation.
 
 This module runs only in the outer launcher supervisor. It never opens, copies,
 restores or migrates saves/configuration/caches. Installed builds and authored
@@ -39,6 +39,7 @@ IDENTITY = re.compile(r'[a-zA-Z0-9][a-zA-Z0-9._-]{0,95}\Z')
 HASH = re.compile(r'[0-9a-f]{64}\Z')
 ACTIVE_KEYS = {'schema', 'version', 'id', 'workspace', 'image_sha256',
                'receipt_sha256', 'source_manifest_sha256'}
+MAX_GAME_RECEIPT = 8 * 1024 * 1024  # native compile commands scale with managed path length
 
 
 def ordinary(path, *, missing=False):
@@ -220,7 +221,8 @@ def _previous_selection(owner):
         return None
     value = json_read(path, 8192)
     if (set(value) != {'schema', 'selection'} or type(value.get('schema')) is not int
-            or value['schema'] not in (1, 2)):
+            or value['schema'] not in (1, 2, 3)
+            or (value['schema'] == 3 and value['selection'] is not None)):
         raise ValueError('invalid previous version record')
     if value['selection'] is not None:
         active_record(owner, value['selection'])
@@ -360,10 +362,119 @@ def _prepare_version_state(owner, capable_workspace):
         _fsync_directory(directory)
     # Old rollback clients must refuse before modifying selection: they cannot
     # restore a mutable owner marker. The pinned wrapper remains usable instead.
-    if previous is None or previous['schema'] != 2:
+    if previous is None or previous['schema'] not in (2, 3):
         durable_replace(directory / 'previous.json', {'schema': 2,
             'selection': None if previous is None else previous['selection']})
     return original, current
+
+
+def _retire_rollback(owner, workspace):
+    """LINUX-054: bind compatibility entrypoints to current, never old history.
+
+    Keep the unchanged original wrapper/source manifest usable by old bootstrap
+    dispatchers. Its --rollback command now reports that downgrades are manual.
+    The bridge is small metadata referencing current, not a retained old build.
+    Caller has committed and repaired active.json and the visible version first.
+    """
+    manifest = installed_sources(workspace)
+    selected = _current_selection(owner)
+    if selected is None or active_record(owner, selected) != workspace:
+        raise ValueError('only the checked active version can retire update history')
+    wrapper = installed_version.WRAPPER
+    expected = manifest['files'].get(wrapper, {}).get('sha256')
+    if not expected or digest(owner / wrapper) != expected:
+        raise ValueError('unknown installation rollback compatibility wrapper')
+    directory = owner / 'Monado_Linux/updates'
+    bridge = dict(schema=1, owner=str(owner), workspace=workspace.relative_to(owner).as_posix(),
+        manifest_sha256=digest(workspace / 'publication-manifest.json'),
+        updater_sha256=manifest['files']['tools/update_linux.py']['sha256'],
+        version_helper_sha256=manifest['files']['tools/installation_version.py']['sha256'],
+        wrapper_sha256=expected)
+    durable_replace(directory / installed_version.BRIDGE, bridge)
+    # Old raw --rollback helpers only understand schemas 1/2. Schema 3 makes
+    # them refuse BEFORE restoring a bootstrap whose game has been pruned.
+    durable_replace(directory / 'previous.json', {'schema': 3, 'selection': None})
+
+
+def _support_module(name):
+    """Load only the reviewed support code shipped with this updater."""
+    path = ordinary(ROOT / 'Monado_Linux/scripts' / (name + '.py'))
+    spec = importlib.util.spec_from_file_location('_monado_update_' + name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _retire_unactivated_history(owner):
+    """A failed activation may have established a bridge before restoring owner.
+
+    Validate then retire that transient pin before deleting its never-activated
+    candidate. The next update can establish its own checked current binding.
+    Original bootstrap source and the compatibility wrapper stay unchanged.
+    """
+    if _current_selection(owner) is not None:
+        raise ValueError('active selection appeared before bootstrap cleanup')
+    directory = owner / 'Monado_Linux/updates'
+    bridge = directory / installed_version.BRIDGE
+    if bridge.exists() or bridge.is_symlink():
+        _bridge_workspace(owner, json_read(bridge, 8192))
+        bridge.unlink()
+        _fsync_directory(directory)
+    previous = _previous_selection(owner)
+    if previous is not None:
+        durable_replace(directory / 'previous.json', {'schema': 3, 'selection': None})
+
+
+def cleanup_current(owner, workspace, state, *, profile_lock_fd=None):
+    """Best-effort owned GC; activation success never depends on deleting history.
+
+    Caller holds install.lock. The separate runtime lease excludes other profiles
+    and inherited GUI/game/precompile workers before touching their code paths.
+    """
+    fd = None
+    try:
+        selected = _current_selection(owner)
+        if selected is None:
+            if workspace != owner:
+                raise ValueError('only the original installation can clean unactivated attempts')
+            installed_sources(owner)
+            _retire_unactivated_history(owner)
+        else:
+            _retire_rollback(owner, workspace)
+        lease = _support_module('install_lease')
+        fd = lease.acquire_maintenance(owner / 'Monado_Linux')
+        if _current_selection(owner) != selected or (selected is not None and active_record(owner, selected) != workspace):
+            raise ValueError('active version changed before cleanup')
+        module = layout_module(ROOT)
+        game_port = module.game_port(workspace / 'Monado_Linux')
+        roots = [owner / 'Monado_Linux/build', owner / 'Monado_Linux/generated']
+        roots += [p for p in (owner / 'Monado_Linux/updates').iterdir()
+                  if p.name.startswith(('update-', 'payload-')) and p != workspace.parent
+                  and not game_port.is_relative_to(p)]
+        excluded = () if profile_lock_fd is None else (profile_lock_fd,)
+        _import_path = list(sys.path)
+        sys.path.insert(0, str(ROOT / 'tools'))
+        try:
+            import update_retention
+        finally:
+            sys.path[:] = _import_path
+        with lease.legacy_guard(owner, roots, exclude_lock_fds=excluded):
+            return update_retention.cleanup(owner, selected, verify_workspace=installed_sources,
+                retained_ports=(game_port,), include_bootstrap=selected is not None)
+    except (OSError, ValueError) as error:
+        report = {'status': 'pending', 'removed': [], 'pending': [str(error)[:1024]]}
+        try:
+            durable_replace(owner / 'Monado_Linux/updates/retention-status.json', report)
+        except (OSError, ValueError):
+            pass  # ENOSPC/permissions must not undo or mask a committed activation.
+        try:
+            print('[updates] Cleanup pending; the current build is usable. ' + str(error), file=sys.stderr)
+        except OSError:
+            pass
+        return report
+    finally:
+        if fd is not None:
+            os.close(fd)
 
 
 def sync_installation_version(workspace, state, profile_lock_fd):
@@ -385,7 +496,12 @@ def sync_installation_version(workspace, state, profile_lock_fd):
         raise ValueError('version synchronization profile lease mismatch')
     fcntl.flock(profile_lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     selected = _current_selection(owner)
-    if selected is None or active_record(owner, selected) != workspace:
+    if selected is None:
+        directory = owner / 'Monado_Linux/updates'
+        if workspace != owner or not directory.exists() or not any(
+                path.name.startswith(('update-', 'payload-')) for path in directory.iterdir()):
+            return False
+    elif active_record(owner, selected) != workspace:
         return False
     session = object.__new__(Session)
     session.owner, session.lock_fd = owner, None
@@ -393,12 +509,16 @@ def sync_installation_version(workspace, state, profile_lock_fd):
         session._lock()
         if _current_selection(owner) != selected:
             raise ValueError('active selection changed during version synchronization')
+        if selected is None:
+            cleanup_current(owner, workspace, state, profile_lock_fd=profile_lock_fd)
+            return False
         original, current = _prepare_version_state(owner, workspace)
         target = _selected_metadata(owner, original, selected)
-        if current != target:
+        changed = current != target
+        if changed:
             _replace_metadata(owner / 'update-version.json', target)
-            return True
-        return False
+        cleanup_current(owner, workspace, state, profile_lock_fd=profile_lock_fd)
+        return changed
     finally:
         session.close()
 
@@ -423,7 +543,7 @@ def dispatch_active(workspace, argv):
 
 def game_features(game):
     """Validate the selected game's recorded capabilities before planning reuse."""
-    receipt = json_read(Path(game).parent / 'receipt.json')
+    receipt = json_read(Path(game).parent / 'receipt.json', MAX_GAME_RECEIPT)
     if not isinstance(receipt.get('dlss_enabled'), bool):
         raise ValueError('old game has no explicit feature receipt')
     framegen = receipt.get('framegen_enabled', False)
@@ -481,6 +601,47 @@ def build_command(workspace, game, rebuild):
     elif receipt.get('foley_trace'):
         raise ValueError('This custom diagnostic game build requires a manual rebuild; the current version is preserved.')
     return command
+
+
+def _copy_reviewed_source(source, destination):
+    """Copy only verified authored files, never a build/profile/input tree."""
+    manifest = installed_sources(source)
+    destination.mkdir(mode=0o700)
+    for name in sorted([*manifest['files'], 'publication-manifest.json']):
+        original = ordinary(source / name)
+        target = destination / name
+        target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        _write_bytes_new(target, read_regular(original), 0o700 if os.access(original, os.X_OK) else 0o600)
+    installed_sources(destination)
+
+
+def _file_digest(path):
+    with ordinary(path).open('rb') as stream:
+        return hashlib.file_digest(stream, 'sha256').hexdigest()
+
+
+def payload_result(workspace, build_id):
+    """Check the fixed output identity from the native game-only builder."""
+    if not isinstance(build_id, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,128}', build_id):
+        raise ValueError('invalid native game payload build identity')
+    port = workspace / 'Monado_Linux'
+    marker = json_read(port / '.deps/metadata/game-payload.json', 16384)
+    game = marker.get('game')
+    if (set(marker) != {'schema', 'artifact_kind', 'status', 'build_id', 'game', 'build_receipt_sha256'}
+            or type(marker.get('schema')) is not int or not isinstance(game, dict)
+            or set(game) != {'path', 'sha256', 'receipt_sha256', 'build_port'}):
+        raise ValueError('native game payload has an invalid build receipt')
+    expected = port / 'build' / (build_id + '-game') / 'xcde-linux'
+    build_receipt = port / 'runs/local-build' / build_id / 'receipt.json'
+    if (marker.get('schema') != 1 or marker.get('artifact_kind') != 'local-game-payload'
+            or marker.get('status') != 'passed' or marker.get('build_id') != build_id
+            or game.get('path') != str(expected) or game.get('build_port') != str(port)
+            or game.get('sha256') != _file_digest(expected)
+            or game.get('receipt_sha256') != digest(expected.parent / 'receipt.json')
+            or marker.get('build_receipt_sha256') != digest(build_receipt)
+            or json_read(build_receipt).get('status') != 'passed'):
+        raise ValueError('native game payload does not match its checked build receipt')
+    return expected
 
 
 def run_build(command, workspace, log, emit, cancelled, *, lock_fd=None):
@@ -579,6 +740,7 @@ class Session:
         self.offer = None
         self.lock_fd = None
         self.prepared = None
+        self.profile_lock_fd = None  # borrowed from the outer launcher; never closed here
         self._busy = threading.Lock()
 
     def check(self):
@@ -622,6 +784,68 @@ class Session:
         finally:
             self._busy.release()
 
+    def _build_payload(self, workspace, directory, progress, cancelled):
+        """Build at a permanent independent path so GUI versions never own reuse."""
+        identity = 'payload-' + uuid.uuid4().hex
+        transaction = directory / identity
+        transaction.mkdir(mode=0o700)
+        write_new(transaction / 'payload.json', {'schema': 1, 'kind': 'game-payload',
+            'owner': str(self.owner), 'id': identity, 'workspace': 'workspace'})
+        payload = transaction / 'workspace'
+        archive = workspace.parent / 'download/source.tar.gz'
+        if self.fetch is update_release.fetch_and_extract or archive.exists():
+            # Reuse the exact checked release archive, not an interruptible copy
+            # of hundreds of source files into an otherwise incomplete workspace.
+            # _unpack declares partial extraction before writing source, so GC can
+            # authenticate and clean a killed/cancelled payload preparation too.
+            archive = ordinary(archive)
+            download = transaction / 'download'
+            download.mkdir(mode=0o700)
+            partial = download / 'source.tar.gz.partial'
+            size, hasher = 0, hashlib.sha256()
+            with archive.open('rb') as incoming, partial.open('xb') as outgoing:
+                while True:
+                    update_release._cancel(cancelled)
+                    data = incoming.read(update_release.CHUNK)
+                    if not data:
+                        break
+                    size += len(data)
+                    if size > self.offer['archive_bytes']:
+                        raise ValueError('payload source archive exceeds its reviewed size')
+                    hasher.update(data)
+                    outgoing.write(data)
+                outgoing.flush()
+                os.fsync(outgoing.fileno())
+            if size != self.offer['archive_bytes'] or hasher.hexdigest() != self.offer['archive_sha256']:
+                raise ValueError('payload source archive differs from the reviewed release')
+            complete = download / 'source.tar.gz'
+            partial.rename(complete)
+            _fsync_directory(download)
+            source = update_release._unpack(complete, download, self.offer, progress, cancelled)
+            source.rename(payload)
+            _fsync_directory(transaction)
+        else:
+            # Explicit injected offline fixture providers have no transport
+            # archive; their already-verified source still gets a fresh copy.
+            _copy_reviewed_source(workspace, payload)
+        port = payload / 'Monado_Linux'
+        write_new(payload / 'installation.json', {'schema': 1, 'owner': str(self.owner),
+            'workspace': str(payload), 'game_port': str(port)})
+        (payload / 'game_files').symlink_to((self.owner / 'game_files').resolve(strict=True), target_is_directory=True)
+        build_id = 'game-' + identity.removeprefix('payload-')
+        command = build_command(payload, self.game, True) + ['--game-only', '--build-id', build_id]
+        self._run(command, payload, transaction / 'build.log', progress, cancelled)
+        if cancelled():
+            raise update_release.UpdateCancelled('Update cancelled; current version remains selected.')
+        installed_sources(payload)
+        return payload_result(payload, build_id)
+
+    def _run(self, command, workspace, log, progress, cancelled):
+        if self.runner is run_build:
+            self.runner(command, workspace, log, progress, cancelled, lock_fd=self.lock_fd)
+        else:
+            self.runner(command, workspace, log, progress, cancelled)
+
     def _install(self, offer_id, progress, cancel):
         if self.offer is None or offer_id != self.offer['id'] or self.prepared is not None:
             raise ValueError('stale or repeated update offer')
@@ -651,21 +875,38 @@ class Session:
         # Native FG support is part of the normal DLSS build. A launcher-only
         # update cannot reuse an older game that lacks that capability.
         rebuild = rebuild or (features['dlss_enabled'] and not features.get('framegen_enabled', False))
+        old_port = self.layout.build_port(self.workspace / 'Monado_Linux', self.game)
+        # A one-time rebuild detaches legacy original/version-owned game output.
+        # New launcher-only updates directly reference one permanent payload.
+        payload_owner = old_port.parent.parent
+        reusable_payload = payload_owner.parent == directory and payload_owner.name.startswith('payload-')
+        if reusable_payload:
+            ownership = json_read(payload_owner / 'payload.json', 16384)
+            if type(ownership.get('schema')) is not int or ownership != {'schema': 1, 'kind': 'game-payload', 'owner': str(self.owner),
+                             'id': payload_owner.name, 'workspace': 'workspace'}:
+                raise ValueError('native game payload has an invalid ownership marker')
+            binding = json_read(old_port.parent / 'installation.json', 8192)
+            if type(binding.get('schema')) is not int or binding != {'schema': 1, 'owner': str(self.owner),
+                           'workspace': str(old_port.parent), 'game_port': str(old_port)}:
+                raise ValueError('native game payload must have a direct self binding')
+            installed_sources(old_port.parent)
+            result = json_read(old_port / '.deps/metadata/game-payload.json', 16384)
+            if payload_result(old_port.parent, result.get('build_id')) != self.game:
+                raise ValueError('selected game differs from the owned native payload')
+        rebuild = rebuild or not reusable_payload
         workspace = transaction / 'workspace'
         source.rename(workspace)  # Before any build: absolute paths never change afterward.
         port = workspace / 'Monado_Linux'
-        game_port = port if rebuild else self.layout.build_port(self.workspace / 'Monado_Linux', self.game)
+        game = self._build_payload(workspace, directory, progress, cancelled) if rebuild else self.game
+        game_port = game.parents[2]
         write_new(workspace / 'installation.json', {'schema': 1, 'owner': str(self.owner),
                   'workspace': str(workspace), 'game_port': str(game_port)})
         shared_input = (self.owner / 'game_files').resolve(strict=True)
         (workspace / 'game_files').symlink_to(shared_input, target_is_directory=True)
-        command = build_command(workspace, self.game, rebuild)
+        command = build_command(workspace, game, False)
         progress({'phase': 'building', 'message': 'Rebuilding the game and launcher locally. Saves stay in place.' if rebuild else
                   'Updating the launcher; keeping the verified game build and saves.'})
-        if self.runner is run_build:
-            self.runner(command, workspace, transaction / 'build.log', progress, cancelled, lock_fd=self.lock_fd)
-        else:
-            self.runner(command, workspace, transaction / 'build.log', progress, cancelled)
+        self._run(command, workspace, transaction / 'build.log', progress, cancelled)
         if cancelled():
             raise update_release.UpdateCancelled('Update cancelled; previous version remains selected.')
         installed_sources(self.workspace)
@@ -718,66 +959,24 @@ class Session:
             else:
                 durable_replace(selected, actual)
             raise
+        # Retire prior selection only after successful durable activation. Any
+        # pending cleanup is retried by the new launcher's startup migration.
+        cleanup_current(self.owner, workspace, self.state, profile_lock_fd=self.profile_lock_fd)
         self.close()
         return [str(workspace / IMAGE), '--appimage-extract-and-run', '--state-root', str(self.state)]
 
 
 def rollback(owner):
-    """Select the previous build and its visible marker; code/game/saves stay put."""
-    owner = ordinary(owner)
-    # Validate original source bytes (with the narrow manifest-bound marker
-    # override) before loading any original-installation Python source.
-    installed_sources(owner, _allow_stale_marker=True)
-    module = layout_module(ROOT)
-    if module.installation_root(ROOT / 'Monado_Linux') != owner:
-        raise ValueError('rollback owner differs from the pinned updater installation')
-    if module.installation_root(owner / 'Monado_Linux') != owner:
-        raise ValueError('run rollback from the original installation')
-    # Acquire the ordinary default profile lease as well as the update lock.
-    scripts = ROOT / 'Monado_Linux/scripts'
-    previous = list(sys.path)
-    sys.path.insert(0, str(scripts))
-    try:
-        import launcher_linux
-        lease = launcher_linux.acquire_lock(owner / 'Monado_Linux/play/launcher')
-    finally:
-        sys.path[:] = previous
-    session = object.__new__(Session)
-    session.owner, session.lock_fd = owner, None
-    try:
-        directory = session._lock()
-        original, marker_before = _prepare_version_state(owner, ROOT)
-        prior = _previous_selection(owner)
-        if prior is None:
-            raise ValueError('invalid previous version record')
-        selection = prior['selection']
-        current = _current_selection(owner)
-        _replace_metadata(owner / 'update-version.json', _selected_metadata(owner, original, selection))
-        try:
-            if selection is None:
-                (directory / 'active.json').unlink(missing_ok=True)
-                _fsync_directory(directory)
-            else:
-                durable_replace(directory / 'active.json', selection)
-        except BaseException:
-            if current is None:
-                _replace_metadata(owner / 'update-version.json', marker_before)
-                (directory / 'active.json').unlink(missing_ok=True)
-                _fsync_directory(directory)
-            else:
-                durable_replace(directory / 'active.json', current)
-                _replace_metadata(owner / 'update-version.json', marker_before)
-            raise
-    finally:
-        session.close()
-        os.close(lease)
+    """Compatibility API: post-update downgrades are manual, never change saves."""
+    raise ValueError('Local rollback is no longer available. Download an older release from GitHub '
+                     'and build it manually; keep your existing saves and settings.')
 
 
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--rollback', action='store_true',
-                        help='select the previous version while the original default profile is closed')
+                        help='deprecated: older releases must be downloaded and built manually')
     parser.add_argument('--owner', type=Path,
                         help='original installation selected by the verified rollback entrypoint')
     parser.add_argument('--build-worker', type=Path, help=argparse.SUPPRESS)
@@ -797,7 +996,9 @@ if __name__ == '__main__':
         owner = layout_module(ROOT).installation_root(ROOT / 'Monado_Linux')
         if options.owner is not None and ordinary(options.owner) != owner:
             parser.error('rollback owner differs from the updater installation')
-        rollback(owner)
-        print('Previous version selected. Open Play_Monado_II.sh; saves and settings are unchanged.')
+        try:
+            rollback(owner)
+        except ValueError as error:
+            parser.exit(1, str(error) + '\n')
     else:
         parser.error('choose --rollback')

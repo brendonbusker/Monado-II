@@ -211,6 +211,36 @@ class Extraction(unittest.TestCase):
         return update.fetch_and_extract(selected or offer(data), self.root / 'stage',
                                         opener=response(data), **kwargs)
 
+    def test_cancel_before_first_source_file_leaves_durable_declared_ownership(self):
+        data = archive_bytes()
+        destination = self.root / 'stage'
+        with self.assertRaises(update.UpdateCancelled):
+            self.fetch(data, cancel=lambda: (destination / 'source').is_dir())
+        declaration = update._json((destination / 'extraction.json').read_bytes())
+        self.assertEqual(declaration['archive'], identity(data))
+        self.assertEqual(declaration['kind'], 'verified-source-extraction')
+        self.assertIn('README.md', declaration['files'])
+        self.assertEqual(list((destination / 'source').iterdir()), [])
+        self.assertEqual(declaration['tar'], identity((destination / 'archive.tar').read_bytes()))
+
+    def test_cancellation_inside_source_member_copy_keeps_exact_declared_prefix(self):
+        files = source_files()
+        files['README.md'] = b'# Authored cancellation fixture\n' * 100000
+        data = archive_bytes(files)
+        target = self.root / 'stage/source/README.md'
+        def cancelled():
+            return target.exists() and 0 < target.stat().st_size < len(files['README.md'])
+        with mock.patch.object(update, 'CHUNK', 4096), self.assertRaises(update.UpdateCancelled):
+            self.fetch(data, cancel=cancelled)
+        actual = target.read_bytes()
+        self.assertGreater(len(actual), 0)
+        self.assertLess(len(actual), len(files['README.md']))
+        self.assertEqual(actual, files['README.md'][:len(actual)])
+        declaration = update._json((self.root / 'stage/extraction.json').read_bytes())
+        self.assertEqual(declaration['files']['README.md'], identity(files['README.md']))
+        with self.assertRaises(update.UpdateError):
+            update.verified_source(target.parent)
+
     def test_real_source_packager_archive_roundtrip(self):
         # Exercise the actual release writer with small authored source only.
         pack_spec = importlib.util.spec_from_file_location('update_packager', ROOT / 'tools/package_source_release.py')
@@ -395,6 +425,8 @@ class Classification(unittest.TestCase):
         for name in ('Monado_Linux/tools/launcher/launcher.cpp',
                      'Monado_Linux/tools/launcher/assets/gaur_plain.png',
                      'Monado_Linux/scripts/build_launcher_linux.py', 'tools/update_linux.py',
+                     'tools/update_retention.py', 'Monado_Linux/scripts/install_lease.py',
+                     'tests/test_update_retention.py', 'tests/test_install_lease.py',
                      'tools/update_release.py', 'tests/test_update_release.py', 'update-version.json',
                      'tools/appimage/driver.py', 'docs/BUILD_LINUX.md', 'NOTICE.md'):
             for delete in (False, True):

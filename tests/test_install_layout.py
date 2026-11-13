@@ -3,6 +3,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import shutil
 import stat
 import tempfile
 from types import SimpleNamespace
@@ -60,6 +61,29 @@ class InstallationLayout(unittest.TestCase):
         other_value = dict(self.value, workspace=str(other.parent), game_port=str(other))
         (other.parent / 'installation.json').write_text(json.dumps(other_value))
         self.assertEqual(layout.game_port(self.candidate), other)
+
+    def test_direct_payload_binding_survives_obsolete_launcher_workspace_removal(self):
+        # Keep schema 1 and the historical managed path grammar: the unchanged
+        # original bootstrap reader must accept a direct immutable game owner.
+        payload = self.port / 'updates/payload-authored/workspace/Monado_Linux'
+        payload.mkdir(parents=True)
+        payload_value = dict(self.value, workspace=str(payload.parent), game_port=str(payload))
+        (payload.parent / 'installation.json').write_text(json.dumps(payload_value))
+        old_workspace = self.port / 'updates/update-obsolete/workspace'
+        (old_workspace / 'Monado_Linux').mkdir(parents=True)
+        (old_workspace / 'installation.json').write_text(json.dumps(dict(self.value,
+            workspace=str(old_workspace), game_port=str(payload))))
+        binary = payload / 'build/authored-game/xcde-linux'
+        binary.parent.mkdir(parents=True)
+        binary.write_text('authored never-executed payload fixture')
+        self.value['game_port'] = str(payload)
+        self.write()
+        self.assertEqual(layout.build_port(self.candidate, binary), payload)
+        shutil.rmtree(old_workspace.parent)
+        self.assertEqual(layout.installation_root(self.candidate), self.root)
+        self.assertEqual(layout.game_port(self.candidate), payload)
+        self.assertEqual(layout.build_port(self.candidate, binary), payload)
+        self.assertEqual(layout.profile_port(self.candidate), self.port)
 
     def test_external_game_port_and_forged_workspace_location_are_rejected(self):
         outside = self.root.parent / 'outside/Monado_Linux'

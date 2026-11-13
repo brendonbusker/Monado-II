@@ -132,7 +132,11 @@ class LauncherEntryTests(unittest.TestCase):
         receipt = json.loads(receipt_path.read_text())
         receipt['executable']['sha256'] = hashlib.sha256(self.game.read_bytes()).hexdigest()
         receipt_path.write_text(json.dumps(receipt))
-        def inspect_selection(argv, environment, lock_fd, log_fd):
+        def inspect_selection(argv, environment, lock_fd, log_fd, *, updates, runtime_fd):
+            self.assertIsNone(updates)
+            self.assertEqual(fcntl.fcntl(runtime_fd, fcntl.F_GETFL) & os.O_ACCMODE, os.O_RDONLY)
+            with self.assertRaises(BlockingIOError):
+                launcher.install_lease.acquire_maintenance(self.root)
             lines = (self.state / 'logs/launcher-console.log').read_text().splitlines()
             self.assertEqual(len(lines), 1)
             self.assertTrue(lines[0].startswith('[launcher-selection] '))
@@ -146,7 +150,7 @@ class LauncherEntryTests(unittest.TestCase):
              mock.patch.object(launcher, 'wait_session', side_effect=inspect_selection) as wait:
             self.assertEqual(launcher.main(self.argv()), 0)
         wait.assert_called_once()
-        self.assertEqual(runtime.call_count, 2)
+        self.assertEqual(runtime.call_count, 4)  # Revalidate after startup maintenance/admission.
 
     def test_runtime_failure_prevents_state_lock_logs_and_gui(self):
         with mock.patch.object(launcher, 'check_input', return_value='synthetic checker passed'), \
@@ -277,9 +281,10 @@ class LauncherEntryTests(unittest.TestCase):
                           'sys.path.insert(0,' + repr(str(ROOT / 'scripts')) + ')\nimport launcher_linux as m\n'
                           'm.ROOT=Path(' + repr(str(self.root)) + ')\n'
                           'fd=m.acquire_lock(Path(' + repr(str(self.state)) + '))\n'
+                          'runtime=m.install_lease.acquire_runtime(m.ROOT)\n'
                           'log=os.open(' + repr(str(self.state / 'console.log')) + ',os.O_WRONLY|os.O_CREAT,0o600)\n'
-                          'code=m.wait_session([sys.executable,' + repr(str(gui)) + '],dict(os.environ),fd,log)\n'
-                          'os.close(log);os.close(fd);sys.exit(code)\n')
+                          'code=m.wait_session([sys.executable,' + repr(str(gui)) + '],dict(os.environ),fd,log,runtime_fd=runtime)\n'
+                          'os.close(log);os.close(fd);os.close(runtime);sys.exit(code)\n')
         process = subprocess.Popen([sys.executable, '-B', str(helper)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         try:
             deadline = time.monotonic() + 5
@@ -294,11 +299,13 @@ class LauncherEntryTests(unittest.TestCase):
             time.sleep(.20)
             self.assertIsNone(process.poll())
             with self.assertRaisesRegex(ValueError, 'already using'): launcher.acquire_lock(self.state)
+            with self.assertRaises(BlockingIOError): launcher.install_lease.acquire_maintenance(self.root)
             stdout, stderr = process.communicate(timeout=5)
             self.assertEqual(process.returncode, 143 if terminate_wrapper else 0, (stdout, stderr))
             self.assertTrue(done.exists())
             with self.assertRaises(ProcessLookupError): os.kill(int(ready.read_text()), 0)
             fd = launcher.acquire_lock(self.state); os.close(fd)
+            fd = launcher.install_lease.acquire_maintenance(self.root); os.close(fd)
         finally:
             if process.poll() is None:
                 process.kill(); process.communicate(timeout=5)
@@ -321,8 +328,9 @@ class LauncherEntryTests(unittest.TestCase):
                            'sys.path.insert(0,' + repr(str(ROOT / 'scripts')) + ')\nimport launcher_linux as m\n'
                            'm.ROOT=Path(' + repr(str(self.root)) + ')\n'
                            'fd=m.acquire_lock(Path(' + repr(str(self.state)) + '))\n'
+                           'runtime=m.install_lease.acquire_runtime(m.ROOT)\n'
                            'log=os.open(' + repr(str(self.state / 'console.log')) + ',os.O_WRONLY|os.O_CREAT,0o600)\n'
-                           'm.wait_session([sys.executable,' + repr(str(gui)) + '],dict(os.environ),fd,log)\n')
+                           'm.wait_session([sys.executable,' + repr(str(gui)) + '],dict(os.environ),fd,log,runtime_fd=runtime)\n')
         # Outer synthetic controller reaps the orphaned GUI, keeping the real
         # unittest process free of subreaper state and live descendants.
         controller = ('import ctypes,os,signal,subprocess,sys,time\nfrom pathlib import Path\n'
@@ -335,6 +343,8 @@ class LauncherEntryTests(unittest.TestCase):
                       'assert ready.exists()\np.kill(); assert p.wait(timeout=3)==-signal.SIGKILL\n'
                       'try:\n fd=m.acquire_lock(Path(' + repr(str(self.state)) + '))\n'
                       'except ValueError: pass\nelse:\n os.close(fd); raise AssertionError("inherited lock released")\n'
+                      'try:\n fd=m.install_lease.acquire_maintenance(Path(' + repr(str(self.root)) + '))\n'
+                      'except BlockingIOError: pass\nelse:\n os.close(fd); raise AssertionError("inherited runtime lease released")\n'
                       'pid,status=os.waitpid(int(ready.read_text()),0)\nassert os.waitstatus_to_exitcode(status)==0\n'
                       'assert Path(' + repr(str(done)) + ').exists()\n'
                       'fd=m.acquire_lock(Path(' + repr(str(self.state)) + '));os.close(fd)\n')

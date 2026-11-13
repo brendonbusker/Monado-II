@@ -2,6 +2,7 @@
 // window opens. "key = value" lines; unknown keys are ignored, missing ones keep their defaults. Key bindings use the
 // LAS format (bind_key_<action> / bind_pad_<action>, runtime/hle/bindings.c).
 #include <stdio.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -11,7 +12,10 @@
 const char *const g_language_codes[N_LANGUAGES] = {"", "ja", "en-US", "fr", "de", "it", "es", "zh-CN", "ko", "nl", "pt", "ru"};
 const char *const g_language_names[N_LANGUAGES] = {"Auto", "Japanese", "English", "French", "German", "Italian", "Spanish",
                                                    "Chinese", "Korean", "Dutch", "Portuguese", "Russian"};
-Settings g_settings = {.fps = 30, .volume = 1.0f, .movie_audio = true, .res_mode = RES_MATCH, .upscaler = UPSCALE_BILINEAR, .upscale_quality = UQ_QUALITY, .game_blur = true, .vsync = true, .ui_lang = 1};
+Settings g_settings = {.fps = 30, .volume = 1.0f, .movie_audio = true, .res_mode = RES_MATCH, .upscaler = UPSCALE_BILINEAR, .upscale_quality = UQ_QUALITY, .game_blur = true, .vsync = true, .ui_lang = 1,
+    // [XCDE] LINUX-072: slider positions are remembered independently of enable flags.
+    .cheat_damage_dealt_percent = 100, .cheat_damage_received_percent = 100,
+    .cheat_exp_percent = 100, .cheat_ap_percent = 100, .cheat_sp_percent = 100, .cheat_gold_percent = 100};
 int g_window_w = 1280, g_window_h = 720;  // windowed size (settings.h)
 
 // [XCDE] Mods (runtime/services/romfs_virtual.c): xcde.ini `mod_<folder> = 0/1`; a folder not listed is on.
@@ -48,11 +52,32 @@ static int lang_index(const char *v) {
     return LANG_AUTO;
 }
 
+// [XCDE] LINUX-072: reject malformed, overflowing and out-of-range cheat values.
+// A stale enabled preference must never survive a reload of a missing/invalid key.
+static bool cheat_enabled(const char *value) {
+    return !strcmp(value, "1") || !strcmp(value, "true");
+}
+static int cheat_percent(const char *value) {
+    if (!*value) return 100;
+    for (const char *p = value; *p; ++p) if (*p < '0' || *p > '9') return 100;
+    errno = 0;
+    char *end;
+    long n = strtol(value, &end, 10);
+    return errno || end == value || *end || n < 0 || n > 2000 ? 100 : (int)n;
+}
+#define XCDE_CHEAT_MULTIPLIERS(X) \
+    X(damage_dealt) X(damage_received) X(exp) X(ap) X(sp) X(gold)
+
 void settings_load(void) {
     // [XCDE] LINUX-014: absent/invalid new preference defaults to Normal on each
     // load, including a reload after a previously selected Fast preference.
     g_settings.menu_navigation_speed = MENU_NAV_NORMAL;
     g_settings.quickstep_slot = false; // [XCDE] LINUX-039: absent/invalid always OFF
+    // [XCDE] LINUX-072: all cheats are opt-in, including absent-file/hidden runs.
+#define RESET_CHEAT(name) g_settings.cheat_##name = false; g_settings.cheat_##name##_percent = 100;
+    XCDE_CHEAT_MULTIPLIERS(RESET_CHEAT)
+#undef RESET_CHEAT
+    g_settings.cheat_no_fall_damage = false;
     // test runs (hidden window, deterministic, scripted input) ignore the player's settings unless XCDE_INI names a file
     if (!getenv("XCDE_INI") && (getenv("LARECOMP_HIDDEN") || getenv("XCDE_DETERMINISTIC") || getenv("XCDE_INPUT_REPLAY"))) return;
     FILE *f = fopen(ini_path(), "r");
@@ -98,6 +123,13 @@ void settings_load(void) {
         else if (!strcmp(k, "menu_navigation_speed"))
             g_settings.menu_navigation_speed = !strcmp(v, "fast") ? MENU_NAV_FAST : MENU_NAV_NORMAL;
         else if (!strcmp(k, "quickstep_slot")) g_settings.quickstep_slot = !strcmp(v, "1");
+        // [XCDE] LINUX-072: config agrees with the launcher's exact 1/true opt-in.
+#define LOAD_CHEAT(name) \
+        else if (!strcmp(k, "cheat_" #name)) g_settings.cheat_##name = cheat_enabled(v); \
+        else if (!strcmp(k, "cheat_" #name "_percent")) g_settings.cheat_##name##_percent = cheat_percent(v);
+        XCDE_CHEAT_MULTIPLIERS(LOAD_CHEAT)
+#undef LOAD_CHEAT
+        else if (!strcmp(k, "cheat_no_fall_damage")) g_settings.cheat_no_fall_damage = cheat_enabled(v);
         else if (!strcmp(k, "language")) g_settings.language = lang_index(v);
         else if (!strncmp(k, "mod_", 4)) mod_set(k + 4, atoi(v) != 0);
         else if (!strcmp(k, "button_icons")) snprintf(g_button_icons, sizeof g_button_icons, "%s", v);
@@ -155,6 +187,12 @@ void settings_save(void) {
     fprintf(f, "cutscenes = %s\n", g_settings.cutscene_mode == 1 ? "30" : g_settings.cutscene_mode == 2 ? "30fg" : "same");
     fprintf(f, "party_switch = %d\n", g_party_switch);
     fprintf(f, "quickstep_slot = %d\n", g_settings.quickstep_slot); // [XCDE] LINUX-039
+    // [XCDE] LINUX-072: preserve all cheat preferences when the game saves F1 settings.
+#define SAVE_CHEAT(name) fprintf(f, "cheat_" #name " = %d\ncheat_" #name "_percent = %d\n", \
+        g_settings.cheat_##name, g_settings.cheat_##name##_percent);
+    XCDE_CHEAT_MULTIPLIERS(SAVE_CHEAT)
+#undef SAVE_CHEAT
+    fprintf(f, "cheat_no_fall_damage = %d\n", g_settings.cheat_no_fall_damage);
     fprintf(f, "volume = %d\nmovie_audio = %d\nshow_fps = %d\n", (int)(g_settings.volume * 100 + 0.5f), g_settings.movie_audio,
             g_settings.show_fps);
     if (g_settings.fps) fprintf(f, "fps = %d\n", g_settings.fps); else fprintf(f, "fps = unlimited\n");

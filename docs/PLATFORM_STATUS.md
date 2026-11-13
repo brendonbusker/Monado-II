@@ -1,5 +1,44 @@
 # Platform status
 
+Linux 0.1.16 preserves validated Steam/SDL input context, exposes existing HIDAPI
+controller nodes through the native state guard, and improves device selection
+and bounded discovery logs. It likely addresses the Steam Deck detection report;
+ROG Ally X remains uncertain. Actual handheld testing is pending. Desktop/NVIDIA
+gameplay was manually accepted. The RADV-only nodcc workaround is based on
+patrickksmdev’s isolated RX 7600 test; the packaged affected-AMD case still needs
+validation. See [handheld controllers](HANDHELD_CONTROLLERS.md) and
+[RADV compatibility](AMD_RADV.md). A full local rebuild is required; save formats
+and state locations are unchanged.
+
+**Windows downloads remain the original implementation, without Linux additions.**
+The version-free Windows filename and implementation identity do not advance with
+Linux release numbers. Source snapshot versions are provenance only.
+
+Linux 0.1.15 adds an optional Cheats tab with independent off-by-default battle
+damage and EXP/AP/SP/gold multipliers, plus ordinary no-fall damage. Multipliers
+span 0x–20x in 0.01x steps. The existing Xenoblade 3 party-switch control moves
+from Controls to Mods beneath Quick Step, with its key and behavior retained.
+The maintainer manually accepted the combined Linux build; authored native,
+sanitizer, instruction and launcher tests provide separate component evidence.
+Damage-over-time/status and comprehensive DE/FC coverage remain unqualified.
+Native save formats are unchanged, but rewards earned remain after disabling
+cheats. See [Cheats](CHEATS.md). A full local rebuild is required.
+
+Linux 0.1.14 adds capability-gated driver-owned guest heap backing for Mesa RADV,
+with safe fallback to the existing import. **AMD gameplay performance, including
+the reported RX 6700 XT, still needs testing.** Controlled integrated-RADV memory
+tests passed; the maintainer accepted NVIDIA gameplay qualitatively. These are
+not AMD game-FPS results or measured NVIDIA performance parity. See
+[AMD / RADV notes](AMD_RADV.md). Save formats and Windows implementation are unchanged.
+
+Version 0.1.13 added early dependency diagnosis and explicit guided package repair
+inside supported Fedora 45 Distrobox environments. Native hosts receive manual
+instructions; ordinary builds and background updates never install packages.
+The baseline remains CPython 3.14, glibc 2.43+ and the required native interfaces.
+Fedora/Debian userspace checks, a fresh native build and a real 0.1.12 updater
+rehearsal passed. Actual Steam Deck/Bazzite desktop gameplay and an interactive
+privileged Distrobox transaction remain unverified.
+
 Monado II targets native Linux x86-64 and Windows x86-64 with SDL/Vulkan. It is
 not affiliated with Nintendo/Monolith Soft and includes no game files.
 
@@ -52,7 +91,8 @@ qualification; coverage limits below remain applicable.
 Windows retains the original Monado implementation. Its original author reported
 whole-game playability on NVIDIA RTX, including Future Connected. This fork has
 not independently built or run that Windows source. The Linux improvements listed
-in [TODO](../TODO.md) have not been backported and are not currently planned.
+in [TODO](../TODO.md) have not been backported. Windows development is approved;
+[the current handoff](WINDOWS_PORT_HANDOFF.md) covers the pending implementation.
 There is no Windows updater in this release.
 
 The public launcher restores the exact original generated landscape artwork;

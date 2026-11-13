@@ -23,6 +23,12 @@ _layout_spec.loader.exec_module(install_layout)
 _runtime_spec = importlib.util.spec_from_file_location('monado_runtime_check', Path(__file__).with_name('linux_runtime_check.py'))
 runtime_check = importlib.util.module_from_spec(_runtime_spec)
 _runtime_spec.loader.exec_module(runtime_check)
+_lease_spec = importlib.util.spec_from_file_location('monado_install_lease', Path(__file__).with_name('install_lease.py'))
+install_lease = importlib.util.module_from_spec(_lease_spec)
+_lease_spec.loader.exec_module(install_lease)
+_controller_spec = importlib.util.spec_from_file_location('monado_controller_environment', Path(__file__).with_name('controller_environment.py'))
+controller_environment = importlib.util.module_from_spec(_controller_spec)
+_controller_spec.loader.exec_module(controller_environment)
 BWRAP = Path('/usr/bin/bwrap')
 NGX_UPDATER = Path('/usr/bin/nvidia-ngx-updater')
 X11_SOCKETS = Path('/tmp/.X11-unix')
@@ -81,6 +87,7 @@ def private_runtime_environment(environment, state, *, planned_namespace=False):
     state = Path(state)
     if not planned_namespace and not private_tmp_alias(state):
         raise ValueError('private runtime environment requires the verified state /tmp namespace')
+    environment = controller_environment.private_environment(environment, state, planned_namespace)
     original = environment.get('XDG_RUNTIME_DIR')
     if not original:
         # Existing headless/X11 launches already use NGX's private /tmp fallback.
@@ -136,8 +143,18 @@ def dlss_namespace(argv, state, *, pid_namespace=True):
     # Outer GUI namespaces must not own PID1: a GUI crash must leave its game
     # alive for the existing Python subreaper/lock holder to adopt and wait for.
     command += ['--proc', '/proc'] if pid_namespace else ['--ro-bind', '/proc', '/proc']
-    command += [
-               '--bind', str(state), str(state), '--bind', str(state), '/tmp']
+    command += ['--bind', str(state), str(state)]
+    # [XCDE] LINUX-077: Steam's optional controller metadata can live in host
+    # /tmp. Admit one validated read-only file before replacing /tmp; point SDL
+    # at its canonical state alias, not an assumed propagated /tmp submount.
+    metadata = controller_environment.namespace_metadata(os.environ, state)
+    if metadata:
+        command += ['--ro-bind', metadata['source'], metadata['target']]
+    command += ['--bind', str(state), '/tmp']
+    if metadata:
+        # bwrap's directory bind does not propagate the earlier child file
+        # mount. Expose the same read-only inode at the private /tmp alias too.
+        command += ['--ro-bind', metadata['source'], '/tmp/' + controller_environment.PRIVATE_INFO]
     x11 = X11_SOCKETS.is_dir()
     if x11:
         command += ['--ro-bind', str(X11_SOCKETS), '/tmp/.X11-unix']
@@ -147,9 +164,12 @@ def dlss_namespace(argv, state, *, pid_namespace=True):
     command += ['--', *argv]
     with BWRAP.open('rb') as stream:
         identity = hashlib.file_digest(stream, 'sha256').hexdigest()
-    return command, {'kind': 'bwrap-private-dlss', 'helper': str(BWRAP),
+    result = {'kind': 'bwrap-private-dlss', 'helper': str(BWRAP),
                      'helper_sha256': identity, 'x11_socket_bind': x11,
                      'updater_masked': mask_updater, 'pid_namespace': pid_namespace}
+    if metadata:
+        result['controller_metadata'] = metadata
+    return command, result
 
 
 def prepare_namespace_state(launch):
@@ -176,6 +196,27 @@ def prepare_namespace_state(launch):
                 raise ValueError('private runtime directory must be owned by this user with mode 0700')
         finally:
             os.close(child)
+        metadata = launch['namespace'].get('controller_metadata')
+        if metadata:
+            expected_target = state / controller_environment.PRIVATE_INFO
+            if (metadata.get('target') != str(expected_target)
+                    or controller_environment.metadata_file(metadata.get('source')) is None):
+                raise ValueError('Steam controller metadata changed or has an unsafe bind target')
+            target_fd = os.open('runtime', os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=fd)
+            try:
+                item = os.open('steam-virtual-gamepad-info', os.O_RDONLY | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK,
+                               0o600, dir_fd=target_fd)
+                try:
+                    info = os.fstat(item)
+                    existing_source = metadata['source'] == str(expected_target)
+                    if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                            or info.st_uid != os.getuid()
+                            or (not existing_source and (stat.S_IMODE(info.st_mode) != 0o600 or info.st_size != 0))):
+                        raise ValueError('Steam controller metadata bind placeholder must be a private empty ordinary file')
+                finally:
+                    os.close(item)
+            finally:
+                os.close(target_fd)
         if launch['namespace'].get('x11_socket_bind', False):
             try:
                 os.mkdir('.X11-unix', 0o700, dir_fd=fd)
@@ -278,7 +319,9 @@ def main():
         # device environment remains available; runtime sets its own cache roots.
         environment = {k: v for k, v in os.environ.items()
                        if not k.startswith(('XCDE_', 'LARECOMP_', 'LASRECOMP_', 'MONADO_'))
-                       and not k.startswith('LD_') and k != 'GLIBC_TUNABLES'}
+                       and not k.startswith('LD_') and k not in ('GLIBC_TUNABLES', 'SDL_DYNAMIC_API', 'SDL_DYNAPI')
+                       and k not in controller_environment.CONTEXT_KEYS}
+        environment.update(controller_environment.preserve(os.environ))
         controls = {}
         for entry in args.env:
             key, separator, value = entry.partition('=')
@@ -308,11 +351,14 @@ def main():
         if 'namespace' in launch:
             prepare_namespace_state(launch)
         os.chdir(ROOT)
+        # A read-only inherited installation lease pins this game even if its
+        # launcher/supervisor dies. No writable regular descriptor is admitted.
+        runtime_fd = install_lease.acquire_runtime(ROOT)
         # No inherited writable regular descriptors may bypass the runtime guard.
         # Stdio remains for terminals/pipes; the guard validates file redirections.
         for entry in os.listdir('/proc/self/fd'):
             fd = int(entry)
-            if fd > 2:
+            if fd > 2 and fd != runtime_fd:
                 try:
                     os.close(fd)
                 except OSError:

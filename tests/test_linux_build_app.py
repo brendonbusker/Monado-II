@@ -54,6 +54,19 @@ class LinuxLibraryRootGrammar(unittest.TestCase):
                 build.validate_linux_library_root('/authored/' + character + '/source')
 
 
+class NativeReceiptSize(unittest.TestCase):
+    def test_supported_nested_build_receipt_exceeds_old_limit_but_remains_bounded(self):
+        with tempfile.TemporaryDirectory(prefix='monado-native-receipt-') as tmp:
+            path=Path(tmp).resolve()/'receipt.json'
+            value={'commands':['authored long immutable compiler argument ' * 80] * 1000}
+            path.write_text(json.dumps(value))
+            self.assertGreater(path.stat().st_size,2*1024*1024)
+            self.assertEqual(build.json_file(path),value)
+            path.write_bytes(b' '*(build.MAX_BUILD_RECEIPT+1))
+            with self.assertRaisesRegex(build.BuildError,'oversized build receipt'):
+                build.json_file(path)
+
+
 class LinuxBuildApp(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix='monado-build-app-')
@@ -114,6 +127,50 @@ class LinuxBuildApp(unittest.TestCase):
         self.assertIn('--framegen', stages['build-game'])
         self.assertEqual(before, inventory(self.root))
         self.assertEqual(sorted(p.name for p in self.port.iterdir()), [])
+
+    def test_game_only_plan_is_read_only_and_has_no_launcher_or_appimage_commands(self):
+        before = inventory(self.root)
+        with mock.patch.object(build, 'ROOT', self.root), \
+                mock.patch.object(build.subprocess, 'Popen', side_effect=AssertionError('executed')):
+            with contextlib.redirect_stdout(io.StringIO()) as output:
+                self.assertEqual(build.main(['--plan', '--game-only', '--build-id', 'payload-fixed', '--without-dlss']), 0)
+        document = json.loads(output.getvalue())
+        self.assertTrue(document['game_only'])
+        self.assertFalse(document['launches_game'])
+        self.assertFalse(document['launches_gui'])
+        stages = {stage['name'] for stage in document['commands']}
+        self.assertIn('generate-game', stages)
+        self.assertIn('build-game', stages)
+        self.assertFalse({'build-launcher', 'check-launcher', 'package-appimage'} & stages)
+        self.assertEqual(document['paths']['game'], str(self.port / 'build/payload-fixed-game/xcde-linux'))
+        self.assertNotIn('published', document['paths'])
+        self.assertEqual(before, inventory(self.root))
+
+    def test_game_only_refuses_reuse_and_unsafe_identity_before_build_commands(self):
+        before = inventory(self.root)
+        with self.assertRaisesRegex(build.BuildError, 'cannot reuse'):
+            build.build(self.root, game_only=True, reuse_game=self.port / 'build/old/xcde-linux')
+        with self.assertRaisesRegex(build.BuildError, 'unsafe build identity'):
+            build.layout(self.root, 2, game_only=True, identity='../outside', dlss=False)
+        self.assertEqual(self.commands, [])
+        self.assertEqual(before, inventory(self.root))
+
+    def test_game_only_build_cli_passes_fixed_identity_and_features(self):
+        with mock.patch.object(build, 'build') as operation:
+            self.assertEqual(build.main(['--game-only', '--build-id', 'payload-fixed', '--without-dlss']), 0)
+        operation.assert_called_once_with(jobs=4, identity='payload-fixed', dlss=False,
+                                          reuse_game=None, framegen=False, game_only=True)
+
+    def test_game_only_preflight_does_not_require_squashfs_tools(self):
+        other_spec = importlib.util.spec_from_file_location('monado_game_only_preflight', ROOT / 'tools/build_linux_app.py')
+        other = importlib.util.module_from_spec(other_spec); other_spec.loader.exec_module(other)
+        with mock.patch.object(other.sys, 'platform', 'linux'), \
+                mock.patch.object(other.platform, 'machine', return_value='x86_64'), \
+                mock.patch.object(other.sys, 'version_info', (3, 14, 4)), \
+                mock.patch.object(other.shutil, 'which', side_effect=lambda name, **kwargs: None if name in ('mksquashfs', 'unsquashfs') else '/authored/' + name):
+            other.preflight(dlss=False, game_only=True)
+            with self.assertRaisesRegex(other.BuildError, 'squashfs-tools'):
+                other.preflight(dlss=False)
 
     def test_runtime_dependency_failure_stops_before_generation_and_preserves_old_image(self):
         make_image(self.root / build.IMAGE, b'accepted prior launcher')
@@ -212,11 +269,14 @@ class LinuxBuildApp(unittest.TestCase):
         self.assertEqual(self.commands, [])
 
     def test_missing_host_tool_is_a_friendly_error_without_system_install(self):
-        with mock.patch.object(build.sys, 'platform', 'linux'), mock.patch.object(build.platform, 'machine', return_value='x86_64'), mock.patch.object(build.sys, 'version_info', (3, 14, 4)), mock.patch.object(build.shutil, 'which', side_effect=lambda name: None if name == 'mksquashfs' else '/authored/' + name):
-            # Call the original through the mock's wrapped module is impossible;
-            # read the function from a fresh isolated module instead.
-            other_spec = importlib.util.spec_from_file_location('monado_build_original_preflight', ROOT / 'tools/build_linux_app.py')
-            other = importlib.util.module_from_spec(other_spec); other_spec.loader.exec_module(other)
+        # Load the original preflight before simulating Linux so conditional
+        # imports still observe the real host, including Windows without fcntl.
+        other_spec = importlib.util.spec_from_file_location('monado_build_original_preflight', ROOT / 'tools/build_linux_app.py')
+        other = importlib.util.module_from_spec(other_spec); other_spec.loader.exec_module(other)
+        with mock.patch.object(other.sys, 'platform', 'linux'), \
+                mock.patch.object(other.platform, 'machine', return_value='x86_64'), \
+                mock.patch.object(other.sys, 'version_info', (3, 14, 4)), \
+                mock.patch.object(other.shutil, 'which', side_effect=lambda name, **kwargs: None if name == 'mksquashfs' else '/authored/' + name):
             with self.assertRaisesRegex(other.BuildError, 'squashfs-tools'):
                 other.preflight()
 
@@ -226,7 +286,7 @@ class LinuxBuildApp(unittest.TestCase):
         with mock.patch.object(other.sys, 'platform', 'linux'), \
                 mock.patch.object(other.platform, 'machine', return_value='x86_64'), \
                 mock.patch.object(other.sys, 'version_info', (3, 14, 4)), \
-                mock.patch.object(other.shutil, 'which', side_effect=lambda name: '/authored/' + name), \
+                mock.patch.object(other.shutil, 'which', side_effect=lambda name, **kwargs: '/authored/' + name), \
                 mock.patch.object(other, 'BWRAP', self.base / 'missing-bwrap'), \
                 mock.patch.object(other.runtime_check, 'discover_gnu_cxx', side_effect=ValueError('authored missing GNU runtime')):
             with self.assertRaisesRegex(other.BuildError, 'bubblewrap.*without-dlss'):
@@ -241,7 +301,7 @@ class LinuxBuildApp(unittest.TestCase):
         with mock.patch.object(other.sys, 'platform', 'linux'), \
                 mock.patch.object(other.platform, 'machine', return_value='x86_64'), \
                 mock.patch.object(other.sys, 'version_info', (3, 14, 4)), \
-                mock.patch.object(other.shutil, 'which', side_effect=lambda name: '/authored/' + name), \
+                mock.patch.object(other.shutil, 'which', side_effect=lambda name, **kwargs: '/authored/' + name), \
                 mock.patch.object(other.os, 'access', return_value=True), \
                 mock.patch.object(other, 'BWRAP', helper), \
                 mock.patch.object(other.runtime_check, 'discover_gnu_cxx', side_effect=ValueError('authored missing GNU runtime')):
@@ -254,7 +314,7 @@ class LinuxBuildApp(unittest.TestCase):
         with mock.patch.object(other.sys, 'platform', 'linux'), \
                 mock.patch.object(other.platform, 'machine', return_value='x86_64'), \
                 mock.patch.object(other.sys, 'version_info', (3, 14, 4)), \
-                mock.patch.object(other.shutil, 'which', side_effect=lambda name: None if name == 'nm' else '/authored/' + name):
+                mock.patch.object(other.shutil, 'which', side_effect=lambda name, **kwargs: None if name == 'nm' else '/authored/' + name):
             with self.assertRaisesRegex(other.BuildError, 'Missing host build tools: nm'):
                 other.preflight()
             other.preflight(dlss=False)
@@ -268,7 +328,7 @@ class LinuxBuildApp(unittest.TestCase):
         with mock.patch.object(other.sys, 'platform', 'linux'), \
                 mock.patch.object(other.platform, 'machine', return_value='x86_64'), \
                 mock.patch.object(other.sys, 'version_info', (3, 14, 4)), \
-                mock.patch.object(other.shutil, 'which', side_effect=lambda name: '/authored/' + name), \
+                mock.patch.object(other.shutil, 'which', side_effect=lambda name, **kwargs: '/authored/' + name), \
                 mock.patch.object(other.os, 'access', side_effect=lambda path, mode: path == helper and mode == os.X_OK), \
                 mock.patch.object(other, 'BWRAP', helper), \
                 mock.patch.object(other.runtime_check, 'discover_gnu_cxx', side_effect=ValueError('authored unreadable GNU runtime')):
@@ -338,7 +398,7 @@ class LinuxBuildApp(unittest.TestCase):
     def test_without_dlss_cli_is_passed_to_the_builder(self):
         with mock.patch.object(build, 'build') as run:
             self.assertEqual(build.main(['--without-dlss', '--jobs', '2']), 0)
-        run.assert_called_once_with(jobs=2, dlss=False, reuse_game=None, framegen=False)
+            run.assert_called_once_with(jobs=2, identity=None, dlss=False, reuse_game=None, framegen=False, game_only=False)
 
     def test_default_framegen_fetches_and_builds_missing_sdk_without_changing_runtime_checkbox(self):
         state = self.port / 'play/launcher'
@@ -428,7 +488,7 @@ class LinuxBuildApp(unittest.TestCase):
     def test_framegen_cli_optin_and_readonly_plan_record_the_feature(self):
         with mock.patch.object(build, 'build') as operation:
             self.assertEqual(build.main(['--framegen', '--jobs', '2']), 0)
-        operation.assert_called_once_with(jobs=2, dlss=True, reuse_game=None, framegen=True)
+            operation.assert_called_once_with(jobs=2, identity=None, dlss=True, reuse_game=None, framegen=True, game_only=False)
         before = inventory(self.root)
         with mock.patch.object(build, 'ROOT', self.root), contextlib.redirect_stdout(io.StringIO()) as output:
             self.assertEqual(build.main(['--plan', '--framegen']), 0)
@@ -441,7 +501,7 @@ class LinuxBuildApp(unittest.TestCase):
         # The current builder must add the provider without requiring new flags.
         with mock.patch.object(build, 'build') as operation:
             self.assertEqual(build.main(['--jobs', '4']), 0)
-        operation.assert_called_once_with(jobs=4, dlss=True, reuse_game=None, framegen=True)
+            operation.assert_called_once_with(jobs=4, identity=None, dlss=True, reuse_game=None, framegen=True, game_only=False)
 
     def test_nonboolean_feature_selections_are_rejected_before_any_writes(self):
         before = inventory(self.root)

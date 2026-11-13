@@ -818,6 +818,13 @@ static void svc_impl(Cpu *c, uint32_t imm, uint64_t pc) {
     case 0x01: {  // SetHeapSize
         uint64_t size = x[1];
         if (size > HEAP_MAX) { x[0] = R_OUT_OF_RESOURCE; break; }
+#if defined(__linux__) && defined(XCDE_LINUX_RADV_HEAP)
+        // [XCDE] LINUX-070: choose backing before publishing the first heap.
+        // The guest starts before the UI's Vulkan device is ready; a later
+        // remap at first draw would discard data the guest has already written.
+        extern void backend_guest_heap_prepare(uint64_t size);
+        backend_guest_heap_prepare(size);
+#endif
         heap_size = size;
         diag_use("mem", "SetHeapSize 0x%llx", (unsigned long long)size);
         region_remove(HEAP_BASE);

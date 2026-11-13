@@ -73,6 +73,13 @@ typedef struct {
     int cutscene_mode;   // [XCDE] T224: 0 cutscenes at the FPS setting, 1 at 30, 2 at 30 + FSR 3 frame generation (xcde.ini cutscenes = same|30|30fg)
     int menu_navigation_speed; // [XCDE] LINUX-014: MENU_NAV_*, normal=30-style, fast=60-style repeat
     bool quickstep_slot; // [XCDE] LINUX-039: character-owned Quick Step slot, opt-in
+    // [XCDE] LINUX-072: opt-in XCDE cheats, fixed integer percentages (100 = 1x).
+    // These are runtime preferences; the native game save format is unchanged.
+    bool cheat_damage_dealt, cheat_damage_received;
+    bool cheat_exp, cheat_ap, cheat_sp, cheat_gold;
+    int cheat_damage_dealt_percent, cheat_damage_received_percent;
+    int cheat_exp_percent, cheat_ap_percent, cheat_sp_percent, cheat_gold_percent;
+    bool cheat_no_fall_damage;
 } Settings;
 
 enum { N_TUNIC_COLOURS = 13, N_HEART_COLOURS = 9 };

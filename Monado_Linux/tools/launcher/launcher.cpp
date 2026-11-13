@@ -3,6 +3,7 @@
 // (runtime/host/settings_ini.c). Build: tools/launcher/build.sh. Run: "Play Monado.bat" at the repository root.
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
+#include "../../runtime/platform/sdl_controller_diagnostics.h"  // [XCDE] LINUX-077
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -97,6 +98,10 @@ struct Cfg {
     bool cut_fg = false;    // T224: cutscenes at 30 + frame generation, gameplay without it (xcde.ini cutscenes = 30fg)
     bool quickstep_slot = false; // [XCDE] LINUX-039: optional per-character gem slot
     bool party_switch = false;  // party mod: switch the controlled character (F2 / L2 + L1 / R1), runtime/hle/party.c
+    // [XCDE] LINUX-072: independent opt-ins; integer percentages preserve 0.01x steps.
+    bool cheat_enabled[6] = {};
+    int cheat_percent[6] = {100, 100, 100, 100, 100, 100};
+    bool cheat_no_fall_damage = false;
     bool show_fps = false;
     int fps = 0;  // index into k_fps_ini
     int menu_navigation_speed = 0;  // 0 normal (30 FPS style), 1 fast (60 FPS style)
@@ -141,6 +146,48 @@ static const char *const k_lang_ini[] = {"auto", "en-US", "es", "fr", "de", "it"
 static const char *const k_lang_ui[] = {"Inglés (por defecto)", "Inglés", "Español", "Francés", "Alemán", "Italiano", "Japonés"};
 
 static Cfg g;
+// [XCDE] LINUX-072: launcher cheat configuration, shared key/units contract with settings_ini.c.
+static const char *const k_cheat_ini[] = {"damage_dealt", "damage_received", "exp", "ap", "sp", "gold"};
+static bool cheat_enabled_value(const char *v) { return !strcmp(v, "1") || !strcmp(v, "true"); }
+static int cheat_percent_value(const char *v) {
+    if (!*v) return 100;
+    int value = 0;
+    for (const char *p = v; *p; ++p) {
+        if (*p < '0' || *p > '9') return 100;
+        value = value * 10 + (*p - '0');
+        if (value > 2000) return 100; // bounded before another multiplication, including oversized input
+    }
+    return value;
+}
+static void cheats_reset() {
+    for (int i = 0; i < 6; ++i) { g.cheat_enabled[i] = false; g.cheat_percent[i] = 100; }
+    g.cheat_no_fall_damage = false;
+}
+static bool is_cheat_key(const char *key) {
+    if (!strcmp(key, "cheat_no_fall_damage")) return true;
+    for (const char *name : k_cheat_ini) {
+        const std::string base = std::string("cheat_") + name;
+        if (base == key || base + "_percent" == key) return true;
+    }
+    return false;
+}
+static bool cheats_load(const char *key, const char *value) {
+    if (!strcmp(key, "cheat_no_fall_damage")) { g.cheat_no_fall_damage = cheat_enabled_value(value); return true; }
+    for (int i = 0; i < 6; ++i) {
+        const std::string base = std::string("cheat_") + k_cheat_ini[i];
+        if (base == key) { g.cheat_enabled[i] = cheat_enabled_value(value); return true; }
+        if (base + "_percent" == key) { g.cheat_percent[i] = cheat_percent_value(value); return true; }
+    }
+    return false;
+}
+static void cheats_save(FILE *file) {
+    for (int i = 0; i < 6; ++i) {
+        fprintf(file, "cheat_%s = %d\ncheat_%s_percent = %d\n", k_cheat_ini[i], g.cheat_enabled[i],
+                k_cheat_ini[i], std::clamp(g.cheat_percent[i], 0, 2000));
+    }
+    fprintf(file, "cheat_no_fall_damage = %d\n", g.cheat_no_fall_damage);
+}
+// [XCDE] LINUX-072: end launcher cheat configuration.
 #ifdef __linux__
 // [XCDE] LINUX-009: preserve runtime values absent from the launcher lists,
 // and unrelated keys, until the user explicitly changes that control.
@@ -158,6 +205,19 @@ static const char *cfg_value(const char *, const char *fallback) { return fallba
 
 // [XCDE] launcher language (xcde.ini launcher_lang = es | en): the Spanish text is the key, T() gives the English one.
 static const char *const k_en[][2] = {
+    // [XCDE] LINUX-072: optional launcher cheats and exact percentage controls.
+    {"Trucos", "Cheats"}, {"Combate", "Combat"}, {"Recompensas", "Rewards"}, {"Exploración", "Exploration"},
+    {"Daño causado por el grupo", "Party damage dealt"}, {"Daño recibido por el grupo", "Party damage received"},
+    {"EXP obtenida", "EXP gained"}, {"AP obtenidos", "AP gained"}, {"SP obtenidos", "SP gained"},
+    {"Dinero obtenido", "Gold gained"}, {"Sin daño por caídas", "No fall damage"},
+    {"Cada truco se activa por separado y se aplica al iniciar el juego.",
+     "Each cheat is enabled separately and applies when the game starts."},
+    {"Multiplicadores: de 0x a 20x, en pasos de 0.01x (1%). 1x mantiene la cantidad original.",
+     "Multipliers: 0x to 20x, in 0.01x (1%) steps. 1x keeps the original amount."},
+    {"Ctrl+clic para escribir un porcentaje. Con el control activo, Ctrl+flecha ajusta 1%.",
+     "Ctrl-click to enter a percentage. With the slider active, Ctrl+arrow adjusts 1%."},
+    {"La EXP, AP, SP y el dinero ganados permanecen en la partida al desactivar los trucos.",
+     "EXP, AP, SP and gold already earned remain in your save after disabling cheats."},
     {"A (acción, usar arte, aceptar)", "A (action, use art, confirm)"}, {"B (saltar, atrás)", "B (jump, back)"},
     {"X (menú principal)", "X (main menu)"}, {"Y (mapa)", "Y (map)"}, {"Pulsar stick izq.", "Left stick press"},
     {"Pulsar stick der.", "Right stick press"}, {"L (objetivo anterior)", "L (previous target)"},
@@ -402,11 +462,15 @@ static int find(const char *const *list, int n, const char *v) {
 static void load() {
     g.menu_navigation_speed = 0;
     g.quickstep_slot = false; // [XCDE] LINUX-039: missing/invalid key resets OFF
+    cheats_reset(); // [XCDE] LINUX-072: old/missing configurations always opt out.
     for (int i = 0; i < NPAD; i++) g.pad[i] = k_def_pad[i];
     for (int i = 0; i < NACT; i++) g.key[i] = k_def_key[i], g.key2[i] = k_def_key2[i];
     FILE *f = fopen(path("xcde.ini").c_str(), "r");
     if (!f) return;
     int layout = 1;  // (bind_layout: an older file's keyboard lines are the old layout - the new defaults replace them)
+#ifdef __linux__
+    bool quality_present = false; // [XCDE] LINUX-056: explicit choices survive reload, regardless of key order.
+#endif
     char line[512];
     while (fgets(line, sizeof line, f)) {
         char *eq = strchr(line, '=');
@@ -423,7 +487,12 @@ static void load() {
         else if (!strcmp(k, "window") && (i = find(k_wins, 5, v)) >= 0) g.win = i;
         else if (!strcmp(k, "resolution") && (i = find(k_res_ini, 7, v)) >= 0) g.res = i;
         else if (!strcmp(k, "upscaler")) g.upscaler = !strcmp(v, "fsr") ? 1 : !strcmp(v, "fsr3") ? 2 : !strcmp(v, "dlss") ? 3 : 0;
-        else if (!strcmp(k, "upscale_quality") && (i = find(k_uq_ini, 5, v)) >= 0) g.uquality = i;
+        else if (!strcmp(k, "upscale_quality") && (i = find(k_uq_ini, 5, v)) >= 0) {
+            g.uquality = i;
+#ifdef __linux__
+            quality_present = true;
+#endif
+        }
         else if (!strcmp(k, "frame_gen")) g.frame_gen = atoi(v) != 0;
         else if (!strcmp(k, "antialias")) g.smaa = !strcmp(v, "smaa");
         else if (!strcmp(k, "depth_of_field")) g.dof = atoi(v) != 0;
@@ -435,6 +504,7 @@ static void load() {
         else if (!strcmp(k, "fps")) { g.fps = 0; for (int j = 0; j < 6; j++) if (!strcmp(v, k_fps_ini[j])) g.fps = j; }
         else if (!strcmp(k, "menu_navigation_speed")) g.menu_navigation_speed = !strcmp(v, "fast") ? 1 : 0;
         else if (!strcmp(k, "quickstep_slot")) g.quickstep_slot = !strcmp(v, "1");
+        else if (cheats_load(k, v)) {} // [XCDE] LINUX-072: recognized keys are not unrelated extras.
         else if (!strcmp(k, "volume")) g.volume = atoi(v);
         else if (!strcmp(k, "movie_audio")) g.movie_audio = atoi(v) != 0;
         else if (!strcmp(k, "language") && (i = find(k_lang_ini, 7, v)) >= 0) g.lang = i;
@@ -479,10 +549,14 @@ static void load() {
         const char *known[] = {"fullscreen","window","resolution","upscaler","upscale_quality","frame_gen","antialias","depth_of_field",
             "game_blur","vsync","cutscenes","party_switch","show_fps","fps","menu_navigation_speed","quickstep_slot","volume","movie_audio","language","bind_layout",
             "mouse_look","mouse_sens","stick_deadzone","launcher_lang","mouse_invert","button_icons"};
-        if (find(known, sizeof known / sizeof *known, k) < 0 && strncmp(k, "mod_", 4) && strncmp(k, "bind_", 5)) g_extra[k] = v;
+        if (is_cheat_key(k)) g_extra.erase(k); // [XCDE] LINUX-072: never serialize stale duplicate cheat keys.
+        else if (find(known, sizeof known / sizeof *known, k) < 0 && strncmp(k, "mod_", 4) && strncmp(k, "bind_", 5)) g_extra[k] = v;
 #endif
     }
     fclose(f);
+#ifdef __linux__
+    if (g.upscaler == 3 && !quality_present) g.uquality = 0;
+#endif
     if (layout < 2) for (int i = 0; i < NACT; i++) g.key[i] = k_def_key[i], g.key2[i] = k_def_key2[i];
 }
 
@@ -506,6 +580,7 @@ static bool save() {
     fprintf(f, "volume = %d\nmovie_audio = %d\nlanguage = %s\nfps = %s\n", g.volume, g.movie_audio, cfg_value("language", k_lang_ini[g.lang]), cfg_value("fps", k_fps_ini[g.fps]));
     fprintf(f, "menu_navigation_speed = %s\n", g.menu_navigation_speed == 1 ? "fast" : "normal");
     fprintf(f, "quickstep_slot = %d\n", g.quickstep_slot); // [XCDE] LINUX-039
+    cheats_save(f); // [XCDE] LINUX-072
     for (const Mod &m : g_mods) if (!is_icon_mod(m.name)) fprintf(f, "mod_%s = %d", m.name.c_str(), m.on), fputc(10, f);
     int ic = icons_effective(g.icons);
     fprintf(f, "button_icons = %s\nmod_%s = %d\nmod_%s = %d\nmod_icons_keyboard = %d\n", k_icon_ini[g.icons], k_icon_mod[0], ic == 2,
@@ -818,11 +893,14 @@ static void tab_graphics() {
     const int linux_values[] = {0, 1, 3};
     int selected = g.upscaler == 3 ? 2 : g.upscaler;
     if (launcher_theme::combo(T("Escalado / antialiasing"), &selected, TL(linux_ups, have_dlss ? 3 : 2).p, have_dlss ? 3 : 2)) {
+        // [XCDE] LINUX-056: entering DLSS starts at native 100% (DLAA).
+        // An existing DLSS quality remains editable and persists on reopening.
+        if (linux_values[selected] == 3 && g.upscaler != 3) g.uquality = 0;
         g.upscaler = linux_values[selected];
         linux_graphics_normalize();
     }
     if (g.upscaler == 3) {
-        const char *quality[] = {"DLAA (native resolution)", "Quality (67%)", "Balanced (59%)", "Performance (50%)", "Ultra Performance (33%)"};
+        const char *quality[] = {"DLAA / Native (100%)", "Quality (67%)", "Balanced (59%)", "Performance (50%)", "Ultra Performance (33%)"};
         launcher_theme::combo(T("Calidad del escalado"), &g.uquality, quality, 5);
         ImGui::PushTextWrapPos();
         ImGui::TextDisabled("Requires a compatible NVIDIA RTX GPU. Unavailable DLSS falls back to spatial scaling.");
@@ -931,10 +1009,6 @@ static void tab_controls() {
     if (npads > 0) ImGui::Text(T("   Mando conectado: %s"), SDL_GetGamepadNameForID(ids[0]));
     else ImGui::TextDisabled("%s", T("   (ningún mando detectado)"));
     SDL_free(ids);
-    launcher_theme::checkbox(T("Cambiar de personaje como en Xenoblade 3 (mantén L2 y pulsa L1 / R1: el de arriba / abajo; F2)"), &g.party_switch);
-    ImGui::SetItemTooltip("%s", T("Pasa el control al siguiente miembro del grupo, en el campo y en combate. Cada uno se queda\n"
-                          "donde está y conserva sus recargas de artes; el anterior pasa a la IA. No funciona en menús ni\n"
-                          "escenas, y en combate salta a los miembros caídos."));
     {
         static const char *ic_ui[] = {"Automático (el mando conectado; sin mando, teclado)", "Switch", "Xbox", "PlayStation",
                                       "Teclado (las teclas asignadas)"};
@@ -1140,8 +1214,13 @@ static void tab_mods() {
     launcher_theme::checkbox(T("Ranura exclusiva de Paso rápido"), &g.quickstep_slot);
     ImGui::TextWrapped("%s", T("Equipa una gema de Paso rápido en una ranura propia del personaje, incluso sin botas."));
     ImGui::TextWrapped("%s", T("Función opcional estable. Desactivada por defecto para quienes prefieren el sistema de equipo original."));
-    ImGui::Separator();
 #endif
+    // [XCDE] LINUX-072: keep the existing setting/behavior, grouped with built-in mods.
+    launcher_theme::checkbox(T("Cambiar de personaje como en Xenoblade 3 (mantén L2 y pulsa L1 / R1: el de arriba / abajo; F2)"), &g.party_switch);
+    ImGui::SetItemTooltip("%s", T("Pasa el control al siguiente miembro del grupo, en el campo y en combate. Cada uno se queda\n"
+                          "donde está y conserva sus recargas de artes; el anterior pasa a la IA. No funciona en menús ni\n"
+                          "escenas, y en combate salta a los miembros caídos."));
+    ImGui::Separator();
     static bool scanned;
     if (!scanned) { scanned = true; scan_mods(); }
 #ifdef __linux__
@@ -1175,6 +1254,39 @@ static void tab_mods() {
         shown++;
     }
     if (!shown) ImGui::TextDisabled("%s", T("No hay mods instalados."));
+}
+
+// [XCDE] LINUX-072: integer-percentage values; Ctrl+navigation gives precise 0.01x steps.
+static void cheat_slider(int index, const char *label) {
+    ImGui::PushID(index);
+    launcher_theme::checkbox(T(label), &g.cheat_enabled[index]);
+    ImGui::BeginDisabled(!g.cheat_enabled[index]);
+    const float number_width = ImGui::CalcTextSize("20.00x").x;
+    const float available = ImGui::GetContentRegionAvail().x;
+    const float width = ImMax(40.0f, ImMin(360 * g_scale, available - number_width - ImGui::GetStyle().ItemInnerSpacing.x));
+    ImGui::SetNextItemWidth(width);
+    ImGui::SliderInt("##multiplier", &g.cheat_percent[index], 0, 2000, "%d%%", ImGuiSliderFlags_AlwaysClamp);
+    ImGui::SetItemTooltip("%s", T("Ctrl+clic para escribir un porcentaje. Con el control activo, Ctrl+flecha ajusta 1%."));
+    ImGui::SameLine(0, ImGui::GetStyle().ItemInnerSpacing.x);
+    ImGui::Text("%.2fx", g.cheat_percent[index] / 100.0);
+    ImGui::EndDisabled();
+    ImGui::PopID();
+}
+
+static void tab_cheats() {
+    ImGui::TextWrapped("%s", T("Cada truco se activa por separado y se aplica al iniciar el juego."));
+    ImGui::TextWrapped("%s", T("Multiplicadores: de 0x a 20x, en pasos de 0.01x (1%). 1x mantiene la cantidad original."));
+    launcher_theme::section(T("Combate"));
+    cheat_slider(0, "Daño causado por el grupo");
+    cheat_slider(1, "Daño recibido por el grupo");
+    launcher_theme::section(T("Recompensas"));
+    cheat_slider(2, "EXP obtenida");
+    cheat_slider(3, "AP obtenidos");
+    cheat_slider(4, "SP obtenidos");
+    cheat_slider(5, "Dinero obtenido");
+    ImGui::TextWrapped("%s", T("La EXP, AP, SP y el dinero ganados permanecen en la partida al desactivar los trucos."));
+    launcher_theme::section(T("Exploración"));
+    launcher_theme::checkbox(T("Sin daño por caídas"), &g.cheat_no_fall_damage);
 }
 
 static void tab_audio() {
@@ -1307,7 +1419,7 @@ int main(int argc, char **argv) {
         !launcher_linux::canonical(game_project ? game_project : project, launcher_linux::game_project, true) ||
         !launcher_linux::canonical(input, launcher_linux::input, true) ||
         !launcher_linux::canonical(game, launcher_linux::game, false) || !state || state[0] != '/' ||
-        shot_tab < 0 || shot_tab > 3 || shot_frame < 1 || shot_frame > 10000) {
+        shot_tab < 0 || shot_tab > 4 || shot_frame < 1 || shot_frame > 10000) {
         fprintf(stderr, "Supply canonical absolute project/input/game paths, absolute private state and valid capture options\n"); return 2;
     }
     if (update_channel >= 0 && (shot || script || !launcher_linux::update_adopt_fd(update_channel))) {
@@ -1348,6 +1460,9 @@ int main(int argc, char **argv) {
         llog("SDL_Init with gamepads failed (%s): video only", SDL_GetError());
         if (!SDL_Init(SDL_INIT_VIDEO)) return fail("Could not start SDL (video).");
     }
+    // [XCDE] LINUX-077: inventory without opening a second reference to pads
+    // already owned by the ImGui SDL backend.
+    rt_input_inventory(g_llog, "launcher", "startup");
     // [XCDE] LINUX-019: use the user's expanded client size so the artwork is visible on opening.
     const int launcher_w = 1267, launcher_h = 804;
     SDL_Window *win = SDL_CreateWindow("Monado II - Launcher", launcher_w, launcher_h, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN);
@@ -1444,7 +1559,8 @@ int main(int argc, char **argv) {
                 run = false;
 #endif
             }
-            if (e.type == SDL_EVENT_GAMEPAD_ADDED) SDL_OpenGamepad(e.gdevice.which);
+            if (e.type == SDL_EVENT_GAMEPAD_ADDED || e.type == SDL_EVENT_GAMEPAD_REMOVED)
+                rt_input_inventory(g_llog, "launcher", e.type == SDL_EVENT_GAMEPAD_ADDED ? "gamepad added" : "gamepad removed");
         }
         ImGui_ImplSDLRenderer3_NewFrame();
         ImGui_ImplSDL3_NewFrame();
@@ -1476,6 +1592,8 @@ int main(int argc, char **argv) {
             if (ImGui::BeginTabItem(T("Audio e idioma"), NULL, f2)) { tab_audio(); ImGui::EndTabItem(); }
             ImGuiTabItemFlags f3 = shot && shot_tab == 3 ? ImGuiTabItemFlags_SetSelected : 0;
             if (ImGui::BeginTabItem(T("Mods"), NULL, f3)) { tab_mods(); ImGui::EndTabItem(); }
+            ImGuiTabItemFlags f4 = shot && shot_tab == 4 ? ImGuiTabItemFlags_SetSelected : 0;
+            if (ImGui::BeginTabItem(T("Trucos"), NULL, f4)) { tab_cheats(); ImGui::EndTabItem(); } // [XCDE] LINUX-072
             ImGui::EndTabBar();
         }
         ImGui::PopTextWrapPos();

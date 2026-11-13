@@ -348,7 +348,7 @@ def force_owned(owned):
     return killed
 
 
-def supervise(launch, *, session=None, timeout=21600, cancel_grace=15, poll_seconds=0.1, cancellation=None):
+def supervise(launch, *, session=None, timeout=21600, cancel_grace=15, poll_seconds=0.1, cancellation=None, runtime_fd=None):
     """Own only this requested compiler and its descendants until reaped.
 
     Signals request cooperative cancellation. Parent death terminates only this
@@ -436,6 +436,7 @@ def supervise(launch, *, session=None, timeout=21600, cancel_grace=15, poll_seco
         child = subprocess.Popen(execution, cwd=launch['cwd'], env=environment,
                                  stdin=subprocess.DEVNULL, stdout=log_fd, stderr=log_fd,
                                  start_new_session=True, close_fds=True,
+                                 pass_fds=(() if runtime_fd is None else (runtime_fd,)),
                                  preexec_fn=parent_death_guard())
         while True:
             exit_code = child.poll()
@@ -600,6 +601,7 @@ def arguments(argv=None):
 def main(argv=None):
     parser, args = arguments(argv)
     cancellation = []
+    runtime_fd = None
     def request(number, _frame):
         if not cancellation:
             cancellation.append(number)
@@ -610,6 +612,8 @@ def main(argv=None):
             raise ValueError('--timeout must be finite and in 1..86400 seconds')
         if args.session is not None and not re.fullmatch(r'[0-9a-f]{32}', args.session):
             raise ValueError('--session must be 32 lowercase hexadecimal digits')
+        if not args.dry_run:
+            runtime_fd = run_linux.install_lease.acquire_runtime(ROOT)
         launch = prepare(args.executable, args.state_root, args.env, cancellation=cancellation)
         if args.dry_run:
             if cancellation:
@@ -620,10 +624,11 @@ def main(argv=None):
         if not cancellation:
             launch['runtime_validation'] = run_linux.validate_runtime(launch)
         os.umask(0o077)
-        return supervise(launch, session=args.session, timeout=args.timeout, cancellation=cancellation)['exit']
+        return supervise(launch, session=args.session, timeout=args.timeout, cancellation=cancellation, runtime_fd=runtime_fd)['exit']
     except (ValueError, OSError, RuntimeError, subprocess.SubprocessError) as error:
         parser.exit(1, str(error) + '\n')
     finally:
+        run_linux.install_lease.release(runtime_fd)
         for number, handler in handlers.items():
             signal.signal(number, handler)
 

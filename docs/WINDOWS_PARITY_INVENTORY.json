@@ -1,0 +1,770 @@
+{
+  "approach": "Use latest repository; adapt portable accepted Linux bundles into existing Monado_Windows while retaining native Windows platform and graphics providers",
+  "changed_common_files": [
+    {
+      "linux": {
+        "bytes": 348,
+        "sha256": "fd887b061b1f04a8f3bccf767dade674299ca7df898050390892caf78e25f3d5"
+      },
+      "relative_path": ".gitignore",
+      "windows": {
+        "bytes": 262,
+        "sha256": "30181fe87ca7326c98dab20aaf8f062ab5aff46fd9539b7aeb018a7543f8ec29"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 5564,
+        "sha256": "265049618ff94d13c7e1d9ec881388a38c81682ba75f53496e28d11ff82fb965"
+      },
+      "relative_path": "NOTICE.md",
+      "windows": {
+        "bytes": 2607,
+        "sha256": "7241118eafeec94a9dc15d2ee17bcd3768dc0da4373e8ebedbd5de5230d14ea6"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 336,
+        "sha256": "f44bb2a836977fbb0d8c1a67b222bb1a4e703d468f1df8361ab9462a11a2fc95"
+      },
+      "relative_path": "README.md",
+      "windows": {
+        "bytes": 340,
+        "sha256": "9cc3902bdc549d09d7a9728b9feac287faa392bad8e3d138e342db38cb8cb0d7"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 1252,
+        "sha256": "7a868bf524669135e773e2feda52ac468ac960c3fb56c7ac3af10a4582940e7d"
+      },
+      "relative_path": "docs/contracts/patch-format.md",
+      "windows": {
+        "bytes": 366,
+        "sha256": "d6286eab2e726bdb9f0cfc2fcf440d9234467f2b89f59c3f94b8099ab8bd692b"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 2997,
+        "sha256": "913f85eb32ed859a0f00943e08535329865d42693815b1ad63ba5f75a6df05f4"
+      },
+      "relative_path": "games/xcde/hle_classes.tsv",
+      "windows": {
+        "bytes": 1862,
+        "sha256": "a581307f33a219fbaf53891c9b71182ea6702c4f46d90998a9c1988f950c3669"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 44521,
+        "sha256": "faee7ff66b22cedf4d2378e8facbe794cddd48e23e67b74cc2227d3cf5315910"
+      },
+      "relative_path": "games/xcde/patches.py",
+      "windows": {
+        "bytes": 3202,
+        "sha256": "6536d643a61b42ae6b5d0763b3e079441552d0d36eec85f6c16faa2ffa396ec4"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 10522,
+        "sha256": "b72a9ff0e9d2c41147c5437c141e25b23c1447d187f82a3a9af7bf7b9f838baf"
+      },
+      "relative_path": "runtime/cpu.h",
+      "windows": {
+        "bytes": 10423,
+        "sha256": "0e601f6c37ac49ec3b7c7f2f76327f5089e6a58795dffb9f7b2f00cc3e10fe15"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 3086,
+        "sha256": "f7adcb29ae416f82f864efa6a2de92d256624dc34ac30ff9aa14be7418bcf979"
+      },
+      "relative_path": "runtime/diag/watchdog.c",
+      "windows": {
+        "bytes": 1869,
+        "sha256": "cd6c36df7648104265f23805ced7b9e7b89278fd09f0c5993fa0109cdfd02ece"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 13633,
+        "sha256": "bbf515d0497028024f219ddfeaa0aa0083a58c360d035cdf366155f957d39a16"
+      },
+      "relative_path": "runtime/hle/fibers.c",
+      "windows": {
+        "bytes": 6409,
+        "sha256": "b2d8560bde0f6329c515990432956a02f7baf737c6c7e38e84b24abdbfb13447"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 41180,
+        "sha256": "ce983928a39a3d78f3e1617345e6d62d612034afd77c19478b8a1f0fe5672f5f"
+      },
+      "relative_path": "runtime/hle/framepace.c",
+      "windows": {
+        "bytes": 35228,
+        "sha256": "640860adf7c80fd1aad4d910f9bfd98cbc58da5d784099c27abd624deff275dc"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 44032,
+        "sha256": "342bd90f5bc569c49543ab7282b25d6cf8aaadb8b2f1fedd95fbd300a337c0fa"
+      },
+      "relative_path": "runtime/hle/input.c",
+      "windows": {
+        "bytes": 40794,
+        "sha256": "410dcbb5f6a8897f6414e264b8f575edb4d6e9de233fe9d498340f9e525a2240"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 65296,
+        "sha256": "3999281bbca7221a53b9b017f78ae3b5df4fd8af4a87f713260e7a9bf54d03d7"
+      },
+      "relative_path": "runtime/hle/party.c",
+      "windows": {
+        "bytes": 51251,
+        "sha256": "7353f1d15e8a2d13fbf06ac3e25b5a2b454d6c34fb2613bf407ce278cf1d1a84"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 10631,
+        "sha256": "1a1e5c7a9041c95949d31795dca2b34e4394ecb541a39a4f9a3d093bbe50f565"
+      },
+      "relative_path": "runtime/host/main_boot.c",
+      "windows": {
+        "bytes": 6252,
+        "sha256": "d2adf36be67a2bf282b899ebb85dbf8d528080bd80bda5c922944e0546972b2c"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 13072,
+        "sha256": "843cc0e08e7bb644d894dffd3ba25bf313bb07dd7f8fea338087260f04c2d2a3"
+      },
+      "relative_path": "runtime/host/settings_ini.c",
+      "windows": {
+        "bytes": 8934,
+        "sha256": "6a1283b1b218063fbab14ef3b27943b7fcf6fb91d51875c96baf456cac6c7237"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 10561,
+        "sha256": "d9005b2846af61bdc15821de250cf3b80d80de8ef128b54bfe92e074bd471830"
+      },
+      "relative_path": "runtime/ipc.c",
+      "windows": {
+        "bytes": 9671,
+        "sha256": "79270e6cc7b94f29ddec2fcde873ae5ac9b61c72574c63eedf1769997f9eb704"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 3255,
+        "sha256": "377c9b726f1cb11ffbad0f26b30a41e57c15c913e81febef635dee94a38906d8"
+      },
+      "relative_path": "runtime/ipc.h",
+      "windows": {
+        "bytes": 3172,
+        "sha256": "5496c8b248700d434eed939504f0faa7109f5e2cb4273a83ac9ea4452be6d751"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 54210,
+        "sha256": "b895707f6cc9c7cadd85ae4b7f12a5aa08308c21c66aa1448992bace0b4c0879"
+      },
+      "relative_path": "runtime/kernel.c",
+      "windows": {
+        "bytes": 50553,
+        "sha256": "2f4055a858050caa65f8628b0dc16da3bae0fd073bb53a3266f9775ce4c85004"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 22990,
+        "sha256": "d750831df8d5090eb30aa40d1b68fb1fbfb19327f59f42c3afbb49deacea5ac0"
+      },
+      "relative_path": "runtime/nvn/cmdbuf.c",
+      "windows": {
+        "bytes": 22636,
+        "sha256": "ea1a3e2a201f4f00d4efe8c17cc2e2507083a31248a4b4193f9312e3c31f0f5a"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 6709,
+        "sha256": "29992032db84187a31e44b122b1ede07277510d5bec868ea4d76404f5a8ccffb"
+      },
+      "relative_path": "runtime/nvn/nvn.h",
+      "windows": {
+        "bytes": 6121,
+        "sha256": "a1e7246750fe2c4c74fe57a1840d0f5919777ec25971714fa198e7ee223a0684"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 59291,
+        "sha256": "b225e41f50ecdc68d2367122894fb3d32c57f6818c630c64fb566ddc259c5f7d"
+      },
+      "relative_path": "runtime/nvn/objects.c",
+      "windows": {
+        "bytes": 55737,
+        "sha256": "054597d8048e50f12b7b33b360737cc7ffce47b58f7522fb243a037e5970a728"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 6491,
+        "sha256": "f28448504e5af4196384fc008f4de7666556ec5723ec407f02def37c9be8090f"
+      },
+      "relative_path": "runtime/nvn/output_scale.c",
+      "windows": {
+        "bytes": 5829,
+        "sha256": "ff1e75a699e3b5326a57d341ce098c9e6b0f1cf743fbcb5a3e4afed0b90301bd"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 91950,
+        "sha256": "10b4a671fd69678ef7affca1b2d903e1219e52a0fc3d87569e3819ea94b04b01"
+      },
+      "relative_path": "runtime/nvn/vulkan/device.c",
+      "windows": {
+        "bytes": 79644,
+        "sha256": "61247a12ba8657ccb70a3a69eba2cea1169f862890c72fffdc76c6fc7f3b0e6a"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 20741,
+        "sha256": "11f258a6fefd9341cfb0ba22458c761ec2a1fba0223913ec3019e9f26a205925"
+      },
+      "relative_path": "runtime/nvn/vulkan/dlss.cpp",
+      "windows": {
+        "bytes": 14187,
+        "sha256": "bb3bf5a827c19fffac3ee4a8377e425e143c5ec7cfeba91b59593b8cc0050a1b"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 433306,
+        "sha256": "e6ea43c4cfe2e78998feb7e49ec1061eaebfbca7f641c4f454028686143953bf"
+      },
+      "relative_path": "runtime/nvn/vulkan/exec.c",
+      "windows": {
+        "bytes": 424258,
+        "sha256": "b69e6a3de6915394d757af8fac1e339b874dfbc93e858b3578862784d20fffed"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 54029,
+        "sha256": "e5c997a8079b6275b76b5a9db925a59f0a9e559569f3f88137b34bd9d83c769f"
+      },
+      "relative_path": "runtime/nvn/vulkan/precompile.c",
+      "windows": {
+        "bytes": 34560,
+        "sha256": "481101ab53ce4b7aa170aa61e7d180f5cd67a4c2f3f69be09ab54fa8bd04b895"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 45837,
+        "sha256": "5457190ba589d792c3f60fc30bf0413e7e86c0303aaf26c05ecea35c601b8b5e"
+      },
+      "relative_path": "runtime/nvn/vulkan/shaders.c",
+      "windows": {
+        "bytes": 40291,
+        "sha256": "e10fba36458696054e5da8ae216c837ef05d6840bd903bbbf2af67e52444bda7"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 1172,
+        "sha256": "66263f085eab70b1f63f1a19629933534aa114d265a5f206c08b2f0fa5e977be"
+      },
+      "relative_path": "runtime/nvn/vulkan/shaders.h",
+      "windows": {
+        "bytes": 938,
+        "sha256": "0478cc35f00d40be1968807987b8caccdbd9f6bf6f1d05197cdaefb7a8c2a343"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 42958,
+        "sha256": "c6e9f69e3c9114fc2d7207fc2a31932bb2c6fbbcd7ec438e53a2c2bd42f8cc90"
+      },
+      "relative_path": "runtime/nvn/vulkan/temporal.c",
+      "windows": {
+        "bytes": 38679,
+        "sha256": "7862efa95c5a9ea37f32c2ea1f3bb5fed3301a45dd6e778e0579b58c40accc99"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 2675,
+        "sha256": "81e4466b0941637a20538edfcb2c8dc13d90d5c3ece9b5480302cd1c684fde22"
+      },
+      "relative_path": "runtime/nvn/vulkan/temporal.h",
+      "windows": {
+        "bytes": 1749,
+        "sha256": "6f4d3cdadde45b3d7bceb4bcbe58ffc185cd77c0a987d00d61ba21c99cb941e6"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 87698,
+        "sha256": "5bf5efbb94f865c31c40593554dd552710578e560ff0bd80c81aa451682cc344"
+      },
+      "relative_path": "runtime/nvn/vulkan/textures.c",
+      "windows": {
+        "bytes": 87430,
+        "sha256": "d6598a0dc211967649fecfa3c0fd72b932e7f65c327ab8bf2860cd1aa02db86c"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 7582,
+        "sha256": "d331c3cdae56e9297f4d787105d86f27da4edeb5158cc18cda6be9b8a2ffa129"
+      },
+      "relative_path": "runtime/nvn/vulkan/vk.h",
+      "windows": {
+        "bytes": 7232,
+        "sha256": "2158ab45ac680cff4310ad4122827182b25a0ce04548400adf740a8fd7cb323a"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 18851,
+        "sha256": "50f9d89009ec855ea99ca64b794eae86b8f3496730efa0655649e6d4bde50228"
+      },
+      "relative_path": "runtime/paths.c",
+      "windows": {
+        "bytes": 7931,
+        "sha256": "fd03a6e3e00c82848aa774de42221fb73b0febe0d19931de5bf4b0b37fe9e83d"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 3414,
+        "sha256": "be1eb454fe0d31cf4ba4889ea43141045f9ba3a99210d61b1870e122c7fee34b"
+      },
+      "relative_path": "runtime/paths.h",
+      "windows": {
+        "bytes": 2663,
+        "sha256": "16242bf15e6917335a9411ad36dee29aaf70b797c456c8323de51c46473707f2"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 5017,
+        "sha256": "6bf4de931e673658b58c43c56353f6cfc6829c364df1b3ad1320ed72225aa755"
+      },
+      "relative_path": "runtime/platform.h",
+      "windows": {
+        "bytes": 4396,
+        "sha256": "303df2787db22036f57524f9fce31b666ef861097bab0171003ab9d891a800d9"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 21433,
+        "sha256": "33802919f1a921bd7a70402e0824ce4a38830ac76f220431ea36a5fa799c0f97"
+      },
+      "relative_path": "runtime/platform/linux.c",
+      "windows": {
+        "bytes": 11909,
+        "sha256": "1531766a518f782f6baf828210e1b6480daa68f0acd5dbc1badcf734c9827a66"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 3907,
+        "sha256": "a7d1cb452547181666c6fe77c65febf9c4dd41d8b2c301d0b59913d8a59c3a73"
+      },
+      "relative_path": "runtime/rt.h",
+      "windows": {
+        "bytes": 3897,
+        "sha256": "8d3987a4bd8c4c4bc000f79046b57d706bb4bf72b377e67e2af91e60058a5216"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 16474,
+        "sha256": "9aafa18adc19f1b6d249275cf0ca38bdb18eef59fe2679aa9d7cf9b446969985"
+      },
+      "relative_path": "runtime/services/am.c",
+      "windows": {
+        "bytes": 9225,
+        "sha256": "740bdfc17b464b7f8df568143178e457f945eb38466f370e5c1190fdd3225e0d"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 42311,
+        "sha256": "8033b23f56953ed61b84f78dada361e8fc5ea6fd3ef7716a5c14ec5eb7dca358"
+      },
+      "relative_path": "runtime/services/fs.c",
+      "windows": {
+        "bytes": 34974,
+        "sha256": "315d1fcaa0605af1231c62b56a2f31c92ccf817876c6c4fd8a99cacc44b0b25c"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 34343,
+        "sha256": "9ee94e0526fb69b256dacfa35954323f261b2facb7264c118ea126463b612234"
+      },
+      "relative_path": "runtime/services/kbicons.c",
+      "windows": {
+        "bytes": 33796,
+        "sha256": "597dc8bdbcbd9cbbd424e9147ab8add73854ded149fd229209460d5d385c7678"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 6825,
+        "sha256": "425a4a3385984c053a334593f21b4ba66e9eba4e8c2555fb8dfe6c31f181f243"
+      },
+      "relative_path": "runtime/services/misc.c",
+      "windows": {
+        "bytes": 1900,
+        "sha256": "676ede75e57f99d58708d2bcda7987a09b36d2ccaeb60a99366d344a633fdaae"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 7122,
+        "sha256": "1159a3c5de185d0cdf7c91d4c6b1cd69129c4c6bfd25ff325b8bccbf1e7cff5a"
+      },
+      "relative_path": "runtime/settings.h",
+      "windows": {
+        "bytes": 6353,
+        "sha256": "8ca2d64803ad9c8c07e4d75c9385b835a46e5002b6f8ff77484d6bdc9e3cf81c"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 17821,
+        "sha256": "e5ca2461f054d01d306503c62e264ff0516ef9c0360ac440bf418a0f639b2e2e"
+      },
+      "relative_path": "runtime/ui/menu_vk.cpp",
+      "windows": {
+        "bytes": 15880,
+        "sha256": "1a1367f95a0f885a073542d603052ad98dbc13d405b9a3272bab955e909dc07b"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 13127,
+        "sha256": "9ec4c7d6d493ef4d50e89130c44af629b043785ded036b9a3f30409bf20c5344"
+      },
+      "relative_path": "tests/native/test_fibers.c",
+      "windows": {
+        "bytes": 6107,
+        "sha256": "aac72464dfa5ea56698694b69177be94fed96402f829055c56693a05694d74fa"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 108318,
+        "sha256": "8774c2b6a62df4a3852ce5236ea74587b84234f9318b1b2d93eb0ebc904ff7e3"
+      },
+      "relative_path": "tools/launcher/launcher.cpp",
+      "windows": {
+        "bytes": 71067,
+        "sha256": "d933184b9119feb0cc17a56ffe03851e7bc97108f504c78fc3da13060e41482a"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 28044,
+        "sha256": "d24b91549b393c687a6d27b7e2b65f23b89a924502f7316e841f5c8f545a37be"
+      },
+      "relative_path": "tools/lifter/gen.py",
+      "windows": {
+        "bytes": 27493,
+        "sha256": "9405788d746c04132dd190d9b4ba2f5afd9b97e4d3aaabac6effb6290195738c"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 4717,
+        "sha256": "eedb88675eeaf1e255ba86c911e7c186c23a1ccf2c462f2e774de738d5c16c20"
+      },
+      "relative_path": "tools/lifter/patchfmt.py",
+      "windows": {
+        "bytes": 1591,
+        "sha256": "a00d19a240c2bd1f1c44fd0009d6f09add8f84e23521350d61c06566b6021a55"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 27448,
+        "sha256": "80932f2ff26bc217c60745eca27e434d9bc632ae80a0a988b1a6543152949bdb"
+      },
+      "relative_path": "tools/lifter/test_simd.py",
+      "windows": {
+        "bytes": 19433,
+        "sha256": "d4d257cc2b126fcca7a1dc22fa4e562db9bac74251b30e2e6ebbe3a7786125e2"
+      }
+    },
+    {
+      "linux": {
+        "bytes": 9058,
+        "sha256": "a18ae21871c6af7de8c984dcc1e145e4c932a17b87b4cf46e6412bc78b937b11"
+      },
+      "relative_path": "tools/package_guard.py",
+      "windows": {
+        "bytes": 3684,
+        "sha256": "4352ab57d649728e1f5264cb0eea268328b934d599ca516d75e72592fd286a0a"
+      }
+    }
+  ],
+  "counts": {
+    "changed_common_paths": 48,
+    "common_paths": 330,
+    "linux_files": 545,
+    "linux_only_paths": 215,
+    "unchanged_common_paths": 282,
+    "windows_files": 330,
+    "windows_only_paths": 0
+  },
+  "linux_only_paths": [
+    "dlss-linux.lock.json",
+    "docs/UPSTREAM.md",
+    "fsr-linux.lock.json",
+    "graphics-deps-linux.lock.json",
+    "requirements-linux.lock",
+    "runtime/hle/cheats_combat.c",
+    "runtime/hle/cheats_combat.h",
+    "runtime/hle/cheats_math.h",
+    "runtime/hle/cheats_rewards.c",
+    "runtime/hle/cheats_rewards.h",
+    "runtime/hle/desktop_exit_caption.c",
+    "runtime/hle/desktop_exit_caption.h",
+    "runtime/hle/expanded_save_scan.c",
+    "runtime/hle/expanded_save_scan.h",
+    "runtime/hle/expanded_saves.c",
+    "runtime/hle/expanded_saves.h",
+    "runtime/hle/fiber_context_linux.c",
+    "runtime/hle/fiber_context_linux.h",
+    "runtime/hle/fibers.h",
+    "runtime/hle/foley_trace.inc",
+    "runtime/hle/pad_modifier.h",
+    "runtime/hle/quickstep_native.c",
+    "runtime/hle/quickstep_native.h",
+    "runtime/hle/quickstep_native_ui.h",
+    "runtime/hle/quickstep_picker.c",
+    "runtime/hle/quickstep_picker.h",
+    "runtime/hle/quickstep_save.c",
+    "runtime/hle/quickstep_save.h",
+    "runtime/hle/quickstep_slot.c",
+    "runtime/hle/quickstep_slot.h",
+    "runtime/hle/quickstep_stats.c",
+    "runtime/hle/quickstep_stats.h",
+    "runtime/hle/quickstep_stats_ui.c",
+    "runtime/hle/quickstep_stats_ui.h",
+    "runtime/hle/quickstep_ui_memory.c",
+    "runtime/hle/quickstep_ui_memory.h",
+    "runtime/hle/system_exit.c",
+    "runtime/hle/system_exit.h",
+    "runtime/hle/title_exit.c",
+    "runtime/hle/title_exit.h",
+    "runtime/hle/title_exit_model.h",
+    "runtime/host/applet_lifecycle_ui.h",
+    "runtime/nvn/program_binding.h",
+    "runtime/nvn/vulkan/dlss.h",
+    "runtime/nvn/vulkan/dlss_linux.cpp",
+    "runtime/nvn/vulkan/dlss_linux.h",
+    "runtime/nvn/vulkan/dlss_ngx_api.h",
+    "runtime/nvn/vulkan/dlss_ngx_loader.cpp",
+    "runtime/nvn/vulkan/driver_heap.c",
+    "runtime/nvn/vulkan/driver_heap.h",
+    "runtime/nvn/vulkan/framegen_linux.cpp",
+    "runtime/nvn/vulkan/framegen_linux.h",
+    "runtime/nvn/vulkan/framegen_pacing_linux.h",
+    "runtime/nvn/vulkan/host_import.c",
+    "runtime/nvn/vulkan/host_import.h",
+    "runtime/nvn/vulkan/pipeline_cache_io.h",
+    "runtime/nvn/vulkan/precompile_status.h",
+    "runtime/nvn/vulkan/radv_dcc_compat.c",
+    "runtime/nvn/vulkan/radv_dcc_compat.h",
+    "runtime/nvn/vulkan/temporal_fg_linux.inc",
+    "runtime/platform/linux_activity.h",
+    "runtime/platform/linux_state_guard.c",
+    "runtime/platform/linux_state_guard.h",
+    "runtime/platform/sdl_controller_diagnostics.h",
+    "runtime/services/am.h",
+    "runtime/ui/graphics_options.h",
+    "scripts/am_tests_linux.py",
+    "scripts/boot_smoke_linux.py",
+    "scripts/build_launcher_linux.py",
+    "scripts/build_linux.py",
+    "scripts/controller_environment.py",
+    "scripts/dlss_config_tests_linux.py",
+    "scripts/dlss_requirements_tests_linux.py",
+    "scripts/dlss_tests_linux.py",
+    "scripts/fpcr_tests_linux.py",
+    "scripts/framegen_presentation_tests_linux.py",
+    "scripts/framegen_tests_linux.py",
+    "scripts/framepace_tests_linux.py",
+    "scripts/gpu_import_tests_linux.py",
+    "scripts/install_layout.py",
+    "scripts/install_lease.py",
+    "scripts/launcher_linux.py",
+    "scripts/launcher_precompile_integration_linux.py",
+    "scripts/launcher_precompile_tests_linux.py",
+    "scripts/launcher_precompile_ui_tests_linux.py",
+    "scripts/launcher_settings_tests_linux.py",
+    "scripts/launcher_theme_tests_linux.py",
+    "scripts/launcher_ui_tests_linux.py",
+    "scripts/launcher_updates.py",
+    "scripts/linux_runtime_check.py",
+    "scripts/linux_runtime_graph.py",
+    "scripts/native_tests_linux.sh",
+    "scripts/path_tests_linux.py",
+    "scripts/pctl_tests_linux.py",
+    "scripts/platform_tests_linux.py",
+    "scripts/precompile_backend_tests_linux.py",
+    "scripts/precompile_linux.py",
+    "scripts/precompile_platform_tests_linux.py",
+    "scripts/precompile_tests_linux.py",
+    "scripts/prepo_tests_linux.py",
+    "scripts/resource_tests_linux.py",
+    "scripts/run_linux.py",
+    "scripts/save_tests_linux.py",
+    "scripts/setup_linux_dlss.py",
+    "scripts/setup_linux_fsr.py",
+    "scripts/setup_linux_graphics.py",
+    "scripts/temporal_tests_linux.py",
+    "scripts/window_icon_tests_linux.py",
+    "tests/native/test_am_linux.c",
+    "tests/native/test_boot_linux_support.c",
+    "tests/native/test_cheats_combat.c",
+    "tests/native/test_cheats_rewards.c",
+    "tests/native/test_cheats_settings.c",
+    "tests/native/test_desktop_exit_caption.c",
+    "tests/native/test_dlss_config_linux.c",
+    "tests/native/test_dlss_launcher_config_linux.cpp",
+    "tests/native/test_dlss_linux.cpp",
+    "tests/native/test_dlss_requirements_linux.cpp",
+    "tests/native/test_driver_heap.c",
+    "tests/native/test_expanded_save_scan.c",
+    "tests/native/test_expanded_saves.c",
+    "tests/native/test_fatal_notice_linux.c",
+    "tests/native/test_fiber_context_linux.c",
+    "tests/native/test_fpcr_linux.c",
+    "tests/native/test_framegen_linux.cpp",
+    "tests/native/test_framegen_pacing_linux.c",
+    "tests/native/test_framegen_policy_linux.c",
+    "tests/native/test_framepace_linux.c",
+    "tests/native/test_host_import.c",
+    "tests/native/test_kbicons_linux.c",
+    "tests/native/test_kernel_fibers_linux.c",
+    "tests/native/test_launcher_precompile_integration_linux.cpp",
+    "tests/native/test_launcher_precompile_linux.cpp",
+    "tests/native/test_launcher_process_linux.cpp",
+    "tests/native/test_launcher_settings_linux.c",
+    "tests/native/test_linux_media_runtime.c",
+    "tests/native/test_optional_linux.c",
+    "tests/native/test_paths_linux.c",
+    "tests/native/test_pctl_linux.c",
+    "tests/native/test_pipeline_cache_io_linux.c",
+    "tests/native/test_platform_linux.c",
+    "tests/native/test_precompile_bounds_linux.c",
+    "tests/native/test_precompile_gpu_linux.c",
+    "tests/native/test_precompile_linux.c",
+    "tests/native/test_precompile_path_linux.c",
+    "tests/native/test_prepo_linux.c",
+    "tests/native/test_program_binding.c",
+    "tests/native/test_program_constants.c",
+    "tests/native/test_quickstep_native.c",
+    "tests/native/test_quickstep_picker.c",
+    "tests/native/test_quickstep_roundtrip.c",
+    "tests/native/test_quickstep_routes.c",
+    "tests/native/test_quickstep_save.c",
+    "tests/native/test_quickstep_slot.c",
+    "tests/native/test_quickstep_stats.c",
+    "tests/native/test_quickstep_stats_integration.c",
+    "tests/native/test_quickstep_stats_ui.c",
+    "tests/native/test_quickstep_ui_memory.c",
+    "tests/native/test_radv_dcc_compat.c",
+    "tests/native/test_radv_heap_device.c",
+    "tests/native/test_radv_heap_lifecycle.c",
+    "tests/native/test_runtime_activity_linux.c",
+    "tests/native/test_save_commit_linux.c",
+    "tests/native/test_save_mount_linux.c",
+    "tests/native/test_shader_snapshots.c",
+    "tests/native/test_spirv_cache_linux.c",
+    "tests/native/test_state_guard_linux.c",
+    "tests/native/test_system_exit_bridge.c",
+    "tests/native/test_temporal_framegen_linux.c",
+    "tests/native/test_temporal_history_linux.c",
+    "tests/native/test_temporal_shaders_linux.c",
+    "tests/native/test_title_exit_bridge.c",
+    "tests/native/test_title_exit_model.c",
+    "tests/native/test_vulkan_import_linux.c",
+    "tests/native/test_watchdog_linux.c",
+    "tests/native/test_window_icon_linux.c",
+    "tests/unit/test_boot_smoke_linux.py",
+    "tests/unit/test_boot_smoke_signals_linux.py",
+    "tests/unit/test_launcher_resources.py",
+    "tests/unit/test_linux_build.py",
+    "tests/unit/test_linux_dlss_build.py",
+    "tests/unit/test_linux_dlss_entry.py",
+    "tests/unit/test_linux_dlss_resources.py",
+    "tests/unit/test_linux_dlss_setup.py",
+    "tests/unit/test_linux_graphics_setup.py",
+    "tests/unit/test_linux_launch.py",
+    "tests/unit/test_linux_launcher_build.py",
+    "tests/unit/test_linux_launcher_entry.py",
+    "tests/unit/test_linux_launcher_ui.py",
+    "tests/unit/test_linux_precompile.py",
+    "tests/unit/test_linux_private_runtime.py",
+    "tests/unit/test_linux_simd_harness.py",
+    "tests/unit/test_vulkan_import_ownership.py",
+    "tools/launcher/README_LINUX.md",
+    "tools/launcher/assets/ARTWORK_PROVENANCE.md",
+    "tools/launcher/assets/fonts/DejaVuSans.ttf",
+    "tools/launcher/assets/fonts/DejaVuSerif-Bold.ttf",
+    "tools/launcher/assets/fonts/DejaVuSerif-BoldItalic.ttf",
+    "tools/launcher/assets/fonts/LICENSE-DejaVu.txt",
+    "tools/launcher/assets/gaur_plain.png",
+    "tools/launcher/linux_config_test.cpp",
+    "tools/launcher/linux_host.h",
+    "tools/launcher/linux_host_test.cpp",
+    "tools/launcher/linux_precompile.h",
+    "tools/launcher/linux_reload_test.cpp",
+    "tools/launcher/linux_theme_test.cpp",
+    "tools/launcher/linux_update.h",
+    "tools/launcher/theme.h",
+    "tools/launcher/theme_resource.py",
+    "tools/test_xcde_foley_trace.py",
+    "tools/test_xcde_gui_timing.py",
+    "tools/test_xcde_input_repeat.py",
+    "tools/test_xcde_locomotion_timing.py",
+    "tools/test_xcde_navigation_speed.py",
+    "tools/tests/test_simd_harness.c"
+  ],
+  "linux_reference": {
+    "commit": "88e639ccab47d19b967e6a0ba2be354ba1393e1e",
+    "manifest_sha256": "058581aeed4944184cd11724791856c8e3c55501c04c1988da4e4201d5855809",
+    "tag": "v0.1.16",
+    "tree": "82264e2f5c971ca8016cf259dff3c9dacab26176"
+  },
+  "previous_handoff_commit": "01d7cdf9c98b24533b214ab9a633d09f972917bd",
+  "purpose": "Authored source comparison for Windows development planning; no implementation or Windows validation claim",
+  "schema": 1,
+  "warning": "Path differences are not a feature count. Linux-only contains nonportable platform code, tests, scripts and docs. Do not wholesale copy or remove platform branches.",
+  "windows_only_paths": []
+}

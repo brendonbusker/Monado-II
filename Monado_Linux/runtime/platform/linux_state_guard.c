@@ -95,6 +95,44 @@ static int devices_in(int ruleset, const char *path, const char *prefix) {
     return result;
 }
 
+// [XCDE] LINUX-077: SDL's HIDAPI opens controller nodes read/write, including
+// the Deck's built-in controller. Admit existing hidraw character devices only;
+// neither a prefix lookalike nor a symlink may widen the writable file policy.
+static bool hidraw_name(const char *name) {
+    if (strncmp(name, "hidraw", 6) || name[6] < '0' || name[6] > '9') return false;
+    for (const char *p = name + 7; *p; ++p)
+        if (*p < '0' || *p > '9') return false;
+    return true;
+}
+
+static int hidraw_devices(int ruleset) {
+    DIR *dir = opendir("/dev");
+    if (!dir) return -1;
+    struct dirent *entry;
+    int result = 0;
+    while ((entry = readdir(dir))) {
+        if (!hidraw_name(entry->d_name)) continue;
+        int fd = openat(dirfd(dir), entry->d_name, O_PATH | O_NOFOLLOW | O_CLOEXEC);
+        // A device disappearing while enumerating is normal hotplug behavior.
+        if (fd < 0) {
+            if (errno == ENOENT) continue;
+            result = -1; break;
+        }
+        struct stat st;
+        if (fstat(fd, &st)) { int saved = errno; close(fd); errno = saved; result = -1; break; }
+        if (S_ISCHR(st.st_mode)) {
+            struct landlock_path_beneath_attr rule = {
+                .allowed_access = LANDLOCK_ACCESS_FS_WRITE_FILE, .parent_fd = fd
+            };
+            result = (int)syscall(SYS_landlock_add_rule, ruleset, LANDLOCK_RULE_PATH_BENEATH, &rule, 0);
+        }
+        int saved = errno; close(fd); errno = saved;
+        if (result) break;
+    }
+    int saved = errno; closedir(dir); errno = saved;
+    return result;
+}
+
 bool rt_linux_state_guard(const char *state, char *error, size_t size) {
     char canonical[PATH_MAX];
     struct stat st;
@@ -120,6 +158,7 @@ bool rt_linux_state_guard(const char *state, char *error, size_t size) {
     for (size_t i = 0; !rc && i < sizeof devices / sizeof devices[0]; ++i)
         rc = add_path(fd, devices[i], LANDLOCK_ACCESS_FS_WRITE_FILE, true);
     if (!rc) rc = devices_in(fd, "/dev", "nvidia");
+    if (!rc) rc = hidraw_devices(fd);
     const char *directories[] = {"/dev/dri", "/dev/nvidia-caps", "/dev/snd", "/dev/input"};
     for (size_t i = 0; !rc && i < sizeof directories / sizeof directories[0]; ++i)
         rc = devices_in(fd, directories[i], NULL);

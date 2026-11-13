@@ -35,6 +35,10 @@ typedef struct {
     VkSemaphore timeline;      // value = last completed submission number
     VkCommandPool pool;        // render thread only
     bool custom_border, divisor, host_import, robust2, logic_op, minmax;
+    // [XCDE] LINUX-070: only RADV opts into driver-owned guest heap backing.
+    // Capability flags describe features/extensions enabled on this device.
+    bool radv, heap_placed, heap_dmabuf;
+    VkDeviceSize heap_map_alignment;
     bool gpl;  // [XCDE] T188: VK_EXT_graphics_pipeline_library with fast linking (exec.c build_pipeline)
     // [XCDE] FSR 3 frame generation's queues (device.c create_device): present, image acquire, async compute; fam UINT32_MAX: none
     VkQueue fg_queue[3];

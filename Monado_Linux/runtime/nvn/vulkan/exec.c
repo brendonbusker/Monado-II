@@ -17,6 +17,9 @@
 #include "vk.h"
 #include "../program_binding.h"
 #include "host_import.h"  // [XCDE] LINUX-005: shared checked host-memory import
+#ifdef __linux__
+#include "driver_heap.h"  // [XCDE] LINUX-070: RADV driver-owned guest backing
+#endif
 #include "temporal.h"
 void vk_watch(VkImage dst, const char *site);  // [XCDE] debugging: log writes to a watched image
 static VkImage g_watch_img;
@@ -3967,6 +3970,58 @@ static VkDescriptorBufferInfo cbuf_info(int stage, ShaderInfo *si, const NvnShad
 // memory. The import pins its pages, so it covers only the heap the game set up (SetHeapSize), made on first use.
 // [XCDE] LINUX-005: no dummy-zero fallback for missing/failed global memory.
 static VkHostImport gmem;
+#ifdef __linux__
+// [XCDE] LINUX-070: backing and descriptor view have separate ownership. The
+// driver allocation spans HEAP_MAX; gmem.size tracks the initialized logical
+// extent, just as the existing grow-only host import does.
+static VkDriverHeap driver_heap;
+static pthread_mutex_t guest_heap_lock = PTHREAD_MUTEX_INITIALIZER;
+static bool guest_heap_decided;
+
+void backend_guest_heap_prepare(uint64_t size) {
+    if (!size) return;
+    pthread_mutex_lock(&guest_heap_lock);
+    if (guest_heap_decided) { pthread_mutex_unlock(&guest_heap_lock); return; }
+    extern void backend_init(void);
+    backend_init();  // acquire ui_ready before reading device capabilities
+    guest_heap_decided = true;
+    if (!g_vk.radv) {
+        LOG("[vk] guest heap mode: host import (non-RADV driver; existing path)\n");
+        pthread_mutex_unlock(&guest_heap_lock);
+        return;
+    }
+    const char *mode = getenv("XCDE_VK_HEAP");
+    if (mode && *mode && strcmp(mode, "auto") && strcmp(mode, "import") && strcmp(mode, "driver"))
+        FATAL("[vk] XCDE_VK_HEAP must be auto, import or driver\n");
+    if (mode && !strcmp(mode, "import")) {
+        LOG("[vk] guest heap mode: host import (XCDE_VK_HEAP=import)\n");
+        pthread_mutex_unlock(&guest_heap_lock);
+        return;
+    }
+    VkDriverHeapOptions options = {.placed = g_vk.heap_placed, .dmabuf = g_vk.heap_dmabuf,
+                                   .map_alignment = g_vk.heap_map_alignment};
+    bool reservation_ok = true;
+    char error[256];
+    VkResult result = vk_driver_heap_create(g_vk.phys, g_vk.dev, (void *)(uintptr_t)HEAP_BASE,
+        HEAP_MAX, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+        &options, &driver_heap, &reservation_ok, error, sizeof error);
+    if (!reservation_ok) FATAL("[vk] RADV heap reservation could not be restored: %s\n", error);
+    if (result == VK_SUCCESS) {
+        // The memory handle belongs exclusively to driver_heap, never to the
+        // host-import destructor. Only the view is shared with drawing code.
+        gmem = (VkHostImport){.buffer = driver_heap.buffer,
+            .size = (size + 0xffff) & ~0xffffull, .allocation_size = driver_heap.allocation_size,
+            .memory_type = driver_heap.memory_type};
+        LOG("[vk] guest heap mode: RADV driver memory (%s), %llu MB capacity, %llu MB logical, cached coherent system type %u\n",
+            vk_driver_heap_mode_name(driver_heap.mode), (unsigned long long)(driver_heap.size >> 20),
+            (unsigned long long)(gmem.size >> 20), driver_heap.memory_type);
+    } else {
+        LOG("[vk] RADV driver heap unavailable: %s; using existing checked host import\n", error);
+    }
+    pthread_mutex_unlock(&guest_heap_lock);
+}
+#endif
 
 // [XCDE] XCDE_GMEM_CHECK="<frame>:<hex addr>:<hex size>": at that presented frame, what the GPU reads through the
 // heap import vs what the CPU sees there (pages decommitted / recommitted after the import would keep their old copy
@@ -4017,7 +4072,11 @@ static void gmem_import(uint64_t size) {
 static uint64_t gmem_tried;  // heap size the import was last attempted for (gmem_info imports)
 
 static VkDescriptorBufferInfo gmem_info(void) {
-    if (getenv("LARECOMP_VK_NO_GMEM") || !g_vk.host_import)
+    bool available = g_vk.host_import;
+#ifdef __linux__
+    available = available || driver_heap.buffer != VK_NULL_HANDLE;
+#endif
+    if (getenv("LARECOMP_VK_NO_GMEM") || !available)
         FATAL("[vk] shader global memory requires VK_EXT_external_memory_host; disabled/unsupported import cannot return dummy data\n");
     uint64_t want = gmem_wanted_size();
     if (!gmem.buffer) gmem_import(want);
@@ -4031,6 +4090,15 @@ static void gmem_prepare_command(void) {
     if (gmem.buffer) {
         uint64_t want = gmem_wanted_size();
         if (want > gmem.size) {
+#ifdef __linux__
+            if (driver_heap.buffer) {
+                if (want > driver_heap.size) FATAL("[vk] logical heap outgrew RADV backing\n");
+                // Full-capacity backing was zeroed before the first heap was
+                // published. Its buffer and pages stay stable during growth.
+                gmem.size = want;
+                return;
+            }
+#endif
             // Retire both recorded and submitted uses before releasing pinned
             // pages. This must precede fetching any command-buffer-local state.
             renderer_flush();
@@ -4547,7 +4615,21 @@ void vk_exec_reset(void) {
     nwant = 0;
     for (int i = 0; i < nxsh; i++) vmaDestroyBuffer(g_vk.vma, xsh[i].buf, xsh[i].mem);  // (GPU idle; refilled on their next write)
     nxsh = 0;
+#ifdef __linux__
+    pthread_mutex_lock(&guest_heap_lock);
+    if (driver_heap.buffer) {
+        bool reservation_ok = true;
+        char error[256];
+        VkResult result = vk_driver_heap_destroy(g_vk.dev, &driver_heap, &reservation_ok, error, sizeof error);
+        if (result != VK_SUCCESS || !reservation_ok) FATAL("[vk] RADV heap reset failed: %s\n", error);
+        memset(&gmem, 0, sizeof gmem);
+    } else
+#endif
     vk_host_import_destroy(g_vk.dev, &gmem);  // [XCDE] LINUX-005: GPU idle; unpin before guest remap
+#ifdef __linux__
+    guest_heap_decided = false;
+    pthread_mutex_unlock(&guest_heap_lock);
+#endif
     gmem_tried = 0;
     for (int i = 0; i < VC_TAB; i++)  // (the vertex cache: copies of the old pages)
         if (vc_tab[i].buf) vmaDestroyBuffer(g_vk.vma, vc_tab[i].buf, vc_tab[i].mem);
@@ -7037,6 +7119,9 @@ void backend_pool_write(void *dst, const void *src, size_t n, int kind) {
 
 static void *rq_worker(void *arg) {
     (void)arg;
+#ifdef __linux__
+    plat_thread_name("vk renderer");  // [XCDE] LINUX-070: do not inherit a misleading guest-thread label
+#endif
     tl_rq_worker = true;
     for (;;) {
         pthread_mutex_lock(&rq_lock);

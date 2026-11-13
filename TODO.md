@@ -1,40 +1,42 @@
 # Monado II TODO
 
-Unchecked items are potential or deferred work, not implemented or validated
-features. Windows backports are not currently planned.
+Unchecked items are potential or planned work, not implemented/validated features.
+**Windows parity is approved for development on the maintainer's Windows host.**
+This preparation branch includes Linux0.1.16 as the reference and leaves Windows
+runtime source unchanged. Use [the current handoff](docs/WINDOWS_PORT_HANDOFF.md)
+and [source inventory](docs/WINDOWS_PARITY_INVENTORY.json); older deferred notes
+and the 0.1.11 plan do not describe the current scope.
 
-## Deferred Windows parity references (not planned)
+## Windows parity — ordered work
 
-This list records known Linux/Windows differences for a possible future decision;
-it is not a Windows development roadmap or a commitment to backport them.
+- [ ] Audit native host/tools/dependencies; harden inherited build failure handling,
+  paths, process ownership and object lists; root game_files → Build/Play BAT →
+  native launcher/game executables with reproducible receipts.
+- [ ] Preserve Windows fibers/TLS/FP/synchronization and vendor providers; implement
+  safe native save/config/cache transactions and orderly owned exit first.
+- [ ] Port checked generator/trading/timing/menu/footstep bundles, expanded99saves
+  and bounded scanning, native Exit, queued-program/constants lifetime correction.
+- [ ] Port complete stable OFF-default Quick Step native UI, ownership/portrait E,
+  sounds/navigation and Save/Load/Continue metadata without native save conversion.
+- [ ] Port fixed L2/HUD/party controls, Win32 party worker safety, reset/release
+  handling and robust SDL controller selection/diagnostics/context delivery.
+- [ ] Port Cheats tab: six0x–20x sliders in0.01x steps plus no-fall; all OFF, native
+  eligibility/caps/spending/Expert transfer preserved; no faster Arts recharge.
+- [ ] Port themed/responsive launcher/resources/DPI/config preservation, party
+  toggle to Mods under Quick Step, newly selected DLSS Native100% default.
+- [ ] Adapt honest precompile status/cancel/retry and Windows provider lifecycle;
+  retain Streamline/FidelityFX, FG experimental/OFF. Scaled67% shaking is unresolved.
+- [ ] Implement verified platform-aware Windows updater/rebuild/activation and
+  current-only retention, protecting saves and deferring busy/modified trees;
+  no local rollback history and no Linux archive/version confusion.
+- [ ] Adapt native Windows fixtures and clean/incremental/failure build checks;
+  manual feature matrix/AMD+NVIDIA/DE+FC; report missing coverage honestly.
+- [ ] Review Windows-only source kit resources, source guards, notices and build
+  documentation; assign a distinct Windows identity only after implementation.
 
-- [ ] Bring over the themed/responsive launcher, public-safe resources, Monado II
-  wordmark/icon integration and larger default opening size.
-- [ ] Port engine-time GUI animation and held-direction repeat corrections,
-  including title/menu/battle-arts navigation.
-- [ ] Port the Normal (30 FPS style) / Fast (60 FPS style) menu-speed setting,
-  parser/save support and checked game query hooks.
-- [ ] Port animation phase rebase and complementary walk/run threshold correction
-  that resolved reported high-FPS footstep chatter on Linux.
-- [ ] Port exact30FPS cutscene limiter behavior at fractional/high output rates.
-- [ ] Transfer save flush/Commit error propagation and journal-retention repairs,
-  graceful guest exit/exit locks, IPC bounds/lifecycle and scheduler atomics.
-- [ ] Review DLAA native-resolution, temporal-history/resource retirement,
-  GPU host-memory import and shader/pipeline-cache integrity corrections.
-- [ ] Adapt honest precompile complete/partial/cancel/fatal states, safe cache
-  commits and explicit retry to Windows process/filesystem APIs.
-- [ ] Preserve custom/unknown launcher settings, atomically save configuration,
-  and review post-game reload/process behavior.
-- [ ] Design and validate a Windows updater; the 0.1.3 updater is Linux-only.
-- [ ] Revisit Linux-only Exit to desktop, expanded save slots, bounded initial
-  save scanning, the dedicated Quick Step slot and native trading/runtime fixes
-  if Windows parity is explicitly scheduled later.
-- [ ] Regenerate/build on Windows and run focused regression tests in isolated
-  state, then manual gameplay. Keep original Windows fiber/vendor implementations.
-
-Windows already has DLSS/DLAA, AMD frame generation and shader precompilation.
-Do not replace those with Linux-specific providers or transplant experimental
-Linux FG presentation. Publishing a Windows source kit does not schedule backports.
+Linux-specific sysroot/Landlock/hidraw/namespace/distro repair/RADV mechanisms are
+not Windows features to copy. Retain existing Windows platform and vendor support.
+Preparation/source CI does not establish native Windows build or gameplay parity.
 
 ## Linux correctness and coverage
 
@@ -45,11 +47,24 @@ Linux FG presentation. Publishing a Windows source kit does not schedule backpor
   coverage beyond the accepted manual scenarios.
 - [x] Preserve recorded shader programs and compiler constants for queued draws;
   the Bionis Interior crash correction received positive manual feedback.
+- [x] Restore held-L2 camera input and native control-help prompts with optional
+  XC3-style party switching; provide Linux party discovery and keep optional
+  D-pad walking from competing with held-ZL controls. The maintainer accepted
+  the revised controls manually.
+- [ ] Expand field/battle, Future Connected and controller coverage for those
+  camera and party-switching controls.
+- [x] Default newly selected Linux DLSS to DLAA / Native (100%) while preserving
+  explicit saved quality choices.
+- [ ] Diagnose and fix reported DLSS Quality (67%) shaking. Native (100%) is the
+  current workaround; the 0.1.12 selection default is not a rendering fix.
 - [ ] Investigate reported shadow boxes in Valak/Makna. They are not fixed in
-  0.1.11; exact causes and affected scenes remain to be established.
+  0.1.12; exact causes and affected scenes remain to be established.
 - [ ] Confirm actual CachyOS/AMD/Wayland gameplay and additional distribution
   builds. Isolated Arch userspace loading/media passes do not cover native GPU,
   audio/session or optional plugin behavior.
+- [ ] Reconcile current-version Bazzite diagnostics and qualify host/container,
+  Python and GUI/CLI environment handling. The historical missing-codec report
+  used the older dependency set; no new Bazzite fix is included in 0.1.12.
 - [ ] Improve experimental frame-generation pacing/performance and visual quality
   after the current publication work; keep its warning and off-by-default setting.
 - [ ] Validate more gameplay, demanding scenes, long sessions and Future Connected.
@@ -68,8 +83,19 @@ Linux FG presentation. Publishing a Windows source kit does not schedule backpor
 - [x] Restore the exact generated launcher illustration with provenance and
   default DLSS/DLAA support, with an explicit `--without-dlss` build option.
 - [x] Add Linux stable-release offers, verified source downloads, local update
-  builds, progress/cancellation, stable profiles and explicit pointer rollback.
-- [ ] Expand real-system update/restart/interruption and rollback validation.
+  builds, progress/cancellation and stable profiles.
+- [x] Retain only the current launcher and its required game payload after checked
+  activation; clean accumulated updater-owned history without changing saves,
+  hidden Quick Step metadata, settings, mods or useful caches. Remove local
+  rollback history; manual downgrades remain available through GitHub releases.
+- [x] Rehearse the installed 0.1.11 upgrade and first-start cleanup using an
+  independent copy, checking protected profile contents and legacy bootstrap
+  selection. This did not change the original installation or test gameplay.
+- [ ] Expand real-system update/restart/interruption and manual-downgrade
+  validation across supported environments.
+- [ ] Improve first-start cleanup responsiveness and measure longer update
+  histories; the isolated long-history rehearsal took about 75 seconds for
+  maintenance and post-checks, with duration depending on files and storage.
 - [x] Include FG capability in normal Linux builds and support ordinary FG full
   rebuilds with the 0.1.6+ updater, retaining the off-by-default runtime setting.
 - [ ] Support automated full rebuilds of footstep-diagnostic builds without

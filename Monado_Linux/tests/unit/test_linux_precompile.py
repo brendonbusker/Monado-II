@@ -511,7 +511,12 @@ class PrecompileEntryTests(unittest.TestCase):
             os.kill(os.getpid(), signal.SIGTERM)
             self.assertEqual(kwargs['cancellation'], [signal.SIGTERM])
             return {'state': '/unused/test/state'}
-        with mock.patch.object(PC, 'prepare', side_effect=interrupted_prepare), \
+        temporary = tempfile.TemporaryDirectory(prefix='monado-precompile-lease-fixture-')
+        self.addCleanup(temporary.cleanup)
+        port = Path(temporary.name).resolve() / 'Monado_Linux'
+        port.mkdir()
+        with mock.patch.object(PC, 'ROOT', port), \
+                mock.patch.object(PC, 'prepare', side_effect=interrupted_prepare), \
                 mock.patch.object(PC, 'supervise', return_value={'exit': 130}) as supervise:
             self.assertEqual(PC.main(['--executable', '/authored/game', '--state-root', '/authored/state']), 130)
         self.assertEqual(supervise.call_args.kwargs['cancellation'], [signal.SIGTERM])

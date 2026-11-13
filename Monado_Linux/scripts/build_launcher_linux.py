@@ -17,7 +17,7 @@ import subprocess
 import sys
 import threading
 
-from build_linux import Builder, check_correctness_macros, digest, fresh_output, runtime_check
+from build_linux import Builder, check_correctness_macros, command_failure, digest, fresh_output, runtime_check
 
 ROOT = Path(__file__).resolve().parent.parent
 CPP = ['third_party/imgui/' + name + '.cpp' for name in
@@ -91,7 +91,7 @@ class LauncherBuilder(Builder):
     def checked_run(self, name, argv, **kwargs):
         record, output = self.run(name, argv, **kwargs)
         if record['exit']:
-            raise RuntimeError(name + ' failed; see recorded stderr')
+            raise RuntimeError(command_failure(record))
         return output
 
     def install_icon(self):

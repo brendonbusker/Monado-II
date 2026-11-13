@@ -20,6 +20,7 @@
 #include "../renderer.h"
 #ifdef __linux__
 #include "pipeline_cache_io.h"  // [XCDE] LINUX-018
+#include "radv_dcc_compat.h"  // [XCDE] LINUX-075: prepared before graphics init
 #endif
 #include "../../env_cache.h"  // (last: cached getenv)
 
@@ -203,6 +204,52 @@ static void create_device(void) {
     if (g_vk.divisor) ext[n_ext++] = VK_EXT_VERTEX_ATTRIBUTE_DIVISOR_EXTENSION_NAME;
     g_vk.host_import = has_ext(ep, ne, VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME);  // guest heap as a GPU buffer (exec.c)
     if (g_vk.host_import) ext[n_ext++] = VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME;
+    // [XCDE] LINUX-070: LASRecomp's RADV heap work (MIT, Peiikai; PRs 71/255)
+    // avoids amdgpu revalidating a whole userptr heap on every submission. The
+    // NVIDIA and non-RADV device extension/feature chains remain as before.
+    g_vk.radv = g_vk.heap_placed = g_vk.heap_dmabuf = false;
+    g_vk.heap_map_alignment = 0;
+#ifdef __linux__
+    if (g_vk.props.vendorID == 0x1002) {
+        VkPhysicalDeviceDriverProperties driver = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES};
+        VkPhysicalDeviceProperties2 query = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, .pNext = &driver};
+        vkGetPhysicalDeviceProperties2(g_vk.phys, &query);
+        g_vk.radv = driver.driverID == VK_DRIVER_ID_MESA_RADV;
+    }
+    if (g_vk.radv) {
+        g_vk.heap_dmabuf = has_ext(ep, ne, VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME) &&
+                           has_ext(ep, ne, VK_EXT_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME);
+        if (g_vk.heap_dmabuf) {
+            ext[n_ext++] = VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME;
+            ext[n_ext++] = VK_EXT_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME;
+        }
+        if (has_ext(ep, ne, VK_EXT_MAP_MEMORY_PLACED_EXTENSION_NAME) &&
+            has_ext(ep, ne, VK_KHR_MAP_MEMORY_2_EXTENSION_NAME)) {
+            VkPhysicalDeviceMapMemoryPlacedFeaturesEXT placed = {
+                .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAP_MEMORY_PLACED_FEATURES_EXT};
+            VkPhysicalDeviceFeatures2 features = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, .pNext = &placed};
+            vkGetPhysicalDeviceFeatures2(g_vk.phys, &features);
+            VkPhysicalDeviceMapMemoryPlacedPropertiesEXT alignment = {
+                .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAP_MEMORY_PLACED_PROPERTIES_EXT};
+            VkPhysicalDeviceProperties2 properties = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, .pNext = &alignment};
+            vkGetPhysicalDeviceProperties2(g_vk.phys, &properties);
+            VkDeviceSize a = alignment.minPlacedMemoryMapAlignment;
+            g_vk.heap_placed = placed.memoryMapPlaced && placed.memoryUnmapReserve && a && !(a & (a - 1));
+            if (g_vk.heap_placed) {
+                g_vk.heap_map_alignment = a;
+                ext[n_ext++] = VK_KHR_MAP_MEMORY_2_EXTENSION_NAME;
+                ext[n_ext++] = VK_EXT_MAP_MEMORY_PLACED_EXTENSION_NAME;
+            }
+        }
+        LOG("[vk] RADV guest heap capabilities: placed %s, dma-buf %s, map alignment %llu\n",
+            g_vk.heap_placed ? "yes" : "no", g_vk.heap_dmabuf ? "yes" : "no",
+            (unsigned long long)g_vk.heap_map_alignment);
+        // [XCDE] LINUX-075: report the effective driver flag only for RADV.
+        // NVIDIA/other drivers do not consume RADV_DEBUG; their policies stay as before.
+        LOG("[vk] RADV DCC compatibility: RADV_DEBUG nodcc=%s (lean-format policy unchanged)\n",
+            rt_radv_dcc_active() ? "on" : "off");
+    }
+#endif
     bool fault = has_ext(ep, ne, VK_EXT_DEVICE_FAULT_EXTENSION_NAME);  // device-lost diagnostics (vk_device_fault_report)
     if (fault) ext[n_ext++] = VK_EXT_DEVICE_FAULT_EXTENSION_NAME;
     // [XCDE] the driver's real per-heap usage and budget for VMA (the [mem] report; a 512 MB iGPU carve-out shows how
@@ -270,6 +317,14 @@ static void create_device(void) {
     if (g_vk.robust2) { r2.pNext = fault ? (void *)&ff : (void *)&f11; }
     VkPhysicalDeviceFeatures2 f = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
                                    .pNext = g_vk.robust2 ? (void *)&r2 : fault ? (void *)&ff : (void *)&f11};
+#ifdef __linux__
+    // [XCDE] LINUX-070: map the complete allocation at offset zero; range-placed
+    // mappings are not requested. Reserve-on-unmap lets reset keep its guest VA.
+    VkPhysicalDeviceMapMemoryPlacedFeaturesEXT heap_features = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAP_MEMORY_PLACED_FEATURES_EXT,
+        .memoryMapPlaced = VK_TRUE, .memoryUnmapReserve = VK_TRUE, .pNext = f.pNext};
+    if (g_vk.heap_placed) f.pNext = &heap_features;
+#endif
     LOG("[vk] robustBufferAccess2: %s\n", g_vk.robust2 ? "on" : "not available");
     VkPhysicalDeviceFeatures *b = &f.features, *h = &have.features;
     b->independentBlend = h->independentBlend;

@@ -32,6 +32,7 @@ class SourceReleaseTests(unittest.TestCase):
             'Monado_Windows/runtime/example.c': b'int authored_windows(void) { return 2; }\n',
             'Monado_Windows/Build.bat': b'@echo off\r\nrem authored fixture\r\n',
             'tools/check.py': b'print("authored fixture")\n',
+            'update-version.json': b'{"schema":1,"protocol":1,"version":"0.1.16"}\n',
         }
         for name, data in self.payloads.items():
             path = self.source / name
@@ -112,13 +113,53 @@ class SourceReleaseTests(unittest.TestCase):
 
     def test_windows_setup_has_no_unsupported_legacy_alias(self):
         receipt = self.package('windows', version='0.1.5')
-        self.assertEqual(receipt['archive'], 'monado-ii-0.1.5-windows-setup.zip')
+        self.assertEqual(receipt['archive'], 'monado-ii-windows-original-implementation-setup.zip')
         self.assertEqual(receipt['archive_aliases'], [])
         output = self.base / 'result'
         self.assertEqual(sorted(p.name for p in output.iterdir()),
                          ['SHA256SUMS', receipt['archive'], 'release-receipt.json'])
         self.assertEqual((output / 'SHA256SUMS').read_text(),
                          receipt['sha256'] + '  ' + receipt['archive'] + '\n')
+
+    def test_windows_implementation_identity_does_not_advance_with_linux_release(self):
+        for version in ('0.1.16', '0.2.0'):
+            with self.subTest(version=version):
+                receipt = self.package('windows', output=version, version=version)
+                content = self.archive_contents(receipt, output=version)
+                self.assertEqual(receipt['archive'], release.WINDOWS_ARCHIVE)
+                self.assertEqual(receipt['version'], 'original')
+                self.assertEqual(receipt['source_release_version'], version)
+                status = json.loads(content['source-only-status.json'])
+                manifest = json.loads(content[release.MANIFEST])
+                for metadata in (status, manifest, receipt):
+                    self.assertEqual(metadata['windows_implementation'], 'original')
+                    self.assertFalse(metadata['linux_feature_additions'])
+                    self.assertEqual(metadata['source_release_version'], version)
+                self.assertEqual(status['version'], 'original')
+                self.assertEqual(manifest['release_version'], 'original')
+                self.assertNotIn('update-version.json', content)
+                self.assertNotIn(version.encode(), content['RELEASE_README.md'])
+                self.assertIn(b'Original Windows implementation', content['RELEASE_README.md'])
+                self.assertIn(b'no Linux feature additions', content['RELEASE_README.md'])
+                with zipfile.ZipFile(self.base / version / receipt['archive']) as archive:
+                    self.assertTrue(all(item.filename.startswith(
+                        'monado-ii-windows-original-implementation/') for item in archive.infolist()))
+
+    def test_linux_retains_linux_updater_version_and_metadata(self):
+        receipt = self.package(version='0.1.16')
+        content = self.archive_contents(receipt)
+        self.assertEqual(receipt['version'], '0.1.16')
+        self.assertEqual(json.loads(content['source-only-status.json'])['version'], '0.1.16')
+        self.assertEqual(json.loads(content[release.MANIFEST])['release_version'], '0.1.16')
+        self.assertEqual(content['update-version.json'], self.payloads['update-version.json'])
+        self.assertNotIn('source_release_version', receipt)
+
+    def test_workflow_selects_canonical_windows_asset_and_both_linux_names(self):
+        workflow = (Path(__file__).resolve().parents[1] / '.github/workflows/source-release.yml').read_text()
+        self.assertIn('archive_pattern: monado-ii-windows-original-implementation-setup.zip', workflow)
+        self.assertIn('artifact_name: monado-ii-windows-original-implementation-setup', workflow)
+        self.assertIn('archive_pattern: monado-ii-*-linux-*.tar.gz', workflow)
+        self.assertIn('${{ matrix.archive_pattern }}', workflow)
 
     def test_corrupted_linux_alias_never_reaches_final_output(self):
         copy = release.shutil.copyfile

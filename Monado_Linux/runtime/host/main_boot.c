@@ -23,6 +23,9 @@
 #include "../paths.h"
 #include "../platform/linux_state_guard.h"
 #include "../platform/linux_activity.h"  // [XCDE] LINUX-018
+#ifdef XCDE_GFX
+#include "../nvn/vulkan/radv_dcc_compat.h"  // [XCDE] LINUX-075
+#endif
 #endif
 
 const char *g_romfs_dir;
@@ -148,6 +151,15 @@ int main(int argc, char **argv) {
     }
     const char *root = rt_input_root();
     int seconds = argc > arg + 1 ? atoi(argv[arg + 1]) : 20;
+#ifdef XCDE_GFX
+    // [XCDE] LINUX-075: RADV reads its driver flags when Vulkan initializes.
+    // Prepare them while still single-threaded, including the precompile path;
+    // never mutate the environment later in SDL/render/guest workers.
+    if (rt_radv_dcc_prepare(error, sizeof error) < 0) {
+        fprintf(stderr, "FATAL: RADV DCC compatibility: %s\n", error);
+        return 1;
+    }
+#endif
     plat_init();
     setvbuf(stderr, NULL, _IONBF, 0);
     if (precompile) {

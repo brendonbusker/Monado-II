@@ -38,7 +38,8 @@ static void put(const std::string &p, const std::string &v = "") { std::ofstream
 static std::string read(const std::string &p) { std::ifstream f(p); assert(f.good()); return std::string(std::istreambuf_iterator<char>(f), {}); }
 static void reset_cfg() { g = Cfg{}; g.icons = 1; g_mods.clear(); g_custom.clear(); g_extra.clear(); }
 int main(int argc, char **argv) {
-    assert(argc == 2);
+    assert(argc == 2 || (argc == 3 && !strcmp(argv[2], "selection")));
+    const bool selection_only = argc == 3;
     g_root = argv[1];
     const std::string shim = g_root + "/libmonado-ngx.so", runtime = g_root + "/libnvidia-ngx-dlss.so.310.9.1";
     launcher_linux::game = g_root + "/synthetic-not-executed-game";
@@ -53,6 +54,25 @@ int main(int argc, char **argv) {
         assert(g.upscaler == (mode == 0 || mode == 1 || mode == 3 ? mode : 1));
         assert(!g.frame_gen && !g.cut_fg);
     }
+    // Loading a DLSS setting without a valid quality must choose Native;
+    // valid explicit qualities remain independent of INI key order.
+    if (!selection_only) for (const char *ini : {"upscaler = dlss\n", "upscaler = dlss\nupscale_quality = invalid\n",
+                           "upscale_quality = invalid\nupscaler = dlss\n"}) {
+        reset_cfg(); g.uquality = 4;
+        put(path("xcde.ini"), ini); load();
+        assert(g.upscaler == 3 && g.uquality == 0);
+        assert(read(path("xcde.ini")) == ini);
+    }
+    for (const char *upscaler : {"bilinear", "fsr", "fsr3"}) {
+        reset_cfg();
+        put(path("xcde.ini"), "upscaler = " + std::string(upscaler) + "\n"); load();
+        assert(g.uquality == 1); // Other upscaler defaults are unchanged.
+    }
+    for (int q = 0; q < 5; q++) {
+        reset_cfg();
+        put(path("xcde.ini"), "upscale_quality = " + std::string(k_uq_ini[q]) + "\nupscaler = dlss\n"); load();
+        assert(g.upscaler == 3 && g.uquality == q);
+    }
     for (int q = 0; q < 5; q++) {
         reset_cfg();
         const std::string ini = "upscaler = dlss\nupscale_quality = " + std::string(k_uq_ini[q]) + "\nframe_gen = 1\ncutscenes = 30fg\nfps = 165\n";
@@ -66,6 +86,22 @@ int main(int argc, char **argv) {
     ImGui::CreateContext();
     ImGuiIO &io = ImGui::GetIO(); io.IniFilename = nullptr; io.DisplaySize = ImVec2(980,680); io.DeltaTime = 1.f / 60;
     unsigned char *pixels; int w,h; io.Fonts->GetTexDataAsRGBA32(&pixels,&w,&h); assert(pixels && w > 0 && h > 0);
+    // Actual Graphics-tab handlers: entering DLSS defaults to native, while
+    // staying on DLSS or choosing another quality does not overwrite it.
+    for (int source : {0, 1}) {
+        for (int prior = 0; prior < 5; ++prior) {
+            reset_cfg(); g.upscaler = source; g.uquality = prior;
+            requested_upscaler = 2; requested_quality = -1;
+            frame(); assert(g.upscaler == 3 && g.uquality == 0);
+        }
+    }
+    for (int q = 0; q < 5; ++q) {
+        reset_cfg(); g.upscaler = 3; g.uquality = q;
+        requested_upscaler = requested_quality = -1;
+        frame(); assert(g.uquality == q);
+        requested_upscaler = 2; frame(); assert(g.uquality == q); // selecting existing DLSS is not entering it
+        requested_upscaler = 1; frame(); assert(g.upscaler == 1 && g.uquality == q);
+    }
     for (int q = 0; q < 5; q++) {
         reset_cfg(); requested_upscaler = 2; requested_quality = q; seen_upscalers = seen_qualities = 0;
         frame();
@@ -98,6 +134,7 @@ int main(int argc, char **argv) {
     reset_cfg(); g.upscaler = 3; linux_graphics_normalize(); assert(g.upscaler == 1);
     launcher_linux::game = "no-slash"; assert(!linux_dlss_packaged());
     assert(refused_forks == 0);
+    puts("native DLSS default and explicit quality preservation passed");
     puts("actual launcher paired-resource gate/reserved mode/five quality save-reload/no-package fallback passed; headless actual ImGui selection handlers passed; no window/game");
     return 0;
 }

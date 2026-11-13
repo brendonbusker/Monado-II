@@ -20,6 +20,8 @@ import hashlib
 
 import run_linux
 
+install_lease = run_linux.install_lease
+
 ROOT = Path(__file__).resolve().parents[1]
 TEST_KEYS = frozenset(('XCDE_SHOTS', 'XCDE_EXIT_AFTER_SHOTS', 'LARECOMP_NO_USER_INPUT',
                       'LARECOMP_AUDIO_GAIN', 'XCDE_USAGE', 'XCDE_HLE_COVERAGE',
@@ -137,6 +139,9 @@ def clean_environment(library_path):
                 'PIPEWIRE_RUNTIME_DIR', 'TZ'):
         if key in os.environ:
             environment[key] = os.environ[key]
+    # [XCDE] LINUX-077: Steam virtual pads are filtered by SDL if the
+    # allow/ignore/mapping context disappears between Steam and the native GUI.
+    environment.update(run_linux.controller_environment.preserve(os.environ))
     return environment
 
 
@@ -286,7 +291,7 @@ def acquire_lock(state):
         os.close(state_fd)
 
 
-def wait_session(argv, environment, lock_fd, log_fd, updates=None):
+def wait_session(argv, environment, lock_fd, log_fd, updates=None, runtime_fd=None):
     """Keep the lock until the GUI and adopted descendants exit naturally.
 
     The GUI retains an inherited lock as protection if this wrapper dies. The
@@ -313,7 +318,7 @@ def wait_session(argv, environment, lock_fd, log_fd, updates=None):
     updates_finished = False
     try:
         command = [*argv, '--lock-fd', str(lock_fd)]
-        descriptors = (lock_fd,)
+        descriptors = (lock_fd,) + ((runtime_fd,) if runtime_fd is not None else ())
         if updates is not None:
             command += ['--update-fd', str(updates.child_fd())]
             descriptors += (updates.child_fd(),)
@@ -378,7 +383,7 @@ def arguments(argv=None):
 
 def main(argv=None):
     parser, args = arguments(argv)
-    lock_fd = log_fd = None
+    lock_fd = log_fd = runtime_fd = None
     updates = None
     restart = None
     result = 1
@@ -407,6 +412,13 @@ def main(argv=None):
             sys.modules[spec.name] = module
             spec.loader.exec_module(module)
             module.sync_installation_version(ROOT.parent, state, lock_fd)
+        # Startup maintenance runs before admitting this session. Recheck the
+        # artifacts under a shared installation lease after that exclusive phase;
+        # cleanup may have retired an obsolete selection while admission waited.
+        runtime_fd = install_lease.acquire_runtime(ROOT)
+        launch = prepare(args)
+        for executable in (args.launcher_executable, args.game_executable):
+            run_linux.validate_runtime(run_linux.plan(executable, args.state_root))
         logs_fd = mkdir_private(state / 'logs')
         try:
             log_fd = regular_open(logs_fd, 'launcher-console.log', os.O_WRONLY | os.O_APPEND)
@@ -429,11 +441,19 @@ def main(argv=None):
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
                 updates = module.UpdateBroker.from_workspace(ROOT.parent, state, Path(launch['argv'][0]), Path(selection['game_executable']))
+                if updates is not None:
+                    # Borrowed only: activation excludes the supervisor's own
+                    # already-held profile lease from legacy maintenance probes.
+                    updates.session.profile_lock_fd = lock_fd
             except Exception as error:
                 os.write(log_fd, ('[updates] unavailable: ' + str(error) + '\n').encode('utf-8', errors='replace'))
         params = (launch.get('execution_argv', launch['argv']),
                   launch.get('runtime_environment', clean_environment(launch['library_path'])), lock_fd, log_fd)
-        result = wait_session(*params, updates=updates) if updates is not None else wait_session(*params)
+        result = wait_session(*params, updates=updates, runtime_fd=runtime_fd)
+        # Every owned child is reaped. Drop SH before the updater requests EX;
+        # separate descriptors avoid flock conversion/upgrade deadlocks.
+        install_lease.release(runtime_fd)
+        runtime_fd = None
         # The original OFD lease is still held here, and every GUI/game/compiler
         # descendant has exited naturally. Only this host may now activate.
         if updates is not None and result == 75 and updates.activation_ready:
@@ -445,6 +465,8 @@ def main(argv=None):
             updates._close_staging()
         if log_fd is not None:
             os.close(log_fd)
+        if runtime_fd is not None:
+            install_lease.release(runtime_fd)
         if lock_fd is not None:
             os.close(lock_fd)
     if restart is not None:

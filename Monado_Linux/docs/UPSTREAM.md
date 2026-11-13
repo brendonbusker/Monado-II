@@ -546,3 +546,158 @@ before activation and preserves the prior selection/profile on failure. Source
 and launcher packages still exclude all local runtime libraries, game/generated
 code, caches, keys and saves. Arch userspace load/media tests are distinct from
 actual GPU/gameplay qualification; the Linux build guide records the boundary.
+
+### LINUX-054 — current-only update storage
+
+Authored `tools/update_retention.py` and `scripts/install_lease.py` add bounded,
+journaled cleanup and installation leases around update activation and runtime
+admission. The updater keeps the checked current launcher and its directly bound
+game payload, removes recognized obsolete updater-owned workspaces/downloads,
+and retries blocked cleanup on later startup. The original profile, native saves,
+hidden Quick Step metadata, mods, useful caches and shared game input are outside
+cleanup. Local rollback selection is retired; the legacy compatibility entrypoint
+reports that downgrades use manually downloaded GitHub release kits.
+
+Compatible launcher-only updates can reuse an independently owned game payload.
+Game changes require a fresh validated payload before activation. A legacy updater
+can place its first updated game in the version workspace, requiring one further
+full rebuild when a later update first detaches that payload. Temporary peak
+storage includes the existing and replacement builds. Original bootstrap source
+and tool support remain; build paths are never relocated to reclaim space.
+
+Authored fixtures cover ownership, leases, interrupted cleanup and legacy readers.
+An isolated installed-0.1.11 upgrade rehearsal completed native build, activation,
+first-start cleanup and legacy bootstrap checks with all protected profile file
+hashes unchanged. Long-history first-start maintenance and post-checks took about
+75 seconds in that rehearsal; this does not establish universal startup time,
+actual GUI/gameplay or other-distribution compatibility.
+
+### LINUX-055 — native held camera controls and Linux party switching
+
+The Linux SDL route forwards a physical L2 hold immediately through its configured
+native bindings, including neutral holds that drive the control-help display.
+Release ends that hold without a synthetic second tap. Only selected-controller
+shoulder press edges request the optional L2 + L1/R1 party switch. Shoulders are
+masked before queued edges arrive and stay consumed through their own release.
+Focus/menu resets, disconnects, option changes and rebinding cancel stale gestures.
+A small authored reducer preserves disabled/scripted passthrough; SDL state/reset
+publication is serialized. Optional D-pad walking yields to held logical ZL.
+
+The inherited party discovery/cache/thread path was Windows-only and returned an
+empty result on Linux. A Linux pthread worker now scans only the declared guest
+heap, skips unresident pages and uses bounded self-process reads for protected or
+changing mappings. It publishes a synchronized cache; background work never calls
+or writes guest game logic. A requested switch revalidates native objects, control
+locks, party/list/group/HUD ranges and writable mappings before the existing native
+leader-change sequence. Full Cpu and virtual/host FP state are preserved around
+its guest calls. Reset/exit stop and join the worker; queued synthetic arts input
+and direct-camera state are cleared at guest reset.
+
+Authored fixtures exercise the actual Linux discovery and switching code, with
+only native game-function calls represented by test boundaries. Coverage includes
+rotation/reserves, control locks, downed members, HUD/follower updates, malformed
+or protected memory, CPU/FP preservation, worker restart and pending-control reset.
+Real SDL virtual-controller fixtures separately test the input route. The
+maintainer manually accepted the revised L2 camera, native help and party-switching
+controls. This does not qualify every field/battle state, Future Connected,
+controller, performance or hardware configuration. No game asset or generated
+game code is added to source.
+
+### LINUX-056 — DLSS selection default
+
+The Linux launcher selects DLAA / Native (100%) when changing from another
+upscaler to DLSS. Missing or invalid DLSS quality also defaults to native after
+the complete configuration is parsed; explicit saved quality choices remain.
+Actual headless launcher/configuration fixtures cover selection and serialization.
+
+Authored jittered-scene NGX and actual temporal-preparation GPU fixtures exercise
+coherent synthetic inputs. They do not establish the cause or a fix for reported
+in-game instability at 67%. Native (100%) remains the current workaround; the
+released change adjusts selection/configuration defaults, leaving rendering,
+history mathematics and shader inputs unchanged. Broader investigation remains
+open, with temporary development diagnostics excluded from the release.
+
+
+### LINUX-070 / 0.1.14 — RADV guest heap backing
+
+The Linux runtime negotiates driver-owned, fixed-address guest heap backing only
+for Mesa RADV. NVIDIA and other drivers retain the checked host-pointer import.
+The first nonzero SetHeapSize waits for device readiness before publishing any
+heap memory, then allocates full capacity once. Placed mapping is preferred;
+checked dma-buf export is the alternate path. CPU-cached coherent system memory,
+reservation restoration, stable growth and exclusive GPU-idle reset ownership
+are required. A failed safe probe retains the original import; failed reservation
+restoration stops rather than running with invalid memory.
+
+Design references: Peiikai's MIT LASRecomp PRs71/255 and the MIT Savage Wind
+runtime's RADV heap approach. Their AMD hardware results motivated this change;
+Monado's AMD performance remains unverified. Authored failure fixtures and actual
+production lifecycle/device-policy fixtures cover the integration. No GPL runtime
+implementation was copied. See the validation limits in docs/AMD_RADV.md at the
+repository root. No generator, shader mathematics or save formats are changed.
+
+
+### LINUX-072 / 0.1.15 — optional Linux cheats
+
+Authored adapters add independent runtime-configured battle damage dealt/received,
+EXP/AP/SP/gold gained and ordinary fall immunity. Every option defaults off;
+fixed integer percentages0..2000 represent0x..20x in0.01x steps. Exact disabled/1x
+routes retain original instructions/calls. Checked word guards bind both battle
+dispatch paths, eleven new-award calls, positive gold add and the native no-fall
+return path/context. Existing bonus-EXP transfers, gold spending/setters and
+healing dispatch stay native. Native reward eligibility, level-ups, skill bonuses,
+notifications and caps remain; no native save format changes.
+
+The launcher gains a Cheats tab with per-option toggles and bounded sliders;
+Xenoblade3 party switching moves to Mods beneath Quickstep, retaining its key and
+behavior. Settings save/load preserves slider values and enable states. The actual
+Linux build recipe includes both authored helpers. Configuration, arithmetic,
+ABI/scratch ownership, guarded generated-C emission and native ImGui fixtures
+exercise the change; selected-input instruction probes remain private, separate
+from authored distributable fixtures. No copied game function/asset data or
+external cheat implementation is included. The maintainer manually accepted
+the combined Linux build; DoT/status and comprehensive DE/FC coverage are not established.
+See repository-root docs/CHEATS.md. Arts-recharge and Windows parity are deferred.
+
+### LINUX-075 — early RADV nodcc compatibility
+
+An authored Linux helper prepares the exact RADV `nodcc` driver flag in the
+single-threaded graphics startup path, including precompilation. It retains
+other flags, has an explicit diagnostic opt-out and reports the effective flag
+only for the selected RADV driver. No shared environment mutation occurs after
+workers start; no lean-format, heap, shader mathematics, synchronization,
+NVIDIA feature-chain or save-format change is made. Native fixtures cover flag
+composition, failure handling and startup ordering. The driver-specific flag
+is ignored by non-RADV drivers.
+
+Credit patrickksmdev for isolating the RX 7600/NAVI33 workaround: `nodcc` alone
+removed the reported Colony 9 dots; lean formats off alone did not. Reported
+performance was unchanged by feel, not a measured cross-GPU benchmark. The
+preceding candidate passed the maintainer's qualitative NVIDIA gameplay check;
+affected-AMD artifact validation remains pending.
+
+### LINUX-077 — Linux handheld controller integration
+
+Preserve a narrowly validated set of Steam/SDL controller settings through the
+launcher and child game. This includes SDL's Steam-virtual-gamepad acceptance
+flag, associated mappings and ignore lists, and optional read-only controller
+metadata in the existing private runtime namespace. Loader and state filters
+remain separate from this input context.
+
+The native state guard admits only existing, strictly named hidraw character
+devices through checked non-following handles. Host permissions and filesystem
+confinement remain enforced. New/recreated HID nodes are not automatically
+admitted after restriction; affected reconnect cases require restarting the
+launcher. This is not a universal hotplug or suspend/resume qualification.
+The read-only metadata bind also follows its original inode; atomic replacement
+by Steam is refreshed on the next launcher start, while in-place updates remain
+visible.
+
+The authored input adapter checks open failures and tries remaining eligible
+controllers, recovers selection after removal, and records bounded discovery
+diagnostics. The GUI retains upstream ImGui SDL ownership rather than leaking
+extra opens. Authored SDL virtual-device, environment and isolated device-policy
+fixtures exercise these paths without game data. No third-party controller
+implementation, game-derived mapping, renderer policy or native save format is
+changed. Actual Steam Deck/ROG Ally X testing remains pending; see repository-root
+docs/HANDHELD_CONTROLLERS.md.

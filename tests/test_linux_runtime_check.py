@@ -218,7 +218,8 @@ class RuntimeChecks(unittest.TestCase):
         state = self.port / 'play/never-created'
         launch = {'argv': [str(self.binary)], 'state': str(state)}
         import contextlib, io
-        with mock.patch.object(precompile, 'prepare', return_value=launch), \
+        with mock.patch.object(precompile, 'ROOT', self.port), \
+                mock.patch.object(precompile, 'prepare', return_value=launch), \
                 mock.patch.object(precompile.run_linux, 'validate_runtime', side_effect=ValueError('authored missing libbluray.so.3')), \
                 mock.patch.object(precompile, 'supervise') as worker, \
                 contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as stopped:

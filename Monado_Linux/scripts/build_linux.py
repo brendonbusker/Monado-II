@@ -19,6 +19,7 @@ import re
 import shlex
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -29,14 +30,16 @@ ROOT = Path(__file__).resolve().parent.parent
 _runtime_spec = importlib.util.spec_from_file_location('monado_build_runtime_check', Path(__file__).with_name('linux_runtime_check.py'))
 runtime_check = importlib.util.module_from_spec(_runtime_spec)
 _runtime_spec.loader.exec_module(runtime_check)
+# [XCDE] LINUX-072: compile the opt-in reward and combat/fall adapters into the
+# actual native game recipe; a launcher preference alone is not an implementation.
 RUNTIME = '''loader dispatch kernel ipc fnprof platform/linux platform/linux_state_guard services/fs services/romfs_virtual
 services/am services/acc services/time services/hid_set services/kbicons services/misc services/audio services/hwopus
 hle/heaps hle/pl hle/vi hle/nvn_boot hle/fibers hle/fiber_context_linux hle/input hle/party hle/bindings hle/movie
 hle/framepace hle/title_exit hle/desktop_exit_caption hle/system_exit hle/expanded_saves hle/expanded_save_scan
-hle/quickstep_slot hle/quickstep_save hle/quickstep_native hle/quickstep_picker hle/quickstep_stats hle/quickstep_stats_ui hle/quickstep_ui_memory host/stubs host/settings_ini host/stubs_gfx host/gamelib_static host/main_boot
+hle/quickstep_slot hle/quickstep_save hle/quickstep_native hle/quickstep_picker hle/quickstep_stats hle/quickstep_stats_ui hle/quickstep_ui_memory hle/cheats_rewards hle/cheats_combat host/stubs host/settings_ini host/stubs_gfx host/gamelib_static host/main_boot
 diag/diag diag/sampler diag/watchdog diag/crashdump paths'''.split()
 NVN = '''astc cmdbuf formats maxwell/translate objects output_scale smaa_data tegra texpatch
-vulkan/device vulkan/exec vulkan/host_import vulkan/precompile vulkan/shaders vulkan/textures vulkan/temporal'''.split()
+vulkan/device vulkan/exec vulkan/host_import vulkan/driver_heap vulkan/radv_dcc_compat vulkan/precompile vulkan/shaders vulkan/textures vulkan/temporal'''.split()
 CPP = ['third_party/imgui/' + n + '.cpp' for n in ('imgui', 'imgui_draw', 'imgui_tables', 'imgui_widgets')]
 CPP += ['third_party/imgui/backends/imgui_impl_vulkan.cpp', 'runtime/nvn/vulkan/imgui_glue.cpp',
         'runtime/ui/menu_vk.cpp', 'runtime/nvn/vulkan/dlss.cpp', 'runtime/nvn/vulkan/vma.cpp']
@@ -46,6 +49,37 @@ PACKAGES = ['sdl3', 'vulkan', 'shaderc', 'libavcodec', 'libavformat', 'libavutil
 def digest(path):
     with path.open('rb') as stream:
         return hashlib.file_digest(stream, 'sha256').hexdigest()
+
+
+def command_failure(record, limit=6000):
+    """[XCDE] LINUX-066: bounded actual diagnostics, without following log links."""
+    parts = [f"{record['name']} failed (exit {record.get('exit', 'unknown')})."]
+    if record.get('spawn_error'):
+        parts.append(str(record['spawn_error']))
+    for field in ('stderr', 'stdout'):
+        value = record.get(field)
+        if not value:
+            continue
+        path = Path(value)
+        try:
+            descriptor = os.open(path, os.O_RDONLY | getattr(os, 'O_NONBLOCK', 0) | getattr(os, 'O_NOFOLLOW', 0))
+            with os.fdopen(descriptor, 'rb') as stream:
+                info = os.fstat(stream.fileno())
+                if not stat.S_ISREG(info.st_mode):
+                    continue
+                stream.seek(max(0, info.st_size - limit))
+                raw = stream.read(limit)
+            text = raw.decode('utf-8', errors='replace').strip()
+            if text:
+                text = ''.join(character if character in '\n\t' or ord(character) >= 32 and ord(character) != 127 else '?' for character in text)
+                parts.append('Diagnostic log: ' + str(path))
+                if info.st_size > limit:
+                    parts.append('(last ' + str(limit) + ' bytes; full output remains in the log)')
+                parts.append(text)
+                break
+        except (OSError, ValueError):
+            continue
+    return '\n'.join(parts)
 
 
 def check_correctness_macros(macros):
@@ -163,6 +197,7 @@ class Builder:
                 with self.lock:
                     self.failed.set()
                     self.save()
+                print(command_failure(record), flush=True)
                 return record, ''
             record['pid'] = proc.pid
             try:
@@ -181,6 +216,8 @@ class Builder:
                 self.failed.set()
             self.save()
         print(f'{name}: {"PASS" if proc.returncode == 0 else "FAIL"} ({record["seconds"]:.2f}s)', flush=True)
+        if proc.returncode:
+            print(command_failure(record), flush=True)
         return record, out.read_text(errors='replace')
 
     def setup(self):
@@ -372,6 +409,10 @@ class Builder:
         extra = ['-std=c++17'] if source.suffix == '.cpp' else []
         if relative == 'runtime/host/main_boot.c':
             extra += ['-DXCDE_GFX']
+        if relative == 'runtime/kernel.c':
+            # [XCDE] LINUX-070: XCDE_GFX is entry-file-only. Keep the native
+            # heap hook explicit without changing standalone kernel fixtures.
+            extra += ['-DXCDE_LINUX_RADV_HEAP=1']
         record, _ = self.run(name, [self.cxx if source.suffix == '.cpp' else self.cc,
                                     *self.flags, *extra, '-c', source, '-o', temporary])
         after = digest(source)

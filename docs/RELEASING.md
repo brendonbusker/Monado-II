@@ -1,29 +1,77 @@
 # Source releases
 
 Monado II release assets are `monado-ii-<version>-linux-setup.tar.gz` and
-`monado-ii-<version>-windows-setup.zip` **source/setup kits**. They contain reviewed authored/licensed source and tooling,
+`monado-ii-windows-original-implementation-setup.zip` **source/setup kits**. They contain reviewed authored/licensed source and tooling,
 not playable game binaries. Each player generates game code locally from their
 own legally dumped input. No game content, generated code, translated shaders,
 caches, seeds, keys, firmware, saves, mods or private SDK binaries are distributed.
 
-Version 0.1.11 is a regular release, with GitHub's prerelease option disabled.
+Version 0.1.16 is a regular release, with GitHub's prerelease option disabled.
 A regular release does not establish Windows game-build or full-game coverage.
 The exact reviewed generated launcher illustration is included with its
 [provenance](../Monado_Linux/tools/launcher/assets/ARTWORK_PROVENANCE.md) and root
 notice; other unreviewed imagery remains excluded.
 
-The 0.1.11 Quick Step save/UI and queued-rendering fixes are Linux-only. The
-Windows kit retains its existing implementation; parity work is not currently
-planned. Quick Step is stable following the maintainer's manual acceptance and
-remains **off by default** for players who prefer the original equipment setup.
-Keep the experimental/off-by-default warning for frame generation. Release notes
-must distinguish the accepted Quick Step and Bionis Interior crash fixes from unqualified
-character/equipment/save-recovery, exact-scene and full-game coverage. The reported
-Valak/Makna shadow boxes remain queued, not fixed. Preserve the historical 0.1.10
-changelog as a record of that release's earlier Quick Step limitations. Isolated
-Arch userspace loading/media checks are not CachyOS/AMD/Wayland gameplay qualification.
+Windows uses a version-free filename and internal root, with `version: "original"`.
+Do not assign the Linux release version to Windows or imply feature parity.
+`source_release_version` records the containing reviewed source snapshot only.
+The Windows kit excludes Linux-only `update-version.json`. Keep this policy until
+Windows actually receives an explicitly approved update; then document its own
+implementation version and changes. Historical assets may be renamed with byte
+identity retained and checksum filenames updated; never silently repackage an old
+release to claim a new implementation.
 
-The native/generator/runtime changes require a full local game rebuild through
+Version 0.1.16 includes the accepted desktop/NVIDIA controller + RADV build.
+Describe the Steam Deck correction as likely and ROG Ally X compatibility as
+uncertain: neither handheld has validated this build. Credit **patrickksmdev**
+for isolating `nodcc` on RX 7600. Keep affected-AMD candidate validation separate
+from the external report and the maintainer’s NVIDIA gameplay acceptance.
+Native saves, profile locations, Quick Step default and experimental FG default
+stay unchanged. Updating requires a full local rebuild.
+
+Version 0.1.15 adds the optional Linux Cheats tab: independent off-by-default
+party damage dealt/received, EXP/AP/SP/gold gain sliders (0x–20x in 0.01x steps),
+and ordinary no-fall damage. The Xenoblade 3 party-switch control moves to Mods
+below Quick Step. The maintainer manually accepted the combined build; broad
+DE/FC and DoT/status coverage remain unqualified. Native save formats and profile
+locations stay unchanged; rewards already earned persist after disabling. See
+[Cheats](CHEATS.md). This release requires a full local game rebuild.
+
+Version 0.1.14 added capability-gated driver-owned guest heap backing for Mesa
+RADV, aimed at excessive user-pointer submission overhead, with checked fallback.
+NVIDIA retains its existing import and device-feature path. **AMD gameplay
+performance, including the reported RX 6700 XT, still needs testing.** Integrated
+RADV memory-transfer tests passed, including full heap capacity. The maintainer
+accepted NVIDIA gameplay qualitatively; no measured FPS parity or full-game claim
+is made. See [AMD / RADV notes](AMD_RADV.md). A full local game rebuild is required.
+
+The 0.1.13 prerequisite checks and explicit supported Fedora 45 Distrobox repair
+remain included. Ordinary builds and background updates never install system
+packages or request sudo. The glibc/Python baseline is unchanged; actual Steam
+Deck/Bazzite desktop gameplay and privileged Distrobox installation are unverified.
+
+The 0.1.12 current-only updater, held-L2/HUD/party controls and new-selection
+DLAA / Native (100%) default are Linux-only. Explicit saved DLSS qualities are
+preserved. Scaled DLSS shaking at 67% remains unresolved; Native (100%) is the
+current workaround. Windows parity is approved but deferred until development
+on Windows. The Windows implementation is unchanged. Quick Step remains stable
+following manual acceptance and **off by default**; frame generation remains
+experimental and off by default. Valak/Makna/pipe rendering reports remain open.
+Do not imply full-game, other-hardware or actual Bazzite qualification.
+
+After successful activation, the new launcher removes obsolete updater-owned
+versions and downloads, including accumulated history from older clients. It
+retains the active game payload and protects input, saves, hidden Quick Step
+metadata, settings, mods and useful caches. Unknown, modified or busy trees are
+deferred safely. Local rollback history is discontinued; manual downloads/builds
+of older GitHub releases remain available. The first cleanup can delay opening:
+an isolated long-history upgrade rehearsal took about 75 seconds for maintenance
+and checks. State this in release notes, alongside the full rebuild and temporary
+old-plus-new storage requirement. An old updater may place the first rebuilt game
+in its version workspace, requiring one more full rebuild on the following update
+to establish the independently reusable payload.
+
+The current build-recipe changes require a full local game rebuild through
 the Linux updater while retaining the original saves/settings profile and
 read-only input. Do not package profiles or perform save conversion as part of
 an update. Preserve optional Quick Step assignment metadata with its save folder.
@@ -47,7 +95,7 @@ for conservatively classified launcher-only changes. No precompiled game or
 vendor SDK is delivered by this updater, and it does not update Windows.
 Release-owned source modifications stop automatic installation; user profiles
 remain outside the source manifest. See the
-[Linux update/rollback guide](BUILD_LINUX.md#4-update-and-roll-back).
+[Linux update guide](BUILD_LINUX.md#4-update-and-roll-back).
 
 Managed workspaces, downloads, generated outputs and logs under
 `Monado_Linux/updates/` are runtime artifacts, excluded from tracked source and
@@ -77,8 +125,8 @@ From a reviewed clean public checkout:
 MONADO_RELEASE_SOURCE="$(pwd -P)"
 MONADO_RELEASE_PARENT="$(dirname "$MONADO_RELEASE_SOURCE")"
 python -B tools/publication_guard.py "$MONADO_RELEASE_SOURCE"
-python -B tools/package_source_release.py --source "$MONADO_RELEASE_SOURCE" --platform linux --version 0.1.11 --output "$MONADO_RELEASE_PARENT/monado-ii-linux-release"
-python -B tools/package_source_release.py --source "$MONADO_RELEASE_SOURCE" --platform windows --version 0.1.11 --output "$MONADO_RELEASE_PARENT/monado-ii-windows-release"
+python -B tools/package_source_release.py --source "$MONADO_RELEASE_SOURCE" --platform linux --version 0.1.16 --output "$MONADO_RELEASE_PARENT/monado-ii-linux-release"
+python -B tools/package_source_release.py --source "$MONADO_RELEASE_SOURCE" --platform windows --version 0.1.16 --output "$MONADO_RELEASE_PARENT/monado-ii-windows-release"
 ```
 
 Outputs must be fresh. The packager verifies the exact publication manifest and
@@ -89,7 +137,7 @@ reuse its Git history. The separately prepared public tree has a reviewed fresh
 history; development notes, unreviewed artwork and personal paths remain local.
 
 The manual **Source release kits** GitHub Actions workflow produces
-`monado-ii-linux-setup` and `monado-ii-windows-setup` workflow artifacts after
+`monado-ii-linux-setup` and `monado-ii-windows-original-implementation-setup` workflow artifacts after
 checks; its read-only token does not publish a GitHub release, compile game code,
 access secrets or fetch game input. The Linux workflow artifact contains both
 Linux filenames and its checksum list. Download the artifacts from the exact
@@ -104,7 +152,7 @@ setup and compatibility alias must have equal bytes and digests. For example,
 from the parent of the two fresh local packaging output directories:
 
 ```sh
-MONADO_RELEASE_VERSION=0.1.11
+MONADO_RELEASE_VERSION=0.1.16
 (cd monado-ii-linux-release && sha256sum -c SHA256SUMS)
 (cd monado-ii-windows-release && sha256sum -c SHA256SUMS)
 cmp "monado-ii-linux-release/monado-ii-${MONADO_RELEASE_VERSION}-linux-setup.tar.gz" "monado-ii-linux-release/monado-ii-${MONADO_RELEASE_VERSION}-linux-source.tar.gz"
@@ -113,7 +161,7 @@ cat monado-ii-linux-release/SHA256SUMS monado-ii-windows-release/SHA256SUMS > SH
 gh release create "v${MONADO_RELEASE_VERSION}" --verify-tag --repo brendonbusker/Monado-II --title "Monado II ${MONADO_RELEASE_VERSION}" --notes-file release-notes.md \
   "monado-ii-linux-release/monado-ii-${MONADO_RELEASE_VERSION}-linux-setup.tar.gz" \
   "monado-ii-linux-release/monado-ii-${MONADO_RELEASE_VERSION}-linux-source.tar.gz" \
-  "monado-ii-windows-release/monado-ii-${MONADO_RELEASE_VERSION}-windows-setup.zip" SHA256SUMS
+  "monado-ii-windows-release/monado-ii-windows-original-implementation-setup.zip" SHA256SUMS
 ```
 
 The same four files may be attached through GitHub's release editor instead.

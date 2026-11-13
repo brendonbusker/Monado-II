@@ -713,3 +713,86 @@ QUICKSTEP_STATS_UI_PATCHES = {
 }
 for _site, (_word, _emit, _note) in QUICKSTEP_STATS_UI_PATCHES.items():
     PATCHES[_site] = Patch(_word, _emit, 'LINUX-040', _note)
+
+
+# [XCDE] LINUX-072: authored opt-in award adapters. Native eligibility, level-ups,
+# skill bonuses and balance caps remain authoritative. Each award is scaled once;
+# Expert Mode's existing bonus-EXP transfer is deliberately not patched.
+def _cheats_reward_award(gen, addr):
+    original = _system_call(gen, addr, 0x70000ba860)
+    return ('{ extern _Bool xcde_cheats_rewards_call(Cpu *c); '
+            f'c->x[30] = 0x{addr + 4:x}ull; '
+            'if (!xcde_cheats_rewards_call(c)) { ' + original + '} }')
+
+
+def _cheats_prefix(helper):
+    def emit(gen, addr):
+        original = _title_plain(gen, addr)
+        return f'{{ extern void {helper}(Cpu *c); {helper}(c); }} ' + original
+    return emit
+
+
+CHEATS_REWARD_CALLS = {
+    0x70000b5d90: 0x940012b4,
+    0x70000b5dc0: 0x940012a8,
+    0x70000b5df0: 0x9400129c,
+    0x70000b5e20: 0x94001290,
+    0x70000b5e50: 0x94001284,
+    0x70000b5e80: 0x94001278,
+    0x70000b5eb0: 0x9400126c,
+    0x70000b5edc: 0x94001261,
+    0x70000bb60c: 0x97fffc95,
+    0x70000bbe20: 0x97fffa90,
+    0x70000bc09c: 0x97fff9f1,
+}
+for _site, _word in CHEATS_REWARD_CALLS.items():
+    assert _site not in PATCHES, f'Conflicting cheat patch at {_site:#x}'
+    PATCHES[_site] = Patch(_word, _cheats_reward_award, 'LINUX-072',
+                          'new EXP/AP/SP award; original call when off/1x, owned scaled record otherwise')
+
+PATCHES[0x70000bc830] = Patch(0xf81e0ff3, _cheats_prefix('xcde_cheats_gold'), 'LINUX-072',
+                            'positive gold-gain amount only; retain original add/cap behavior and prologue')
+
+
+def _cheats_after(helper):
+    def emit(gen, addr):
+        original = _title_plain(gen, addr)
+        return original + f' {{ extern void {helper}(Cpu *c); {helper}(c); }}'
+    return emit
+
+
+# Scale positive native event-9 HP loss once, after native source/target lookup.
+# Both normal and linked damage dispatch retain their own immunity/presentation.
+CHEATS_COMBAT_PATCHES = {
+    0x700049eabc: (0xb0003788, 'cheats_combat_hit'),
+    0x700049d148: (0xf9400fe8, 'cheats_combat_linked_hit'),
+}
+for _site, (_word, _helper) in CHEATS_COMBAT_PATCHES.items():
+    assert _site not in PATCHES, f'Conflicting cheat patch at {_site:#x}'
+    PATCHES[_site] = Patch(_word, _cheats_after(_helper), 'LINUX-072',
+                          'optional party damage magnitude; native event dispatch and HP consumer remain')
+
+
+# This target is an existing native no-damage path in the same function, not a
+# new dispatch entry. Bind the saved arguments and false-return epilogue as well
+# as the patched instruction, so a mismatched native layout fails generation.
+CHEATS_FALL_CONTEXT = {
+    0x700044678c: 0x2a0103f6,  # original forced-event argument -> w22
+    0x7000446858: 0xaa0003f7,  # native status-kind result -> w23
+    0x700044691c: 0x2a1f03f6,  # existing no-damage/false path
+    0x7000446924: 0x2a1603e0,  # return original native false result
+    0x700044693c: 0xd65f03c0,  # native epilogue returns normally
+}
+
+
+def _cheats_fall(gen, addr):
+    for site, expected in CHEATS_FALL_CONTEXT.items():
+        if gen.word(site) != expected:
+            raise ValueError(f'{site:#x}: LINUX-072 native fall context changed')
+    original = _title_plain(gen, addr)
+    return (original + ' { extern _Bool cheats_skip_fall_damage(Cpu *c); '
+            'if (cheats_skip_fall_damage(c)) goto L_700044691c; }')
+
+
+PATCHES[0x7000446864] = Patch(0xb9400815, _cheats_fall, 'LINUX-072',
+                            'optional ordinary PC fall immunity before nonlethal/lethal split; forced events remain native')

@@ -7,14 +7,29 @@
 //   party manager = the unique object of class vtable 0x7000b35210, + 0x20
 // Runs on the game's main thread from the pad read (runtime/hle/input.c fill_state), between the game's own updates.
 // XCDE_PARTY_SWITCH_AT=<frame>[,<frame>...]: switch to the next member at those presented frames (tests).
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 #include <stdlib.h>
 #include <string.h>
+#include <stdatomic.h>
+#include <fenv.h>
 
 #include "../rt.h"
 #include "../cpu.h"
 #include "../diag/diag.h"
 #include "../platform.h"
 #include "../settings.h"
+#include "../hle.h"
+
+#ifdef __linux__
+#include <errno.h>
+#include <sys/mman.h>
+#include <sys/uio.h>
+#include <time.h>
+#include <unistd.h>
+#include "../kernel.h"
+#endif
 
 #ifdef _WIN32
 #include <windows.h>
@@ -24,7 +39,7 @@
 #define SET_LEADER_FN 0x70004c5710ull
 #define FOCUS_FN 0x70000507e0ull       // (party manager, entity handle): the Party menu calls it just before
 
-static volatile int g_switch_req;  // members to advance (set from the input thread: a key / button)
+static _Atomic int g_switch_req;  // members to advance (set from the input thread: a key / button)
 
 // From the keys / pad (runtime/hle/input.c): only with the option on (launcher: Controls, xcde.ini party_switch = 1)
 void party_switch_request(int step) {
@@ -64,14 +79,117 @@ static const uint64_t k_vtables[K_N] = {FIELD_VTABLE, HUD_VTABLE, PLAYER_VTABLE,
 typedef struct { uint64_t obj[K_N][SET_MAX]; int n[K_N]; } Found;
 
 static Found g_found;               // the last scan (under g_found_lock)
-static volatile bool g_cam_used;    // (the direct mouse camera asked for the camera object)
-static volatile bool g_warp_used;   // (XCDE_WARP: the map jump manager)
-static volatile int g_rescan;       // the game's thread asks the scanner for a new scan
+static _Atomic bool g_cam_used;    // (the direct mouse camera asked for the camera object)
+static _Atomic bool g_warp_used;   // (XCDE_WARP: the map jump manager)
+static _Atomic int g_rescan;       // the game's thread asks the scanner for a new scan
+static _Atomic uint64_t g_party_epoch;
+static void party_actions_reset(void);
 #ifdef _WIN32
 static SRWLOCK g_found_lock = SRWLOCK_INIT;
 #endif
 
-static bool obj_ok(uint64_t o, int k) { return o && *(volatile uint64_t *)(uintptr_t)o == k_vtables[k]; }
+#ifdef __linux__
+// [XCDE] LINUX-055 R2: only our currently declared guest heap is eligible.
+// Self process_vm_readv reports unreadable/racing protection instead of faulting
+// the input thread or worker. No foreign process or arbitrary host address read.
+static bool party_range(uint64_t address, size_t bytes) {
+    uint64_t size = kernel_heap_size();
+    return size && size <= HEAP_MAX && address >= HEAP_BASE &&
+           address - HEAP_BASE < size && bytes <= size - (address - HEAP_BASE);
+}
+static bool party_read(uint64_t address, void *out, size_t bytes) {
+    if (!bytes || !party_range(address, bytes)) return false;
+    struct iovec local = {out, bytes}, remote = {(void *)(uintptr_t)address, bytes};
+    ssize_t got = process_vm_readv(getpid(), &local, 1, &remote, 1, 0);
+    if (got >= 0 && got != (ssize_t)bytes) errno = EFAULT;
+    return got == (ssize_t)bytes;
+}
+// Pointers returned by the original native party functions may name writable
+// module data or an alias as well as the heap. Keep discovery heap-only, but
+// validate these typed native returns against the complete claimed guest window.
+static bool party_native_read(uint64_t address, void *out, size_t bytes) {
+    if (!bytes || address < GUEST_LO || address >= GUEST_HI || bytes > GUEST_HI - address) return false;
+    struct iovec local = {out, bytes}, remote = {(void *)(uintptr_t)address, bytes};
+    ssize_t got = process_vm_readv(getpid(), &local, 1, &remote, 1, 0);
+    if (got >= 0 && got != (ssize_t)bytes) errno = EFAULT;
+    return got == (ssize_t)bytes;
+}
+static bool party_writable(uint64_t address, size_t bytes) {
+    if (!bytes || address < GUEST_LO || address >= GUEST_HI || bytes > GUEST_HI - address) return false;
+    FILE *maps = fopen("/proc/self/maps", "r");
+    if (!maps) return false;
+    char line[1024];
+    uint64_t cursor = address, end = address + bytes;
+    size_t budget = 0;
+    while (budget < 131072 && fgets(line, sizeof line, maps)) {
+        budget += strlen(line);
+        unsigned long long lo, hi; char permissions[5];
+        if (sscanf(line, "%llx-%llx %4s", &lo, &hi, permissions) != 3 || hi <= cursor) continue;
+        if (lo > cursor || permissions[0] != 'r' || permissions[1] != 'w') break;
+        cursor = hi < end ? hi : end;
+        if (cursor == end) break;
+    }
+    fclose(maps);
+    return cursor == end;
+}
+static bool party_group_valid(uint64_t group) {
+    uint64_t table;
+    if (!party_writable(group, 0x734) || !party_native_read(group, &table, sizeof table)) return false;
+    const unsigned offsets[] = {0x18, 0x20, 0x28, 0x40};
+    for (unsigned i = 0; i < sizeof offsets / sizeof offsets[0]; ++i) {
+        uint64_t address = table + offsets[i], function;
+        if (address < table || (!party_writable(address, sizeof function) &&
+            !(address >= MAIN_BASE && address <= SDK_BASE - sizeof function))) return false;
+        struct iovec local = {&function, sizeof function}, remote = {(void *)(uintptr_t)address, sizeof function};
+        if (process_vm_readv(getpid(), &local, 1, &remote, 1, 0) != sizeof function ||
+            function < MAIN_BASE || function >= SDK_BASE) return false;
+    }
+    return true;
+}
+static pthread_mutex_t g_found_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t g_scan_cond;
+static pthread_once_t g_scan_once = PTHREAD_ONCE_INIT;
+static pthread_t g_scan_thread;
+static bool g_scan_started, g_scan_failed, g_scan_atexit;
+static _Atomic bool g_scan_stop;
+static _Atomic unsigned g_scan_failures;
+static void scan_failure(const char *operation) {
+    if (atomic_fetch_add(&g_scan_failures, 1) < 4)
+        LOG("[party] Linux %s could not read an owned heap range; discovery deferred (%s)\n", operation, strerror(errno));
+}
+static void scan_cond_init(void) {
+    pthread_condattr_t attr;
+    if (pthread_condattr_init(&attr) || pthread_condattr_setclock(&attr, CLOCK_MONOTONIC) ||
+        pthread_cond_init(&g_scan_cond, &attr)) FATAL("[party] cannot initialize Linux scanner condition\n");
+    pthread_condattr_destroy(&attr);
+}
+#endif
+
+static bool obj_ok(uint64_t o, int k) {
+#ifdef __linux__
+    static const size_t span[K_N] = {0x28, 0x338, 0x1a0, 8, 0x1cc, 0x200, 0x60};
+    unsigned char image[0x338], gauge_prefix[0x40];
+    uint64_t value;
+    if (k < 0 || k >= K_N || !party_read(o, image, span[k]) ||
+        (k == K_GAUGE && !party_read(o - 0x38, gauge_prefix, sizeof gauge_prefix))) return false;
+    memcpy(&value, image, sizeof value);
+    return value == k_vtables[k];
+#else
+    return o && *(volatile uint64_t *)(uintptr_t)o == k_vtables[k];
+#endif
+}
+
+#ifdef __linux__
+static void scan_words(Found *f, uint64_t address, const uint64_t *words, size_t bytes) {
+    for (size_t n = 0; n < bytes / sizeof(uint64_t); ++n) {
+        uint64_t value = words[n];
+        if (value >> 32 != 0x70) continue;
+        for (int k = 0; k < K_N; ++k)
+            if (value == k_vtables[k] && f->n[k] < SET_MAX)
+                f->obj[k][f->n[k]++] = address + n * sizeof(uint64_t);
+    }
+}
+#endif
 
 static void heap_scan(Found *f) {
     memset(f, 0, sizeof *f);
@@ -89,10 +207,44 @@ static void heap_scan(Found *f) {
             }
         a = end;
     }
+#elif defined(__linux__)
+    uint64_t size = kernel_heap_size();
+    long page = sysconf(_SC_PAGESIZE);
+    if (!size || size > HEAP_MAX) return;
+    if (page < 4096 || page > 65536 || (0x100000 % page)) { errno = EINVAL; scan_failure("page size"); return; }
+    uint64_t words[8192];
+    unsigned char resident[256];
+    // Residency avoids faulting in the untouched MAP_NORESERVE window merely
+    // to search it. Both mincore and reads are bounded, and shutdown interrupts
+    // the scan between blocks/runs rather than waiting for the entire heap.
+    for (uint64_t block = 0; block < size && !atomic_load(&g_scan_stop); block += 0x100000) {
+        size_t bytes = size - block < 0x100000 ? (size_t)(size - block) : 0x100000;
+        if (mincore((void *)(uintptr_t)(HEAP_BASE + block), bytes, resident)) { scan_failure("mincore"); continue; }
+        size_t pages = (bytes + (size_t)page - 1) / (size_t)page;
+        for (size_t i = 0; i < pages && !atomic_load(&g_scan_stop);) {
+            if (!(resident[i] & 1)) { ++i; continue; }
+            size_t first = i++;
+            while (i < pages && resident[i] & 1 && (i - first + 1) * (size_t)page <= sizeof words) ++i;
+            size_t count = (i - first) * (size_t)page;
+            size_t offset = first * (size_t)page;
+            if (count > bytes - offset) count = bytes - offset;
+            uint64_t address = HEAP_BASE + block + offset;
+            if (party_read(address, words, count)) scan_words(f, address, words, count);
+            else {
+                // A protected page must not hide healthy objects in adjacent
+                // resident pages from the same coalesced run.
+                scan_failure("read");
+                for (size_t off = 0; off < count && !atomic_load(&g_scan_stop); off += (size_t)page) {
+                    size_t part = count - off < (size_t)page ? count - off : (size_t)page;
+                    if (party_read(address + off, words, part)) scan_words(f, address + off, words, part);
+                }
+            }
+        }
+    }
 #endif
 }
 
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__linux__)
 // Everything still there? (a scanned object freed or reused, a battle's gauges not created yet)
 static bool found_stale(const Found *f) {
     for (int k = 0; k < K_N; k++)
@@ -103,9 +255,16 @@ static bool found_stale(const Found *f) {
     if (g_warp_used && !f->n[K_WARP]) return true;
     if (f->n[K_GAUGE] && !f->n[K_PAL]) return true;  // (a battle without its palette)
     uint64_t hud = f->obj[K_HUD][0];
-    return hud && *(volatile uint64_t *)(uintptr_t)(hud + 0x2c0) && !f->n[K_GAUGE];  // (a battle without its gauges)
+    uint64_t battle = 0;
+#ifdef __linux__
+    if (hud && !party_read(hud + 0x2c0, &battle, sizeof battle)) return true;
+#else
+    if (hud) battle = *(volatile uint64_t *)(uintptr_t)(hud + 0x2c0);
+#endif
+    return battle && !f->n[K_GAUGE];  // (a battle without its gauges)
 }
 
+#ifdef _WIN32
 static DWORD WINAPI party_scanner(LPVOID arg) {
     (void)arg;
     static Found scan;
@@ -127,6 +286,83 @@ static DWORD WINAPI party_scanner(LPVOID arg) {
     }
     return 0;
 }
+#else
+static void *party_scanner(void *arg) {
+    (void)arg;
+    plat_thread_name("monado-party");
+    plat_thread_background();
+    Found scan;
+    unsigned summaries = 0;
+    int previous[K_N];
+    for (int k = 0; k < K_N; ++k) previous[k] = -1;
+    while (!atomic_load(&g_scan_stop)) {
+        pthread_mutex_lock(&g_found_lock);
+        bool stale = found_stale(&g_found);
+        pthread_mutex_unlock(&g_found_lock);
+        bool requested = atomic_exchange(&g_rescan, 0) != 0;
+        unsigned wait_ms = 250;
+        if (stale || requested) {
+            uint64_t started = plat_now_ns();
+            heap_scan(&scan);
+            pthread_mutex_lock(&g_found_lock);
+            if (!atomic_load(&g_scan_stop)) g_found = scan;
+            pthread_mutex_unlock(&g_found_lock);
+            if (summaries < 8 && memcmp(previous, scan.n, sizeof previous)) {
+                memcpy(previous, scan.n, sizeof previous);
+                ++summaries;
+                LOG("[party] Linux scan heap=%llu bytes field=%d hud=%d player=%d gauges=%d palette=%d camera=%d warp=%d time=%llu ms\n",
+                    (unsigned long long)kernel_heap_size(), scan.n[K_FIELD], scan.n[K_HUD], scan.n[K_PLAYER],
+                    scan.n[K_GAUGE], scan.n[K_PAL], scan.n[K_CAM], scan.n[K_WARP],
+                    (unsigned long long)((plat_now_ns() - started) / 1000000));
+            }
+            wait_ms = scan.n[K_FIELD] ? 1000 : 4000;
+        }
+        struct timespec deadline;
+        clock_gettime(CLOCK_MONOTONIC, &deadline);
+        deadline.tv_sec += wait_ms / 1000;
+        deadline.tv_nsec += (long)(wait_ms % 1000) * 1000000;
+        if (deadline.tv_nsec >= 1000000000) { deadline.tv_nsec -= 1000000000; ++deadline.tv_sec; }
+        pthread_mutex_lock(&g_found_lock);
+        if (!atomic_load(&g_scan_stop) && !atomic_load(&g_rescan))
+            pthread_cond_timedwait(&g_scan_cond, &g_found_lock, &deadline);
+        pthread_mutex_unlock(&g_found_lock);
+    }
+    return NULL;
+}
+static void party_scanner_shutdown(void) {
+    pthread_mutex_lock(&g_found_lock);
+    bool join = g_scan_started;
+    atomic_store(&g_scan_stop, true);
+    if (join) pthread_cond_broadcast(&g_scan_cond);
+    pthread_mutex_unlock(&g_found_lock);
+    if (join) pthread_join(g_scan_thread, NULL);
+    pthread_mutex_lock(&g_found_lock);
+    g_scan_started = g_scan_failed = false;
+    memset(&g_found, 0, sizeof g_found);
+    pthread_mutex_unlock(&g_found_lock);
+    g_switch_req = g_rescan = 0;
+    g_cam_used = g_warp_used = false;
+    party_actions_reset();
+}
+static void party_scanner_start(void) {
+    pthread_once(&g_scan_once, scan_cond_init);
+    pthread_mutex_lock(&g_found_lock);
+    if (!g_scan_started && !g_scan_failed) {
+        atomic_store(&g_scan_stop, false);
+        int error = pthread_create(&g_scan_thread, NULL, party_scanner, NULL);
+        if (error) { g_scan_failed = true; LOG("[party] cannot start Linux discovery worker: %s\n", strerror(error)); }
+        else {
+            g_scan_started = true;
+            if (!g_scan_atexit) {
+                if (atexit(party_scanner_shutdown)) FATAL("[party] cannot register Linux scanner shutdown\n");
+                g_scan_atexit = true;
+            }
+        }
+    }
+    pthread_mutex_unlock(&g_found_lock);
+}
+RT_ON_RESET(party_linux_reset) { party_scanner_shutdown(); }
+#endif
 #endif
 
 // The game's thread: a copy of the last scan (a few hundred bytes)
@@ -135,6 +371,10 @@ static void found_get(Found *f) {
     AcquireSRWLockShared(&g_found_lock);
     *f = g_found;
     ReleaseSRWLockShared(&g_found_lock);
+#elif defined(__linux__)
+    pthread_mutex_lock(&g_found_lock);
+    *f = g_found;
+    pthread_mutex_unlock(&g_found_lock);
 #else
     memset(f, 0, sizeof *f);
 #endif
@@ -142,13 +382,24 @@ static void found_get(Found *f) {
 static uint64_t found_one(const Found *f, int k) {
     for (int i = 0; i < f->n[k]; i++) if (obj_ok(f->obj[k][i], k)) return f->obj[k][i];
     g_rescan = 1;
+#ifdef __linux__
+    pthread_mutex_lock(&g_found_lock);
+    if (g_scan_started) pthread_cond_signal(&g_scan_cond);
+    pthread_mutex_unlock(&g_found_lock);
+#endif
     return 0;
 }
 // -1: no gauge for that entity (not in a battle, or not scanned yet)
 static int64_t battle_hp(const Found *f, uint32_t handle) {
     for (int i = 0; i < f->n[K_GAUGE]; i++) {
         uint64_t o = f->obj[K_GAUGE][i];
+#ifdef __linux__
+        uint32_t owner, hp;
+        if (obj_ok(o, K_GAUGE) && party_read(o - 0x38, &owner, sizeof owner) && owner == handle &&
+            party_read(o - 0x10, &hp, sizeof hp)) return hp;
+#else
         if (obj_ok(o, K_GAUGE) && *(volatile uint32_t *)(uintptr_t)(o - 0x38) == handle) return *(volatile uint32_t *)(uintptr_t)(o - 0x10);
+#endif
     }
     return -1;
 }
@@ -157,16 +408,30 @@ static int64_t battle_hp(const Found *f, uint32_t handle) {
 // HLE import, so the game only expects what the import itself returns).
 static uint64_t call_guest(Cpu *c, uint64_t fn, uint64_t x0, uint64_t x1) {
     Cpu saved = *c;
+#ifdef __linux__
+    uint64_t fpcr = rt_get_fpcr(), fpsr = rt_get_fpsr();
+    fenv_t environment;
+    if (fegetenv(&environment)) FATAL("[party] cannot save host FP environment\n");
+#endif
     c->x[0] = x0;
     c->x[1] = x1;
     c->sp = (c->sp - 0x400) & ~15ull;  // (room below whatever the caller has on the stack)
     guest_call(c, fn);
     uint64_t r = c->x[0];
     *c = saved;
+#ifdef __linux__
+    if (fesetenv(&environment)) FATAL("[party] cannot restore host FP environment\n");
+    rt_set_fpcr(fpcr); rt_set_fpsr(fpsr);
+#endif
     return r;
 }
 static uint64_t call_guest3(Cpu *c, uint64_t fn, uint64_t x0, uint64_t x1, uint64_t x2) {
     Cpu saved = *c;
+#ifdef __linux__
+    uint64_t fpcr = rt_get_fpcr(), fpsr = rt_get_fpsr();
+    fenv_t environment;
+    if (fegetenv(&environment)) FATAL("[party] cannot save host FP environment\n");
+#endif
     c->x[0] = x0;
     c->x[1] = x1;
     c->x[2] = x2;
@@ -174,6 +439,10 @@ static uint64_t call_guest3(Cpu *c, uint64_t fn, uint64_t x0, uint64_t x1, uint6
     guest_call(c, fn);
     uint64_t r = c->x[0];
     *c = saved;
+#ifdef __linux__
+    if (fesetenv(&environment)) FATAL("[party] cannot restore host FP environment\n");
+    rt_set_fpcr(fpcr); rt_set_fpsr(fpsr);
+#endif
     return r;
 }
 
@@ -186,7 +455,12 @@ static uint64_t field_group(Cpu *c, uint64_t pm) {
     uint64_t slot = ((c->sp - 0x100) & ~15ull);  // (above the callee's frames: call_guest starts them at sp - 0x400)
     *(volatile uint64_t *)(uintptr_t)slot = pm;
     uint64_t holder = call_guest(c, 0x7000593120ull, slot, 0);
-    uint64_t g = holder ? *(volatile uint64_t *)(uintptr_t)(holder + 0x40) : 0;
+    uint64_t g = 0;
+#ifdef __linux__
+    if (!holder || !party_native_read(holder + 0x40, &g, sizeof g) || g < 8 || !party_writable(g - 8, 8)) return 0;
+#else
+    if (holder) g = *(volatile uint64_t *)(uintptr_t)(holder + 0x40);
+#endif
     return g ? g - 8 : 0;
 }
 // A party member's entity handle (0: none) - the game's own lookup (f_70004c5490(party manager, character id), as the
@@ -213,7 +487,13 @@ static void drop_follow_move(Cpu *c, uint64_t pm, uint32_t handle) {
     memset((void *)(uintptr_t)scratch, 0, 0x20);
     call_guest3(c, 0x700049f8c0ull, scratch, pm, handle);  // (entity handle -> its object, as the game resolves it)
     uint64_t obj = *(volatile uint64_t *)(uintptr_t)scratch;
+#ifdef __linux__
+    uint64_t vt;
+    if (!party_read(obj, &vt, sizeof vt) || vt != CHARA_OBJ_VTABLE ||
+        !party_writable(obj + 0x1a38 + 0x1a0, sizeof(uint64_t))) return;
+#else
     if (!obj || *(volatile uint64_t *)(uintptr_t)obj != CHARA_OBJ_VTABLE) return;
+#endif
     volatile uint64_t *invoker = (volatile uint64_t *)(uintptr_t)(obj + 0x1a38 + 0x1a0);
     if (*invoker == FOLLOW_MOVE_INVOKER) *invoker = 0;
 }
@@ -222,15 +502,28 @@ static void drop_follow_move(Cpu *c, uint64_t pm, uint32_t handle) {
 // loading screens have no party yet).
 static bool player_in_control(uint64_t p) {
     if (!p) return false;
+#ifdef __linux__
+    uint32_t on_bits, disabled;
+    if (!obj_ok(p, K_PLAYER) || !party_read(p + 0xc, &on_bits, sizeof on_bits) ||
+        !party_read(p + 0x10, &disabled, sizeof disabled) || on_bits != 0x3f800000u || disabled) return false;
+#else
     float on;
     memcpy(&on, (const void *)(uintptr_t)(p + 0xc), 4);
     if (on != 1.0f || *(volatile uint32_t *)(uintptr_t)(p + 0x10) != 0) return false;
+#endif
     // +0x120 .. +0x1a0: a u32 per player action whose upper half counts the locks on it. These are 0 in the field and in
     // battle and non-zero while the main menu or a cutscene holds the controls (measured: faces_1515 field / menu,
     // colony9 battle, a Colony 9 cutscene)
     static const uint16_t locks[] = {0x136, 0x13a, 0x13e, 0x142, 0x146, 0x14a, 0x14e, 0x156, 0x15a, 0x15e, 0x176, 0x17a, 0x19e};
     for (size_t i = 0; i < sizeof locks / sizeof locks[0]; i++)
+    {
+#ifdef __linux__
+        uint16_t lock;
+        if (!party_read(p + locks[i], &lock, sizeof lock) || lock) return false;
+#else
         if (*(volatile uint16_t *)(uintptr_t)(p + locks[i])) return false;
+#endif
+    }
     return true;
 }
 
@@ -243,16 +536,34 @@ static void switch_leader(Cpu *c, int step) {
     uint64_t list = call_guest(c, PARTY_LIST_FN, fo + 0x20, 0);
     if (!list) return;
     uint16_t *ids = (uint16_t *)(uintptr_t)list;
+#ifdef __linux__
+    uint64_t n;
+    if (!party_native_read(list + 0x18, &n, sizeof n)) { LOG("[party] invalid Linux party list\n"); return; }
+#else
     uint64_t n = *(uint64_t *)(uintptr_t)(list + 0x18);
+#endif
     if (n < 2 || n > 16) { LOG("[party] %llu member(s): no switch\n", (unsigned long long)n); return; }
+#ifdef __linux__
+    if (!party_writable(list, (size_t)n * sizeof *ids)) { LOG("[party] Linux party list is not writable\n"); return; }
+#endif
     // the list holds the whole roster: the deployed party (the first 3 - the Party menu's slots 1-2-3) and then the
     // reserve. Only the deployed ones take turns (as in Xenoblade 3); the reserve stays as it is.
     uint64_t total = n;
     if (n > 3) n = 3;
     uint64_t hud = found_one(&f, K_HUD);
+#ifdef __linux__
+    uint64_t battle_part = 0;
+    if (hud && !party_read(hud + 0x2c0, &battle_part, sizeof battle_part)) return;
+    bool battle = battle_part != 0;
+    if (battle && (!party_writable(hud + 0x2d0, 4) || !party_writable(hud + 0x330, 1))) return;
+#else
     bool battle = hud && *(volatile uint64_t *)(uintptr_t)(hud + 0x2c0);  // (the HUD's battle part is set up)
+#endif
     uint64_t group = field_group(c, fo + 0x20);
     if (!group) { LOG("[party] no field group\n"); return; }
+#ifdef __linux__
+    if (!party_group_valid(group)) { LOG("[party] invalid Linux field group\n"); return; }
+#endif
     // the next member able to fight leads (in battle a member at 0 HP is skipped, as Xenoblade 3 does); the order of the
     // others is kept (the list rotated left)
     uint16_t old[3];
@@ -324,8 +635,8 @@ static void party_probe(Cpu *c, uint64_t frame) {
 // (measured). Only in battle with the player in control; the presses go out through party_macro_buttons.
 enum { MACRO_A = 0, MACRO_LEFT = 12, MACRO_RIGHT = 14 };
 #define MACRO_HOLD 4  // frames a press is held / released
-static volatile int g_art_req = -1;
-static volatile bool g_art_used;  // (the scanner starts on the first request)
+static _Atomic int g_art_req = -1;
+static _Atomic bool g_art_used;  // (the scanner starts on the first request)
 static _Atomic uint64_t g_macro_buttons;
 void party_art_request(int slot) {
     if (slot < 0 || slot > 8) return;
@@ -339,10 +650,16 @@ static void art_macro(uint64_t frame) {
     static int target = -1, presses, last, dir;
     static bool fire;
     static uint64_t next, asked;
+    static uint64_t epoch;
+    uint64_t current_epoch = atomic_load(&g_party_epoch);
+    if (epoch != current_epoch) {
+        epoch = current_epoch;
+        target = -1; presses = last = dir = 0; fire = false; next = asked = 0;
+    }
     static int dbg = -1;
     if (dbg < 0) dbg = getenv("XCDE_ART_AT") != NULL;
-    int r = g_art_req;
-    if (r >= 0) { g_art_req = -1; target = r; presses = 0; last = -1; fire = false; next = asked = frame; }
+    int r = atomic_exchange(&g_art_req, -1);
+    if (r >= 0) { target = r; presses = 0; last = -1; fire = false; next = asked = frame; }
     if (target < 0 || frame < next) return;
     if (g_macro_buttons) {  // release, then look again
         g_macro_buttons = 0;
@@ -383,7 +700,15 @@ static void art_macro(uint64_t frame) {
 
 // [XCDE] T236: the mouse camera as a PC game's - the mouse's pixels added to the camera's yaw / pitch (0.0025 rad a pixel
 // at mouse_sens 50), no stick in between: no dead zone, curve or top speed. The game's thread, each pad read.
-static volatile uint64_t g_cam_direct_frame;
+static _Atomic uint64_t g_cam_direct_frame;
+static void party_actions_reset(void) {
+    g_art_req = -1;
+    g_art_used = false;
+    g_macro_buttons = 0;
+    g_tour_buttons = 0;
+    g_cam_direct_frame = 0;
+    atomic_fetch_add(&g_party_epoch, 1);
+}
 bool party_camera_direct(uint64_t frame) { return g_cam_direct_frame && frame - g_cam_direct_frame <= 1; }
 static void mouse_camera(uint64_t frame) {
     extern bool input_mouse_take(uint64_t frame, float *dx, float *dy), input_mouse_on(void);
@@ -395,6 +720,9 @@ static void mouse_camera(uint64_t frame) {
     found_get(&f);
     uint64_t cam = found_one(&f, K_CAM);
     if (!cam || !player_in_control(found_one(&f, K_PLAYER))) return;  // (the stick fallback moves it, if anything)
+#ifdef __linux__
+    if (!party_writable(cam + 0x1f0, 0x10)) return;
+#endif
     float dx, dy;
     if (!input_mouse_take(frame, &dx, &dy)) return;
     g_cam_direct_frame = frame;
@@ -898,6 +1226,8 @@ void party_game_tick(Cpu *c, uint64_t frame) {
         HANDLE t = CreateThread(NULL, 0, party_scanner, NULL, 0, NULL);
         if (t) { SetThreadPriority(t, THREAD_PRIORITY_BELOW_NORMAL); CloseHandle(t); }
     }
+#elif defined(__linux__)
+    if (g_party_switch || nat || g_art_used || g_cam_used || g_warp_used) party_scanner_start();
 #endif
     for (int i = 0; i < nat; i++) if (at[i] == frame) { at[i] = 0; g_switch_req = 1; }
     static int probe = -1;  // (tests: XCDE_PARTY_PROBE=<n>: the deployed members' positions every n frames)
@@ -916,8 +1246,7 @@ void party_game_tick(Cpu *c, uint64_t frame) {
     for (int i = 0; i < nart; i++) if (art_at[i] == frame) { art_at[i] = 0; party_art_request((int)art_v[i]); }
     art_macro(frame);
     mouse_camera(frame);
-    int step = g_switch_req;
+    int step = atomic_exchange(&g_switch_req, 0);
     if (!step) return;
-    g_switch_req = 0;
     switch_leader(c, step);
 }

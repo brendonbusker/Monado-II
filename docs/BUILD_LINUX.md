@@ -1,6 +1,6 @@
 # Build and play on Linux
 
-Download and extract **`monado-ii-0.1.11-linux-setup.tar.gz`** from
+Download and extract **`monado-ii-0.1.13-linux-setup.tar.gz`** from
 [Releases](https://github.com/brendonbusker/Monado-II/releases). Open a terminal in
 the extracted folder. The current pinned baseline is **Linux x86-64 (x86-64-v2),
 CPython 3.14, glibc 2.43 or newer**, and a native GNU C++ runtime exporting
@@ -19,8 +19,59 @@ normal system package. No downgrade, major-version symlink or individual-library
 version override is needed or supported.
 Host glibc, GNU runtimes, driver clients and native audio/session interfaces are
 checked rather than replaced. The builder never runs sudo or changes system
-packages or drivers. This remains an explicitly tested baseline rather than a
-universal Linux binary compatibility promise.
+packages during ordinary/noninteractive builds. Explicit dependency repair can
+request a reviewed package transaction inside a supported Distrobox, as described
+below. Drivers and the operating-system baseline are not installed by the build.
+This remains an explicitly tested baseline rather than a universal Linux binary
+compatibility promise.
+
+### Prerequisite checks and guided repair
+
+Run the same `./Build_Monado_II.sh` command. Before compilation, it reports the
+Monado version, current distribution/container, libc baseline, missing tools and
+required native libraries. Missing prerequisites include the corresponding
+distribution package names and installation instructions. Python 3.14 is still
+the build baseline; an available Python 3.9+ can run the dependency diagnosis.
+`--help` works without Python and `--plan` never installs or downloads anything.
+
+Inside a supported **Fedora 45 Distrobox**, request package installation with:
+
+```sh
+./Build_Monado_II.sh --install-deps
+```
+
+The script displays the container and exact package command. Review the package
+manager's transaction and confirmation; sudo may ask for your container password.
+Only that package command uses sudo. Generation, compilation and AppImage creation
+continue as your ordinary user. Do not run the whole build script with sudo.
+If no suitable Python is available, this mode first installs Fedora's Python 3.14
+to run the fuller checks. An existing complete environment needs no transaction.
+Supported private dependency downloads remain automatic and hash-checked.
+
+Native installations receive manual package instructions. On native Bazzite,
+`dpkg-deb` is supplied by Fedora's `dpkg` package through the supported layering
+route:
+
+```sh
+rpm-ostree install dpkg
+```
+
+Reboot to apply that deployment, then rerun the build. The script does not layer
+host packages, unlock SteamOS, reboot, install drivers or replace libc. A container
+below glibc 2.43 is rejected with compatible-image guidance; installing more
+ordinary packages does not make an old libc satisfy that baseline. Unknown images
+get diagnostic information rather than guessed automatic installations.
+
+Build and launch from the same compatible container. A file visible in the shared
+home directory still needs the container's libraries when it runs. Actual Steam
+Deck GPU, audio, controller and game coverage requires separate manual testing.
+
+Background updater builds never install packages or ask for sudo. If a new
+prerequisite is missing, the working selection stays active and the error explains
+what to install before retrying. Original game input, saves, settings and optional
+Quick Step metadata remain in their existing locations; no save conversion is
+introduced by these setup changes. Build failures include bounded command/loader
+diagnostics and the path to the complete log.
 
 ### Native prerequisites on Arch / CachyOS
 
@@ -122,6 +173,12 @@ DLSS-specific prerequisites:
 ./Build_Monado_II.sh --without-dlss
 ```
 
+Selecting DLSS in the Linux launcher now defaults to **DLAA / Native (100%)**.
+An explicitly saved quality choice is preserved when reopening settings.
+**Shaking reported at Quality (67%) remains unresolved**; choose Native (100%) as
+the current workaround. This release changes the selection default without
+claiming a scaled-DLSS rendering fix.
+
 To inspect the proposed steps without creating files or downloading anything:
 
 ```sh
@@ -196,6 +253,16 @@ Load Game and Continue restore the saved assignment and its actual movement
 bonus from matching metadata. Native `.sav` formats and filenames stay unchanged.
 See the [Quick Step guide](QUICKSTEP.md) for controls, removal and coverage limits.
 
+### Held-L2 camera and party controls
+
+Linux 0.1.12 restores the native held-L2 camera controls and control-help display
+when the optional Xenoblade 3-style character-switching setting is enabled.
+Hold L2 and press L1/R1 to request the previous/next party member; a neutral L2
+hold still reaches the game's native camera controls. Optional D-pad walking
+yields to held-ZL camera controls. The maintainer accepted the revised controls
+manually; broader field/battle, Future Connected and controller coverage remains
+incomplete.
+
 ## Experimental frame generation
 
 Normal Linux builds include native frame-generation support without an extra flag:
@@ -226,7 +293,9 @@ Launcher-only updates preserve a compatible FG game. An older DLSS build without
 FG support is rebuilt to gain it. Current clients can rebuild ordinary FG builds
 automatically; footstep-diagnostic builds still require a manual rebuild.
 
-## 4. Update and roll back
+<a id="4-update-and-roll-back"></a>
+
+## 4. Updates and storage
 
 **The 0.1.2 launcher cannot update itself.** Enable the updater with one manual
 0.1.3 or newer source upgrade/build. You can preserve your current profile in the same
@@ -276,51 +345,66 @@ experimental. Edited release-owned source files also stop automatic installation
 so local changes can be merged manually. Normal settings changes do not modify
 the release-owned source.
 
-**The 0.1.11 Quick Step and queued-rendering fixes require a full local game
-rebuild.** The normal updater performs this rebuild before activation. It preserves the original
+**Updating to 0.1.13 requires a full local game rebuild** for the changed build
+recipes and checks. The normal updater performs this rebuild before activation.
+It preserves the original
 `Monado_Linux/play/launcher` save/settings profile and shared input in place;
 it does not convert, replace or delete saves. Preserve optional Quick Step metadata
 with the complete save folder, including hidden files. Keep the original installation
-folder and its retained update directories. A fresh kit elsewhere is a separate
+folder and its current managed directories. A fresh kit elsewhere is a separate
 profile, as described above.
 
-Subsequent managed updates leave installed sources in place. Each new version
-stays at a fixed path under
-`Monado_Linux/updates/<id>/workspace`, with separate generated code, dependencies,
-builds and logs. Once a build starts, its source/build/image paths must never be
-moved or renamed. The original root AppImage remains the entry point and selects
-the checked active version. Managed updates keep the original installation's
-`game_files` read-only and leave saves/settings in its
-`Monado_Linux/play/launcher` profile; they do not copy or replace that profile.
-Keep the original folder and retained version directories together. Update
-downloads and runtime artifacts under `Monado_Linux/updates` are local only and
-must not be committed or included in source releases.
+Managed updates retain **only the current launcher version and its required game
+payload** after successful activation and cleanup. The working version stays in
+place while the candidate downloads, builds and passes the available checks. A
+failed or cancelled preparation leaves it selected and usable. Allow temporary
+space for the existing build, download, generated sources and replacement build
+before cleanup can reclaim it.
 
-Starting with 0.1.6, the original folder's **`update-version.json` reflects the
-active version**. An older installation gains this behavior when its updated
-launcher first starts. Its original source version is retained in a checked
-backup for rollback; the game input and profile are not moved. Keep the update
-directories, including the retained updater used for rollback.
+The first launch of a version supporting this policy also cleans accumulated old
+updates and failed attempts from older installations. Cleanup removes recognized,
+unmodified updater-owned artifacts only. If another session is using them, or a
+permission/unexpected file prevents safe deletion, cleanup is recorded as pending
+and retried on a later launch. Close other launcher/game/precompile sessions to
+allow it to finish. Its bounded status is in
+`Monado_Linux/updates/retention-status.json`.
 
-To select the previous version, close the launcher, game and shader precompiler
-using the original default profile. From the **original installation root**, run:
+This first-start maintenance runs before the launcher window appears. An isolated
+upgrade rehearsal with a long update history took about **75 seconds** for
+maintenance and post-checks; other installations may take more or less time.
+Leave the launcher starting while cleanup works. A deletion that cannot safely
+finish is left pending for a later launch.
 
-```sh
-./Rollback_Monado_II.sh
-./Play_Monado_II.sh
-```
+Launcher-only updates reuse one directly referenced game payload. Game-changing
+updates build a fresh payload at a permanent path before activation. Existing
+version-owned game binaries are detached through a one-time full local rebuild
+when first needed by the new updater. In particular, an older updater can build
+0.1.12's game inside its version workspace, so the following update may need
+one additional full rebuild to create the reusable payload. Later compatible
+launcher-only updates can reuse that payload. Build paths stay fixed; never
+manually move or rename an installed source/build/image directory.
 
-The rollback entrypoint is included in fresh 0.1.6 kits and installed at the
-original root during its first version-aware managed startup. It validates and
-uses the retained capable updater even when the previous game version is older.
-Use this entrypoint after upgrading; the old pre-0.1.6 `tools/update_linux.py
---rollback` command refuses the newer version records safely.
+The original root AppImage remains the entry point and selects the checked active
+version. Keep the original folder, its Python support environment and the current
+managed directories together. The updater preserves original authored source and
+support files; it does not turn the installation into a standalone game AppImage.
+Downloads, native outputs and generated content under `Monado_Linux/updates` stay
+local and must not be committed or included in source releases.
 
-Rollback changes the active-version pointer and visible version, including
-returning to the original bootstrap after the first managed update. It does not restore or delete game
-builds, input, saves or settings. This command uses the original default profile;
-it is not a profile migration or save-recovery tool. The updater is Linux-only;
-no Windows updater or backport is included.
+Saves, settings, mods, useful shader/driver caches and shared `game_files` are
+outside version cleanup. Native save formats are unchanged. Preserve the complete
+save folder, including hidden Quick Step metadata. The original folder's
+`update-version.json` reflects the active version; its checked original metadata
+backup supports source verification rather than retaining an old playable build.
+
+**Local rollback is discontinued.** The legacy `Rollback_Monado_II.sh` compatibility
+entrypoint reports this instead of changing the selected version. To downgrade,
+download an older Linux source/setup kit from the project's GitHub releases and
+build it manually. Keep your original installation/profile intact; a kit in a
+new folder uses a separate profile and does not automatically import saves. Back
+up the complete save/settings profile before manually transferring it. The updater
+never restores or deletes user progress as part of changing program versions.
+The updater remains Linux-only; no Windows updater/backport is included.
 
 If a stage fails, use the log path printed by the builder. A successful local build
 and AppImage check do not establish full-game or other-GPU compatibility. The

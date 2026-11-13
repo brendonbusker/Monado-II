@@ -173,6 +173,83 @@ class ManagedBuild(unittest.TestCase):
         self.assertEqual(paths['state'], self.state)
         self.assertEqual(files(self.owner), before)
 
+    def game_only_runner(self, command, cwd, log):
+        result = self.runner(command, cwd, log)
+        if any(Path(str(value)).name == 'build_linux.py' for value in command):
+            (self.port / '.deps/metadata').mkdir(parents=True, exist_ok=True)
+            game = Path(command[command.index('--output') + 1]) / 'xcde-linux'
+            write_elf(game)
+            sysroot = self.port / '.deps/graphics/sysroots/authored'
+            if not sysroot.exists():
+                self.marker(sysroot, self.receipt['sources_before']['graphics-deps-linux.lock.json'])
+            receipt = dict(self.receipt, executable={'path': str(game), 'sha256': sha(game)},
+                           dependencies={'sysroot': str(sysroot)})
+            (game.parent / 'receipt.json').write_text(json.dumps(receipt))
+        return result
+
+    def test_game_only_publishes_verified_payload_marker_and_keeps_profile_original_image(self):
+        (self.workspace / 'installation.json').write_text(json.dumps({'schema': 1,
+            'owner': str(self.owner), 'workspace': str(self.workspace), 'game_port': str(self.port)}))
+        original_image = self.owner / build.IMAGE
+        original_image.write_text('original bootstrap remains untouched')
+        before = files(self.state), files(self.input), files(self.original / 'build')
+        with contextlib.redirect_stdout(io.StringIO()), \
+                mock.patch.object(build.run_linux, 'validate_runtime', return_value={'status': 'passed'}) as checked:
+            receipt = build.build(self.workspace, 2, runner=self.game_only_runner,
+                locker=lambda port: contextlib.nullcontext(), identity='immutable-payload', dlss=False, game_only=True)
+        game = self.port / 'build/immutable-payload-game/xcde-linux'
+        marker = json.loads((self.port / '.deps/metadata/game-payload.json').read_text())
+        self.assertEqual(marker['artifact_kind'], 'local-game-payload')
+        self.assertEqual(marker['status'], 'passed')
+        self.assertEqual(marker['build_id'], 'immutable-payload')
+        self.assertEqual(marker['game']['path'], str(game))
+        self.assertEqual(marker['game']['sha256'], sha(game))
+        self.assertEqual(marker['game']['receipt_sha256'], sha(game.parent / 'receipt.json'))
+        self.assertEqual(marker['game']['build_port'], str(self.port))
+        self.assertEqual(marker['build_receipt_sha256'], sha(self.port / 'runs/local-build/immutable-payload/receipt.json'))
+        self.assertEqual(receipt['status'], 'passed')
+        checked.assert_called_once()
+        self.assertEqual(before, (files(self.state), files(self.input), files(self.original / 'build')))
+        self.assertEqual(original_image.read_text(), 'original bootstrap remains untouched')
+        self.assertFalse((self.workspace / build.IMAGE).exists())
+        self.assertFalse(any('build_launcher' in str(command) or '--dry-run' in command for command in self.commands))
+        with self.assertRaisesRegex(build.BuildError, 'receipt already exists'):
+            build.layout(self.workspace, 2, identity='another-game', dlss=False, game_only=True)
+
+    def test_game_only_validation_failure_does_not_publish_payload_or_launcher(self):
+        for name in ('missing-native-receipt', 'runtime-rejected'):
+            with self.subTest(name=name):
+                identity = 'game-' + name
+                runner = self.runner if name == 'missing-native-receipt' else self.game_only_runner
+                with contextlib.redirect_stdout(io.StringIO()), \
+                        mock.patch.object(build.run_linux, 'validate_runtime', side_effect=ValueError('authored runtime rejection')):
+                    with self.assertRaises((ValueError, OSError, build.BuildError)):
+                        build.build(self.workspace, 2, runner=runner,
+                            locker=lambda port: contextlib.nullcontext(), identity=identity, dlss=False, game_only=True)
+                self.assertFalse((self.port / '.deps/metadata/game-payload.json').exists())
+                self.assertFalse((self.workspace / build.IMAGE).exists())
+                receipt = json.loads((self.port / ('runs/local-build/' + identity) / 'receipt.json').read_text())
+                self.assertEqual(receipt['status'], 'failed')
+
+    def test_payload_marker_failure_records_failed_build_and_preserves_profile(self):
+        before = files(self.state), files(self.input)
+        original = build.write_json
+        marker = self.port / '.deps/metadata/game-payload.json'
+        def write(path, document):
+            if path == marker:
+                raise PermissionError('authored marker publication failure')
+            return original(path, document)
+        with contextlib.redirect_stdout(io.StringIO()), \
+                mock.patch.object(build.run_linux, 'validate_runtime', return_value={'status': 'passed'}), \
+                mock.patch.object(build, 'write_json', side_effect=write):
+            with self.assertRaisesRegex(PermissionError, 'marker publication'):
+                build.build(self.workspace, 2, runner=self.game_only_runner,
+                    locker=lambda port: contextlib.nullcontext(), identity='marker-failure', dlss=False, game_only=True)
+        self.assertFalse(marker.exists())
+        receipt = json.loads((self.port / 'runs/local-build/marker-failure/receipt.json').read_text())
+        self.assertEqual(receipt['status'], 'failed')
+        self.assertEqual(before, (files(self.state), files(self.input)))
+
     def test_reuse_build_publishes_only_inside_candidate_and_preserves_old_receipt_state_input(self):
         active = self.owner / build.IMAGE
         active.write_text('original active bootstrap fixture')
@@ -225,7 +302,7 @@ class ManagedBuild(unittest.TestCase):
     def test_reuse_cli_is_explicitly_forwarded_to_builder(self):
         with mock.patch.object(build, 'build') as operation:
             self.assertEqual(build.main(['--reuse-game', str(self.game), '--without-dlss']), 0)
-        operation.assert_called_once_with(jobs=4, dlss=False, reuse_game=self.game, framegen=False)
+            operation.assert_called_once_with(jobs=4, identity=None, dlss=False, reuse_game=self.game, framegen=False, game_only=False)
 
     def test_normal_reuse_rejects_older_dlss_game_without_framegen_before_writes(self):
         self.receipt['dlss_enabled'] = True

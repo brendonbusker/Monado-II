@@ -1,5 +1,138 @@
 # Changelog
 
+## 0.1.16 — November 13, 2026
+
+- Preserve validated Steam/SDL controller context through the launcher and game,
+  including the flag SDL needs to recognize Steam's virtual gamepad. Retain
+  associated mapping and device-filter settings.
+- Allow existing HIDAPI controller device nodes through the native state-write
+  guard, keeping game input, saves and unrelated files confined as before.
+- Add bounded controller discovery diagnostics and recover another usable pad
+  when an open fails or the selected controller disconnects. Let the launcher's
+  SDL/ImGui backend own its controller handles.
+- These changes are likely to address the reported Steam Deck detection failure.
+  ROG Ally X compatibility remains uncertain; neither handheld has been tested
+  with this release. The maintainer accepted desktop/NVIDIA gameplay. New or recreated
+  native HID device nodes can require restarting the launcher; see
+  [handheld controller notes](docs/HANDHELD_CONTROLLERS.md).
+
+- Prepare the RADV-only `nodcc` driver option before graphics initialization to
+  work around colorful glowing dots reported on the Radeon RX 7600. Keep lean
+  formats, the driver-owned heap optimization and NVIDIA rendering policies as
+  before. Preserve existing RADV debug flags and provide a diagnostic opt-out.
+- Thanks to **patrickksmdev** for testing both switches separately at the same
+  Colony 9 location and settings: `nodcc` alone removed the artifacts, while
+  disabling lean formats alone did not. The reporter observed no noticeable FPS
+  loss or added stuttering; this is qualitative RX 7600 evidence, not a universal
+  AMD performance claim.
+- The maintainer accepted NVIDIA gameplay on both the preceding `nodcc`
+  candidate and this combined build. Affected-AMD validation of the packaged fix
+  is still requested. Native save formats and state locations are unchanged;
+  updating requires a full local rebuild. See [RADV notes](docs/AMD_RADV.md).
+- Label Windows downloads as the **original implementation**, without borrowing
+  the Linux version number. Windows has not received the Linux additions. Future
+  Windows kits retain that identity until Windows is explicitly updated.
+
+## 0.1.15 — November 12, 2026
+
+- Add a separate Cheats launcher tab with independent, off-by-default controls
+  for party damage dealt/received, EXP/AP/SP/gold gained and no fall damage.
+  Multiplier sliders cover 0x–20x in 0.01x (1%) increments. Settings apply when
+  starting the game; disabled and exact 1x paths retain native behavior.
+- Scale new awards rather than editing balances. Preserve native eligibility,
+  caps, spending, healing and Expert Mode transfers of EXP already earned. Native
+  save formats stay unchanged; rewards already earned remain after disabling.
+- Move the existing Xenoblade 3 party-switching control from Controls to Mods,
+  immediately beneath Quick Step, keeping its setting and behavior.
+- The maintainer manually accepted the combined Linux build. Focused native,
+  sanitizer, instruction and launcher tests passed; comprehensive DE/FC and
+  damage-over-time/status-effect coverage remain unqualified. See
+  [Cheats](docs/CHEATS.md) for controls and scope. No Arts-recharge cheat or Windows
+  feature backport is included.
+- Updating requires a full local game rebuild. Saves, settings and hidden Quick
+  Step metadata remain in place without native save conversion. The AMD/RADV
+  correction from 0.1.14 remains included; AMD gameplay performance still needs
+  testing.
+
+## 0.1.14 — November 12, 2026
+
+- Add a capability-gated, driver-owned guest heap path for Mesa RADV, aimed at
+  excessive AMDGPU user-pointer submission overhead. Keep NVIDIA on its existing
+  import path and retain a checked RADV fallback. **AMD gameplay performance,
+  including the reported RX 6700 XT case, still needs testing.** No specific FPS
+  improvement is promised.
+- Add focused allocation/failure, device-policy and heap-lifecycle coverage, and
+  an explicit render-worker thread name for Linux diagnostics. Save formats and
+  input paths remain unchanged. See [RADV compatibility notes](docs/AMD_RADV.md).
+
+- Controlled memory-transfer tests passed on an integrated RADV GPU, including the
+  full 3.25 GiB heap. The maintainer manually accepted NVIDIA gameplay; this is
+  qualitative feedback, not measured FPS parity or full-game qualification.
+- Updating requires a full local game rebuild. The updater retains saves,
+  settings and hidden Quick Step metadata without changing native save formats.
+  Quick Step stays off by default; frame generation stays experimental and off.
+  Windows gameplay implementation and the glibc/Python baseline are unchanged.
+
+## 0.1.13 — November 12, 2026
+
+- Diagnose Linux prerequisites before compilation, including the current
+  distribution/container, Python 3.14, libc, tools and required native libraries.
+  Missing dependencies include distribution-specific package instructions.
+- Add explicit `./Build_Monado_II.sh --install-deps` repair for supported Fedora 45
+  Distrobox environments. Only the reviewed package-manager command may request
+  sudo; generation and compilation remain under the ordinary user. Native hosts
+  retain manual system-package setup, and background updates never install or
+  prompt. Unsupported libc baselines stop with compatible-environment guidance.
+- Preserve clean build-tool discovery and show bounded actual compiler/loader
+  diagnostics in build errors. Existing input, saves, settings and optional
+  Quick Step metadata retain their formats and locations. No renderer or gameplay
+  behavior is changed.
+- Updating requires a full local game rebuild because the build recipes changed.
+  The updater keeps the working version selected until the replacement passes
+  its checks. Missing prerequisites do not trigger package installation during
+  background updates; install the reported requirements before retrying.
+- The baseline remains Linux x86-64-v2, CPython 3.14, glibc 2.43+ and the required
+  native GNU/audio/graphics interfaces. Fedora 45 and Debian userspace checks,
+  a fresh native build and a real 0.1.12 updater rehearsal passed; actual Steam
+  Deck/Bazzite desktop gameplay and interactive Distrobox installation remain
+  unverified. Windows implementation is unchanged. No cheats are included.
+
+## 0.1.12 — November 10, 2026
+
+- Keep only the active Linux launcher and its required game payload after a
+  successful update. The first updated launch also cleans accumulated older
+  updater-owned builds and abandoned downloads. Interrupted or blocked cleanup
+  retries safely; saves, settings, hidden Quick Step metadata, mods, useful caches
+  and game input stay in place. Native save formats are unchanged.
+- Reuse one independently owned game payload for compatible launcher-only updates.
+  Keep the working build until its replacement is built, checked and activated.
+  Local rollback history is discontinued; older versions remain available as
+  manual downloads/builds from GitHub releases.
+- Updating to 0.1.12 requires a **full local game rebuild** and temporary space for
+  the old and new builds. An older updater may place this first rebuilt game in
+  its version workspace; the following update can require one additional full
+  rebuild to put it in the new reusable payload location.
+- First-start cleanup can delay the launcher opening. An isolated upgrade rehearsal
+  with a long update history took about **75 seconds** for maintenance and checks.
+  Duration depends on update history, files and storage. Cleanup status is recorded
+  in `Monado_Linux/updates/retention-status.json`.
+- Restore native held-L2 camera controls and control-help prompts immediately
+  with XC3-style party switching enabled. Keep L2 + L1/R1 party shortcuts,
+  selected-controller checks, safe release handling and ordinary native taps.
+- Port the party-switch object-discovery worker to Linux. Use bounded reads of
+  the owned guest heap, preserve native party ordering/leader/HUD calls, and stop
+  the worker and clear synthetic controls during a guest reset. The maintainer
+  manually accepted the revised camera, control-help and party-switching behaviour.
+  Broader field/battle, Future Connected and hardware coverage remains incomplete.
+- Keep optional D-pad walking from competing with held-ZL camera controls.
+- Default a newly selected Linux DLSS mode to **DLAA / Native (100%)**. Keep
+  explicit saved quality choices, including Quality (67%), when reopening settings.
+  **Reported shaking at 67% remains unresolved.** Select Native (100%) as the
+  current workaround; the default change does not fix scaled DLSS rendering.
+- Frame generation remains experimental and off by default. This release adds no
+  new Bazzite compatibility fix or Windows backport; reported rendering artifacts
+  and broader distribution/gameplay coverage remain open.
+
 ## 0.1.11 — November 10, 2026
 
 - Make the optional dedicated **Quick Step gem slot** stable following the

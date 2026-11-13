@@ -223,6 +223,39 @@ def verified_source(root):
     return document
 
 
+def _extraction_declaration(destination, offer, raw_tar, identities):
+    """Durably declare owned source members before any partial extraction exists.
+
+    This receipt only authorizes later deletion of exact archive bytes/prefixes;
+    it never authorizes execution or treats incomplete source as a valid release.
+    """
+    archive = destination / 'source.tar.gz'
+    def identity(path):
+        with path.open('rb') as stream:
+            return {'bytes': path.stat().st_size,
+                    'sha256': hashlib.file_digest(stream, 'sha256').hexdigest()}
+    compressed = identity(archive)
+    if compressed != {'bytes': offer['archive_bytes'], 'sha256': offer['archive_sha256']}:
+        raise UpdateError('source archive changed before extraction declaration')
+    value = {'schema': 1, 'kind': 'verified-source-extraction', 'version': offer['version'],
+             'archive': compressed, 'tar': identity(raw_tar), 'files': identities}
+    raw = (json.dumps(value, sort_keys=True, separators=(',', ':')) + '\n').encode()
+    if len(raw) > MAX_METADATA:
+        raise UpdateError('extraction ownership declaration exceeds its bound')
+    temporary = destination / 'extraction.json.partial'
+    with temporary.open('xb') as stream:
+        stream.write(raw)
+        stream.flush()
+        os.fsync(stream.fileno())
+    temporary.replace(destination / 'extraction.json')
+    if os.name != 'nt':
+        directory = os.open(destination, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+
+
 def _unpack(archive_path, destination, offer, progress, cancel):
     version, _ = _offer(offer)
     # Retain this archive root for installed 0.1.3/0.1.4 clients, including users
@@ -240,6 +273,8 @@ def _unpack(archive_path, destination, offer, progress, cancel):
             if total > MAX_TAR:
                 raise UpdateError('decompressed source archive exceeds its limit')
             outgoing.write(block)
+        outgoing.flush()
+        os.fsync(outgoing.fileno())
     source = destination / 'source'
     with tarfile.open(raw_tar, 'r:', ignore_zeros=True) as archive:
         members, folded, directories, components = {}, set(), set(), {}
@@ -287,6 +322,7 @@ def _unpack(archive_path, destination, offer, progress, cancel):
                     or identity['bytes'] != members[name].size or not isinstance(identity.get('sha256'), str)
                     or not SHA256.fullmatch(identity['sha256'])):
                 raise UpdateError('invalid archive manifest identity')
+        _extraction_declaration(destination, offer, raw_tar, identities)
         source.mkdir(mode=0o700)
         count = 0
         for name, identity in identities.items():
@@ -364,7 +400,8 @@ def fetch_and_extract(offer, destination, *, opener=None, progress=None, cancel=
 LAUNCHER_FILES = frozenset((
     'README.md', 'CHANGELOG.md', 'CREDITS.md', 'CONTRIBUTING.md', 'LICENSE', 'NOTICE.md', 'TODO.md',
     'RELEASE_README.md', 'source-only-status.json', 'publication-policy.json', 'update-version.json',
-    'Play_Monado_II.sh', 'tools/update_release.py', 'tools/update_linux.py',
+    'Play_Monado_II.sh', 'tools/update_release.py', 'tools/update_linux.py', 'tools/update_retention.py',
+    'Monado_Linux/scripts/install_lease.py', 'tests/test_install_lease.py', 'tests/test_update_retention.py',
     'tools/build_launcher_appimage.py', 'tests/test_update_release.py', 'tests/test_update_linux.py',
     'Monado_Linux/scripts/build_launcher_linux.py', 'Monado_Linux/scripts/launcher_linux.py',
 ))
