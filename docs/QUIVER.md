@@ -2,11 +2,14 @@
 
 The primary release downloads are **setup/build kits**, named
 `monado-ii-<version>-linux-setup.tar.gz` and
-`monado-ii-<version>-windows-setup.zip`. They contain reviewed authored source and
+`monado-ii-windows-original-implementation-setup.zip`. They contain reviewed authored source and
 setup entrypoints. The player builds locally using their own legally dumped,
 already-extracted Switch Definitive Edition 2.0.0 files. No game files, keys,
 firmware, generated game code/binaries, translated game shaders/caches, saves or
 private SDK binaries are distributed. A local build is required before playing.
+
+Windows remains the original implementation without the Linux additions. Its
+version-free filename does not advance with Linux release numbers.
 
 ## Linux entrypoint
 

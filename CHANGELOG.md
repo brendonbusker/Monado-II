@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.1.16 — November 13, 2026
+
+- Preserve validated Steam/SDL controller context through the launcher and game,
+  including the flag SDL needs to recognize Steam's virtual gamepad. Retain
+  associated mapping and device-filter settings.
+- Allow existing HIDAPI controller device nodes through the native state-write
+  guard, keeping game input, saves and unrelated files confined as before.
+- Add bounded controller discovery diagnostics and recover another usable pad
+  when an open fails or the selected controller disconnects. Let the launcher's
+  SDL/ImGui backend own its controller handles.
+- These changes are likely to address the reported Steam Deck detection failure.
+  ROG Ally X compatibility remains uncertain; neither handheld has been tested
+  with this release. The maintainer accepted desktop/NVIDIA gameplay. New or recreated
+  native HID device nodes can require restarting the launcher; see
+  [handheld controller notes](docs/HANDHELD_CONTROLLERS.md).
+
+- Prepare the RADV-only `nodcc` driver option before graphics initialization to
+  work around colorful glowing dots reported on the Radeon RX 7600. Keep lean
+  formats, the driver-owned heap optimization and NVIDIA rendering policies as
+  before. Preserve existing RADV debug flags and provide a diagnostic opt-out.
+- Thanks to **patrickksmdev** for testing both switches separately at the same
+  Colony 9 location and settings: `nodcc` alone removed the artifacts, while
+  disabling lean formats alone did not. The reporter observed no noticeable FPS
+  loss or added stuttering; this is qualitative RX 7600 evidence, not a universal
+  AMD performance claim.
+- The maintainer accepted NVIDIA gameplay on both the preceding `nodcc`
+  candidate and this combined build. Affected-AMD validation of the packaged fix
+  is still requested. Native save formats and state locations are unchanged;
+  updating requires a full local rebuild. See [RADV notes](docs/AMD_RADV.md).
+- Label Windows downloads as the **original implementation**, without borrowing
+  the Linux version number. Windows has not received the Linux additions. Future
+  Windows kits retain that identity until Windows is explicitly updated.
+
 ## 0.1.15 — November 12, 2026
 
 - Add a separate Cheats launcher tab with independent, off-by-default controls

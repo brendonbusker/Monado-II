@@ -71,8 +71,12 @@ source and setup tools. **You build locally from your own game dump.**
 
 | Platform | Current setup kit | Full instructions |
 |---|---|---|
-| Linux x86-64 | [Linux `.tar.gz`](https://github.com/brendonbusker/Monado-II/releases/download/v0.1.15/monado-ii-0.1.15-linux-setup.tar.gz) | [Linux build guide](docs/BUILD_LINUX.md) |
-| Windows x86-64 | [Windows `.zip`](https://github.com/brendonbusker/Monado-II/releases/download/v0.1.15/monado-ii-0.1.15-windows-setup.zip) | [Windows build guide](docs/BUILD_WINDOWS.md) |
+| Linux x86-64 | [Linux `.tar.gz`](https://github.com/brendonbusker/Monado-II/releases/download/v0.1.16/monado-ii-0.1.16-linux-setup.tar.gz) | [Linux build guide](docs/BUILD_LINUX.md) |
+| Windows x86-64 | [Original Windows implementation `.zip`](https://github.com/brendonbusker/Monado-II/releases/download/v0.1.16/monado-ii-windows-original-implementation-setup.zip) | [Windows build guide](docs/BUILD_WINDOWS.md) |
+
+> **Windows is the original implementation.** Linux release numbers and the
+> Linux features shown above do not describe the Windows download. Its version-free
+> filename stays unchanged until Windows itself receives updates.
 
 ### Linux quick start
 
@@ -148,7 +152,7 @@ launcher. It never presses Play.
   rebuild the game locally.
 - Saves, settings and shared game input stay in the original installation.
   Failed or cancelled preparation keeps the previous version selected.
-- **Updating to 0.1.15 requires a full local game rebuild** for the updated build
+- **Updating to 0.1.16 requires a full local game rebuild** for the updated build
   runtime and build recipes. The updater handles this without converting, replacing or
   deleting your saves. Missing prerequisites leave the working version selected
   and show instructions for retrying.
@@ -167,7 +171,7 @@ installation and does not import an older profile. Follow
 New downloads use the **`-setup` kit**. A legacy Linux **`-source`** archive remains
 in releases solely for installed-updater compatibility. Both contain source, not
 precompiled playable games. No compiled game binary, private vendor SDK binary,
-game-derived cache or user data is distributed. **0.1.15 is a regular stable
+game-derived cache or user data is distributed. **0.1.16 is a regular stable
 release**; the optional Quick Step feature is stable, while frame generation
 remains experimental. Windows has no updater in this release.
 
@@ -176,6 +180,14 @@ capability-gated memory path and safe fallback. **AMD gameplay performance still
 needs testing**, including on the reported RX 6700 XT. NVIDIA gameplay received
 positive maintainer feedback. See [AMD / RADV compatibility notes](docs/AMD_RADV.md)
 for the distinction between memory tests and game-performance coverage.
+
+Linux **0.1.16** preserves Steam/SDL controller context and improves HIDAPI access
+and device selection. This likely addresses the reported **Steam Deck** detection
+issue; **ROG Ally X remains unconfirmed** and neither handheld has been tested on
+this release. Desktop/NVIDIA gameplay received positive manual feedback. See
+[handheld controller notes](docs/HANDHELD_CONTROLLERS.md) for restart limitations
+and reporting guidance. The RADV-only `nodcc` workaround targets colorful
+RX 7600 artifacts; thanks to **patrickksmdev** for isolating and testing it.
 
 ## Platform status and limitations
 

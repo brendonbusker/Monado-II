@@ -1,4 +1,38 @@
-# AMD / RADV compatibility in 0.1.14
+# AMD / RADV compatibility
+
+## Colorful glowing dots (0.1.16)
+
+The Linux graphics executable prepares `RADV_DEBUG=nodcc` before platform
+workers, shader precompilation, SDL and Vulkan initialization. RADV consumes this
+driver-specific option; NVIDIA and other Vulkan drivers retain their existing
+rendering policies. This does not disable lean formats or undo the driver-owned
+guest heap described below. Existing RADV debug flags are preserved and `nodcc`
+is added only when its exact token is absent.
+
+Thanks to **patrickksmdev**, who tested the switches separately on an RX 7600
+(RADV NAVI33) at the same Colony 9 location/settings in 0.1.14. `nodcc` alone
+removed the colorful dots; `XCDE_LEAN_FORMATS=0` alone did not. The reporter saw
+no noticeable FPS drop or additional stuttering. This is qualitative evidence
+for that configuration, not proof of the underlying driver/application fault or
+every AMD GPU, scene or performance outcome. The maintainer accepted NVIDIA
+gameplay on the combined build; affected-AMD validation of this packaged
+workaround remains requested.
+
+For diagnostics, `XCDE_RADV_DCC_WORKAROUND=0` prevents the automatic addition;
+absence or exactly `1` enables it. Supply the control through the checked
+`Monado_Linux/scripts/run_linux.py` runner's explicit `--env` argument alongside
+the installation's normal `--executable` and isolated `--state-root` arguments.
+Inherited XCDE controls are intentionally filtered by normal launchers. Opting
+out does not remove an explicitly supplied `nodcc` from `RADV_DEBUG`. No system
+environment, driver, game input, save format or save location is changed.
+
+The startup log reports the effective `nodcc` flag only when the selected Vulkan
+driver is RADV. DCC is a lossless bandwidth optimization; disabling it can cost
+performance in some workloads. Compare the same scene/settings after shader
+warmup when reporting an issue. No general FPS improvement or zero-cost claim
+is made.
+
+## Driver-owned guest heap (0.1.14)
 
 This Linux change targets severe AMD/RADV CPU submission overhead.
 **AMD gameplay performance still needs testing**, including on the reported

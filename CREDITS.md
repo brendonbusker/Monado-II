@@ -12,6 +12,9 @@
   upstream revision `136f679`. Its original copyright notice remains intact.
 - **Monado II contributors** — native Linux integration, timing/menu/footstep
   corrections, diagnostics/testing, source publication tooling and ongoing work.
+- **patrickksmdev — AMD/RADV testing.** Isolated the RX 7600 colorful-dot
+  workaround by testing `nodcc` and lean formats separately, and reported the
+  visual result and performance observations used for the compatibility change.
 - **Launcher illustration** — generated with OpenAI image generation under the
   maintainer's direction. The exact restored asset is documented in
   [artwork provenance](Monado_Linux/tools/launcher/assets/ARTWORK_PROVENANCE.md).

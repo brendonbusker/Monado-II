@@ -30,6 +30,12 @@ PORTS = {'linux': 'Monado_Linux', 'windows': 'Monado_Windows'}
 VERSION = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z')
 SHA256 = re.compile(r'[0-9a-f]{64}\Z')
 ZIP_DATE = (1980, 1, 1, 0, 0, 0)
+# Windows retains the original implementation. Linux release versions identify
+# source snapshots, not a Windows feature update. Change this policy only when
+# an actual Windows implementation update is explicitly being released.
+WINDOWS_IMPLEMENTATION = 'original'
+WINDOWS_ROOT = 'monado-ii-windows-original-implementation'
+WINDOWS_ARCHIVE = WINDOWS_ROOT + '-setup.zip'
 
 
 class ReleaseError(ValueError):
@@ -259,6 +265,9 @@ def package(source: Path, platform: str, version: str, output: Path) -> dict:
     other_port = PORTS['windows' if platform == 'linux' else 'linux']
     selected = {name: metadata for name, metadata in document['files'].items()
                 if not name.startswith(other_port + '/')}
+    if platform == 'windows':
+        # This is Linux updater state, not a Windows implementation version.
+        selected.pop('update-version.json', None)
     if not any(name.startswith(selected_port + '/') for name in selected):
         raise ReleaseError('manifest has no source files for selected platform')
     if any(name in selected for name in ('RELEASE_README.md', 'source-only-status.json')):
@@ -266,9 +275,28 @@ def package(source: Path, platform: str, version: str, output: Path) -> dict:
     # The user-facing filename describes the setup flow. Existing Linux update
     # clients require the original internal root and source filename, so retain
     # that root and publish a byte-identical compatibility alias on every release.
-    prefix = f'monado-ii-{version}-{platform}-source'
-    filename = f'monado-ii-{version}-{platform}-setup' + ('.tar.gz' if platform == 'linux' else '.zip')
-    alias = prefix + '.tar.gz' if platform == 'linux' else None
+    if platform == 'linux':
+        prefix = f'monado-ii-{version}-linux-source'
+        filename = f'monado-ii-{version}-linux-setup.tar.gz'
+        alias = prefix + '.tar.gz'
+        implementation_version = version
+        provenance = {}
+        heading = f'# Monado II — Linux source/setup kit ({version})\n\n'
+    else:
+        prefix = WINDOWS_ROOT
+        filename = WINDOWS_ARCHIVE
+        alias = None
+        implementation_version = WINDOWS_IMPLEMENTATION
+        provenance = dict(source_release_version=version,
+                          windows_implementation=WINDOWS_IMPLEMENTATION,
+                          linux_feature_additions=False)
+        heading = (
+            '# Monado II — Windows original implementation source/setup kit\n\n'
+            '**Original Windows implementation — no Linux feature additions.**\n\n'
+            'The Windows implementation is unchanged. The containing GitHub release\n'
+            'and source-snapshot provenance do not identify a Windows feature update.\n'
+            'Linux launcher, gameplay additions and updates are not backported here.\n\n'
+        )
     output.mkdir(mode=0o700)
     with tempfile.TemporaryDirectory(prefix='.package-', dir=output) as temporary:
         temporary = Path(temporary)
@@ -277,7 +305,7 @@ def package(source: Path, platform: str, version: str, output: Path) -> dict:
         for name, metadata in sorted(selected.items()):
             _copy_checked(source / name, stage / name, metadata)
         release_readme = (
-            f'# Monado II — {platform.title()} source/setup kit ({version})\n\n'
+            heading +
             'This is a source-only release, not a prebuilt playable game. Generate and\n'
             'compile your game executable locally using the accompanying build documentation.\n'
             'Packaging checks do not establish Windows/Linux runtime or full-game validation.\n\n'
@@ -290,15 +318,16 @@ def package(source: Path, platform: str, version: str, output: Path) -> dict:
             'Keep all local input and generated/runtime data outside tracked source. Preserve\n'
             'the accompanying original-project attribution and component license notices.\n'
         ).encode('utf-8')
-        status = encoded(dict(schema=1, project=PROJECT, platform=platform, version=version,
+        status = encoded(dict(schema=1, project=PROJECT, platform=platform, version=implementation_version,
             kind='source-only', local_generation_required=True, contains_game_files=False,
             contains_game_derived_code=False, contains_compiled_binaries=False,
-            runtime_validation='not performed by packaging', windows_backports='deferred'))
+            runtime_validation='not performed by packaging', windows_backports='deferred', **provenance))
         for name, content in {'RELEASE_README.md': release_readme, 'source-only-status.json': status}.items():
             (stage / name).write_bytes(content)
             selected[name] = dict(sha256=hashlib.sha256(content).hexdigest(), bytes=len(content))
         trimmed = {key: value for key, value in document.items() if key != 'files'}
-        trimmed.update(platform=platform, release_version=version, release_kind='source-only', files=selected)
+        trimmed.update(platform=platform, release_version=implementation_version,
+                       release_kind='source-only', files=selected, **provenance)
         (stage / MANIFEST).write_bytes(encoded(trimmed))
         _document(stage)
         _guard(stage)
@@ -317,7 +346,7 @@ def package(source: Path, platform: str, version: str, output: Path) -> dict:
             if legacy.stat().st_size != archive.stat().st_size or digest(legacy) != identity:
                 raise ReleaseError('Linux compatibility alias differs from verified setup archive')
             aliases.append(dict(archive=alias, sha256=identity, bytes=legacy.stat().st_size))
-        receipt = dict(schema=1, project=PROJECT, platform=platform, version=version,
+        receipt = dict(schema=1, project=PROJECT, platform=platform, version=implementation_version,
             kind='source-only', archive=filename, sha256=identity, bytes=archive.stat().st_size,
             archive_aliases=aliases,
             source_manifest_sha256=hashlib.sha256(raw).hexdigest(),
@@ -325,7 +354,7 @@ def package(source: Path, platform: str, version: str, output: Path) -> dict:
             archived_files=len(selected) + 1, archive_readback_verified=True,
             publication_guards='source, platform stage, archive readback, unchanged source',
             contains_game_files=False, contains_game_derived_code=False,
-            contains_compiled_binaries=False, local_generation_required=True)
+            contains_compiled_binaries=False, local_generation_required=True, **provenance)
         archive.replace(output / filename)
         for compatibility in aliases:
             (temporary / compatibility['archive']).replace(output / compatibility['archive'])
@@ -340,7 +369,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, required=True)
     parser.add_argument('--platform', choices=tuple(PORTS), required=True)
-    parser.add_argument('--version', required=True)
+    parser.add_argument('--version', required=True,
+                        help='Linux release/source-snapshot version; Windows implementation stays original')
     parser.add_argument('--output', type=Path, required=True, help='fresh ordinary output directory outside source')
     args = parser.parse_args(argv)
     try:

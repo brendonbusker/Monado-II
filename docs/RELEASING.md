@@ -1,16 +1,33 @@
 # Source releases
 
 Monado II release assets are `monado-ii-<version>-linux-setup.tar.gz` and
-`monado-ii-<version>-windows-setup.zip` **source/setup kits**. They contain reviewed authored/licensed source and tooling,
+`monado-ii-windows-original-implementation-setup.zip` **source/setup kits**. They contain reviewed authored/licensed source and tooling,
 not playable game binaries. Each player generates game code locally from their
 own legally dumped input. No game content, generated code, translated shaders,
 caches, seeds, keys, firmware, saves, mods or private SDK binaries are distributed.
 
-Version 0.1.15 is a regular release, with GitHub's prerelease option disabled.
+Version 0.1.16 is a regular release, with GitHub's prerelease option disabled.
 A regular release does not establish Windows game-build or full-game coverage.
 The exact reviewed generated launcher illustration is included with its
 [provenance](../Monado_Linux/tools/launcher/assets/ARTWORK_PROVENANCE.md) and root
 notice; other unreviewed imagery remains excluded.
+
+Windows uses a version-free filename and internal root, with `version: "original"`.
+Do not assign the Linux release version to Windows or imply feature parity.
+`source_release_version` records the containing reviewed source snapshot only.
+The Windows kit excludes Linux-only `update-version.json`. Keep this policy until
+Windows actually receives an explicitly approved update; then document its own
+implementation version and changes. Historical assets may be renamed with byte
+identity retained and checksum filenames updated; never silently repackage an old
+release to claim a new implementation.
+
+Version 0.1.16 includes the accepted desktop/NVIDIA controller + RADV build.
+Describe the Steam Deck correction as likely and ROG Ally X compatibility as
+uncertain: neither handheld has validated this build. Credit **patrickksmdev**
+for isolating `nodcc` on RX 7600. Keep affected-AMD candidate validation separate
+from the external report and the maintainer’s NVIDIA gameplay acceptance.
+Native saves, profile locations, Quick Step default and experimental FG default
+stay unchanged. Updating requires a full local rebuild.
 
 Version 0.1.15 adds the optional Linux Cheats tab: independent off-by-default
 party damage dealt/received, EXP/AP/SP/gold gain sliders (0x–20x in 0.01x steps),
@@ -108,8 +125,8 @@ From a reviewed clean public checkout:
 MONADO_RELEASE_SOURCE="$(pwd -P)"
 MONADO_RELEASE_PARENT="$(dirname "$MONADO_RELEASE_SOURCE")"
 python -B tools/publication_guard.py "$MONADO_RELEASE_SOURCE"
-python -B tools/package_source_release.py --source "$MONADO_RELEASE_SOURCE" --platform linux --version 0.1.15 --output "$MONADO_RELEASE_PARENT/monado-ii-linux-release"
-python -B tools/package_source_release.py --source "$MONADO_RELEASE_SOURCE" --platform windows --version 0.1.15 --output "$MONADO_RELEASE_PARENT/monado-ii-windows-release"
+python -B tools/package_source_release.py --source "$MONADO_RELEASE_SOURCE" --platform linux --version 0.1.16 --output "$MONADO_RELEASE_PARENT/monado-ii-linux-release"
+python -B tools/package_source_release.py --source "$MONADO_RELEASE_SOURCE" --platform windows --version 0.1.16 --output "$MONADO_RELEASE_PARENT/monado-ii-windows-release"
 ```
 
 Outputs must be fresh. The packager verifies the exact publication manifest and
@@ -120,7 +137,7 @@ reuse its Git history. The separately prepared public tree has a reviewed fresh
 history; development notes, unreviewed artwork and personal paths remain local.
 
 The manual **Source release kits** GitHub Actions workflow produces
-`monado-ii-linux-setup` and `monado-ii-windows-setup` workflow artifacts after
+`monado-ii-linux-setup` and `monado-ii-windows-original-implementation-setup` workflow artifacts after
 checks; its read-only token does not publish a GitHub release, compile game code,
 access secrets or fetch game input. The Linux workflow artifact contains both
 Linux filenames and its checksum list. Download the artifacts from the exact
@@ -135,7 +152,7 @@ setup and compatibility alias must have equal bytes and digests. For example,
 from the parent of the two fresh local packaging output directories:
 
 ```sh
-MONADO_RELEASE_VERSION=0.1.15
+MONADO_RELEASE_VERSION=0.1.16
 (cd monado-ii-linux-release && sha256sum -c SHA256SUMS)
 (cd monado-ii-windows-release && sha256sum -c SHA256SUMS)
 cmp "monado-ii-linux-release/monado-ii-${MONADO_RELEASE_VERSION}-linux-setup.tar.gz" "monado-ii-linux-release/monado-ii-${MONADO_RELEASE_VERSION}-linux-source.tar.gz"
@@ -144,7 +161,7 @@ cat monado-ii-linux-release/SHA256SUMS monado-ii-windows-release/SHA256SUMS > SH
 gh release create "v${MONADO_RELEASE_VERSION}" --verify-tag --repo brendonbusker/Monado-II --title "Monado II ${MONADO_RELEASE_VERSION}" --notes-file release-notes.md \
   "monado-ii-linux-release/monado-ii-${MONADO_RELEASE_VERSION}-linux-setup.tar.gz" \
   "monado-ii-linux-release/monado-ii-${MONADO_RELEASE_VERSION}-linux-source.tar.gz" \
-  "monado-ii-windows-release/monado-ii-${MONADO_RELEASE_VERSION}-windows-setup.zip" SHA256SUMS
+  "monado-ii-windows-release/monado-ii-windows-original-implementation-setup.zip" SHA256SUMS
 ```
 
 The same four files may be attached through GitHub's release editor instead.

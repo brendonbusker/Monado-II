@@ -20,6 +20,7 @@
 #include "../renderer.h"
 #ifdef __linux__
 #include "pipeline_cache_io.h"  // [XCDE] LINUX-018
+#include "radv_dcc_compat.h"  // [XCDE] LINUX-075: prepared before graphics init
 #endif
 #include "../../env_cache.h"  // (last: cached getenv)
 
@@ -243,6 +244,10 @@ static void create_device(void) {
         LOG("[vk] RADV guest heap capabilities: placed %s, dma-buf %s, map alignment %llu\n",
             g_vk.heap_placed ? "yes" : "no", g_vk.heap_dmabuf ? "yes" : "no",
             (unsigned long long)g_vk.heap_map_alignment);
+        // [XCDE] LINUX-075: report the effective driver flag only for RADV.
+        // NVIDIA/other drivers do not consume RADV_DEBUG; their policies stay as before.
+        LOG("[vk] RADV DCC compatibility: RADV_DEBUG nodcc=%s (lean-format policy unchanged)\n",
+            rt_radv_dcc_active() ? "on" : "off");
     }
 #endif
     bool fault = has_ext(ep, ne, VK_EXT_DEVICE_FAULT_EXTENSION_NAME);  // device-lost diagnostics (vk_device_fault_report)

@@ -139,6 +139,9 @@ def clean_environment(library_path):
                 'PIPEWIRE_RUNTIME_DIR', 'TZ'):
         if key in os.environ:
             environment[key] = os.environ[key]
+    # [XCDE] LINUX-077: Steam virtual pads are filtered by SDL if the
+    # allow/ignore/mapping context disappears between Steam and the native GUI.
+    environment.update(run_linux.controller_environment.preserve(os.environ))
     return environment
 
 

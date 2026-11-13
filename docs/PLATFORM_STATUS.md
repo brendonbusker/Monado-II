@@ -1,5 +1,19 @@
 # Platform status
 
+Linux 0.1.16 preserves validated Steam/SDL input context, exposes existing HIDAPI
+controller nodes through the native state guard, and improves device selection
+and bounded discovery logs. It likely addresses the Steam Deck detection report;
+ROG Ally X remains uncertain. Actual handheld testing is pending. Desktop/NVIDIA
+gameplay was manually accepted. The RADV-only nodcc workaround is based on
+patrickksmdev’s isolated RX 7600 test; the packaged affected-AMD case still needs
+validation. See [handheld controllers](HANDHELD_CONTROLLERS.md) and
+[RADV compatibility](AMD_RADV.md). A full local rebuild is required; save formats
+and state locations are unchanged.
+
+**Windows downloads remain the original implementation, without Linux additions.**
+The version-free Windows filename and implementation identity do not advance with
+Linux release numbers. Source snapshot versions are provenance only.
+
 Linux 0.1.15 adds an optional Cheats tab with independent off-by-default battle
 damage and EXP/AP/SP/gold multipliers, plus ordinary no-fall damage. Multipliers
 span 0x–20x in 0.01x steps. The existing Xenoblade 3 party-switch control moves

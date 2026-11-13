@@ -39,7 +39,7 @@ hle/framepace hle/title_exit hle/desktop_exit_caption hle/system_exit hle/expand
 hle/quickstep_slot hle/quickstep_save hle/quickstep_native hle/quickstep_picker hle/quickstep_stats hle/quickstep_stats_ui hle/quickstep_ui_memory hle/cheats_rewards hle/cheats_combat host/stubs host/settings_ini host/stubs_gfx host/gamelib_static host/main_boot
 diag/diag diag/sampler diag/watchdog diag/crashdump paths'''.split()
 NVN = '''astc cmdbuf formats maxwell/translate objects output_scale smaa_data tegra texpatch
-vulkan/device vulkan/exec vulkan/host_import vulkan/driver_heap vulkan/precompile vulkan/shaders vulkan/textures vulkan/temporal'''.split()
+vulkan/device vulkan/exec vulkan/host_import vulkan/driver_heap vulkan/radv_dcc_compat vulkan/precompile vulkan/shaders vulkan/textures vulkan/temporal'''.split()
 CPP = ['third_party/imgui/' + n + '.cpp' for n in ('imgui', 'imgui_draw', 'imgui_tables', 'imgui_widgets')]
 CPP += ['third_party/imgui/backends/imgui_impl_vulkan.cpp', 'runtime/nvn/vulkan/imgui_glue.cpp',
         'runtime/ui/menu_vk.cpp', 'runtime/nvn/vulkan/dlss.cpp', 'runtime/nvn/vulkan/vma.cpp']

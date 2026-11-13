@@ -3,6 +3,7 @@
 // (runtime/host/settings_ini.c). Build: tools/launcher/build.sh. Run: "Play Monado.bat" at the repository root.
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
+#include "../../runtime/platform/sdl_controller_diagnostics.h"  // [XCDE] LINUX-077
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -1459,6 +1460,9 @@ int main(int argc, char **argv) {
         llog("SDL_Init with gamepads failed (%s): video only", SDL_GetError());
         if (!SDL_Init(SDL_INIT_VIDEO)) return fail("Could not start SDL (video).");
     }
+    // [XCDE] LINUX-077: inventory without opening a second reference to pads
+    // already owned by the ImGui SDL backend.
+    rt_input_inventory(g_llog, "launcher", "startup");
     // [XCDE] LINUX-019: use the user's expanded client size so the artwork is visible on opening.
     const int launcher_w = 1267, launcher_h = 804;
     SDL_Window *win = SDL_CreateWindow("Monado II - Launcher", launcher_w, launcher_h, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN);
@@ -1555,7 +1559,8 @@ int main(int argc, char **argv) {
                 run = false;
 #endif
             }
-            if (e.type == SDL_EVENT_GAMEPAD_ADDED) SDL_OpenGamepad(e.gdevice.which);
+            if (e.type == SDL_EVENT_GAMEPAD_ADDED || e.type == SDL_EVENT_GAMEPAD_REMOVED)
+                rt_input_inventory(g_llog, "launcher", e.type == SDL_EVENT_GAMEPAD_ADDED ? "gamepad added" : "gamepad removed");
         }
         ImGui_ImplSDLRenderer3_NewFrame();
         ImGui_ImplSDL3_NewFrame();
