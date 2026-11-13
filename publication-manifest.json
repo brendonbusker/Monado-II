@@ -3681,8 +3681,8 @@
       "sha256": "964d33936f198d2460f17c9d125e65377e616d34527d2e701df5abb3199844d8"
     },
     "tests/test_builder_bytecode.py": {
-      "bytes": 4133,
-      "sha256": "753f63d3882dd6b417141a6f9d50182b6da9acbfdcd86fc4c3880e54d0c8fc79"
+      "bytes": 4135,
+      "sha256": "ff693ad745d1ee8aab4eb8f0445d4274b90c8b5668e83b25df291cfebf49e950"
     },
     "tests/test_builder_json.py": {
       "bytes": 2353,

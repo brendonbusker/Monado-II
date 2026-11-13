@@ -27,7 +27,7 @@ class GeneratorBytecodeFlags(unittest.TestCase):
             'c', '/authored source/patches.py', '/authored source/hle.txt')
         self.assertEqual(command[:5], ['/authored/venv/bin/python', '-B', '-E', '-s',
                                       '/authored source/generator.py'])
-        self.assertEqual(command[5:], ['authored-module', str(Path('/authored input/exefs') / 'authored-module'),
+        self.assertEqual(command[5:], ['authored-module', os.path.join('/authored input/exefs', 'authored-module'),
                                       '0x0', '/authored output', '--simd', 'c', '--patches',
                                       '/authored source/patches.py', '--hle', '/authored source/hle.txt'])
         self.assertEqual(command.count('-B'), 1)
