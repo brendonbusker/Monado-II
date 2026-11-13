@@ -1,0 +1,42 @@
+Monado II standalone builder AppImage runtime notices
+
+The payload is described in BUNDLE_NOTICES.md. This document describes the
+unchanged pinned official runtime only.
+
+AppImage/type2-runtime, source revision:
+https://github.com/AppImage/type2-runtime/tree/fedfad51acc2860b2916a1eef32ba4a500ff31ef
+Copyright (c) 2004-23 probonopd, MIT license. Full notice is included.
+The exact runtime executable identity is recorded in appimage-runtime.lock.json.
+
+Its source license identifies statically linked musl, libfuse, squashfuse, zstd
+and zlib. The pinned build also links mimalloc. Full license texts accompany
+this notice: musl (MIT/BSD notices), libfuse (LGPL 2.1), squashfuse (BSD), zstd
+(BSD), zlib and mimalloc (MIT). Runtime source/build recipes are available at
+the revision above. libfuse is patched there; its source is version 3.15.0,
+squashfuse is 0.5.2. Alpine package dependency versions are not fully pinned by
+upstream; the included musl1.2.5/zstd1.5.6/zlib1.3.1/mimalloc2.1.7 license texts
+preserve their applicable terms, without asserting those exact runtime versions.
+Sources of the preserved notices:
+https://raw.githubusercontent.com/libfuse/libfuse/fuse-3.15.0/LGPL2.txt
+https://raw.githubusercontent.com/vasi/squashfuse/0.5.2/LICENSE
+https://git.musl-libc.org/cgit/musl/plain/COPYRIGHT?h=v1.2.5
+https://raw.githubusercontent.com/facebook/zstd/v1.5.6/LICENSE
+https://raw.githubusercontent.com/madler/zlib/v1.3.1/LICENSE
+https://raw.githubusercontent.com/microsoft/mimalloc/v2.1.7/LICENSE
+
+The full LGPL text accompanies the runtime. Its form-feed page separators
+are normalized to newlines in the preserved source notice.
+
+Public builder releases provide monado-ii-<version>-linux-builder-runtime-sources.tar.gz
+on the same release page as the AppImage. That companion contains the exact
+runtime source revision, libfuse3.15.0 preferred sources and squashfuse0.5.2 source archive,
+the upstream libfuse patch, complete LGPL text and build/relink/repack instructions.
+The source-and-relinking route is described by LGPL2.1 sections6(a) and6(d).
+It permits modifying the library and relinking the separate AppImage runtime;
+no game source or game object is required or supplied. Alpine package revisions
+were not fully pinned upstream, so byte-identical reproduction is not asserted.
+
+The libfuse companion archive omits only generated doc/html/ and the unrelated
+academic paper doc/fast17-vangoor.pdf. Every library/interface/build/manual-page
+source byte is retained; the companion records the exact original upstream hash
+and per-file retained/excluded inventories. No library source patch is hidden.

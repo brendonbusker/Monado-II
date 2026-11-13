@@ -17,8 +17,8 @@ quality-of-life features, while preserving the original Windows implementation.
 [Get started](#getting-started) · [Latest release](https://github.com/brendonbusker/Monado-II/releases/latest) · [Linux guide](docs/BUILD_LINUX.md) · [Windows guide](docs/BUILD_WINDOWS.md) · [Changelog](CHANGELOG.md)
 
 > [!IMPORTANT]
-> **Bring your own legally dumped game.** Downloads contain source and setup
-> tools, not a playable game. You must own the game and supply your own extracted
+> **Bring your own legally dumped game.** Downloads contain setup software and
+> source, not a playable game. You must own the game and supply your own extracted
 > **Definitive Edition 2.0.0** files from your own legally obtained Nintendo Switch.
 > No game files, keys or firmware are provided.
 
@@ -26,7 +26,7 @@ quality-of-life features, while preserving the original Windows implementation.
 
 | Feature | What it adds |
 |---|---|
-| Native launcher | A themed settings screen, controller configuration and a locally generated launcher AppImage. |
+| Graphical setup and launcher | Open one Linux AppImage, select your extracted game folder and build location, watch the local build, then use the themed settings launcher. |
 | High-refresh improvements | Timing, animation, menu-navigation and footstep corrections, plus a choice of 30 FPS-style or faster 60 FPS-style menu navigation. |
 | DLSS Super Resolution / DLAA | Native support on compatible NVIDIA hardware, included in normal Linux builds. |
 | Shader preparation | Prepare shaders before playing with the launcher’s **Precompile shaders** button. |
@@ -37,7 +37,7 @@ quality-of-life features, while preserving the original Windows implementation.
 
 The Linux-specific launcher, timing, menu, save, Quick Step and cheat improvements have
 not been backported. Windows retains its upstream launcher and vendor/shader
-integrations; backporting the Linux improvements is not currently planned.
+integrations; Windows parity work is separate from this Linux release.
 
 ### A dedicated Quick Step gem slot
 
@@ -65,14 +65,14 @@ take time; 99 populated slots and every save/recovery case have not been qualifi
 
 ## Getting started
 
-Download a setup/build kit from the [latest release](https://github.com/brendonbusker/Monado-II/releases/latest)
-and verify it against the release’s **SHA256SUMS** file. Both kits contain reviewed
-source and setup tools. **You build locally from your own game dump.**
+Download from the [latest release](https://github.com/brendonbusker/Monado-II/releases/latest)
+and verify the download against **SHA256SUMS**. The recommended Linux download is
+one graphical builder AppImage. **The game is still built locally from your own dump.**
 
-| Platform | Current setup kit | Full instructions |
+| Platform | Recommended download | Full instructions |
 |---|---|---|
-| Linux x86-64 | [Linux `.tar.gz`](https://github.com/brendonbusker/Monado-II/releases/download/v0.1.16/monado-ii-0.1.16-linux-setup.tar.gz) | [Linux build guide](docs/BUILD_LINUX.md) |
-| Windows x86-64 | [Original Windows implementation `.zip`](https://github.com/brendonbusker/Monado-II/releases/download/v0.1.16/monado-ii-windows-original-implementation-setup.zip) | [Windows build guide](docs/BUILD_WINDOWS.md) |
+| Linux x86-64 | [Graphical builder AppImage](https://github.com/brendonbusker/Monado-II/releases/download/v0.1.17/monado-ii-0.1.17-linux-builder-x86_64.AppImage) | [Linux setup and build guide](docs/BUILD_LINUX.md) |
+| Windows x86-64 | [Original Windows implementation `.zip`](https://github.com/brendonbusker/Monado-II/releases/download/v0.1.17/monado-ii-windows-original-implementation-setup.zip) | [Windows build guide](docs/BUILD_WINDOWS.md) |
 
 > **Windows is the original implementation.** Linux release numbers and the
 > Linux features shown above do not describe the Windows download. Its version-free
@@ -80,25 +80,34 @@ source and setup tools. **You build locally from your own game dump.**
 
 ### Linux quick start
 
-1. Extract the Linux kit into a folder you want to keep.
-2. Check the [prerequisites](docs/BUILD_LINUX.md), then place your own extracted
-   input in `game_files/exefs/` and `game_files/romfs/` inside that folder.
-   The guide also explains how to link an existing input folder without moving it.
-3. Open a terminal in the extracted folder and run:
+1. Make the downloaded AppImage executable in your file manager's permissions,
+   then open it. If FUSE is unavailable, use the [extraction-mode command](docs/BUILD_LINUX.md#graphical-setup-recommended).
+2. Choose **Set up Monado II** and select your own extracted **DE 2.0.0** folder
+   containing `exefs` and `romfs`. Your files stay in their existing location.
+3. Choose a final installation folder, whether to include NVIDIA DLSS support,
+   and whether to prepare shaders after building.
+4. Build, following the progress and details. When ready, open the settings
+   launcher and choose **Play** yourself.
 
-   ```sh
-   ./Build_Monado_II.sh
-   ./Play_Monado_II.sh
-   ```
+Open the **same AppImage** later to return to your checked installation. It
+contains the setup frontend, Python runtime and reviewed source template—not the
+game. Keep the installed build folder and its input available. If you already
+have Monado II installed, **Use an existing installation** adopts it in place,
+including its settings, saves and current update. See the [graphical setup guide](docs/GRAPHICAL_BUILDER.md).
 
-The build generates **`Monado-II-x86_64.AppImage`** for the launcher.
-`Play_Monado_II.sh` also works without FUSE. **Keep the build folder alongside the
-AppImage**: the game executable, libraries and state live outside its launcher
-payload. The image is a workspace launcher, not a standalone game download.
+The [Linux source/setup kit](https://github.com/brendonbusker/Monado-II/releases/download/v0.1.17/monado-ii-0.1.17-linux-setup.tar.gz)
+remains available for terminal builds and existing updaters. After extracting it
+and arranging its `game_files/exefs` and `game_files/romfs` input, the established
+commands are still:
 
-For Quiver and other Linux app launchers, select **`App_Monado_II.sh`**. It shows
-first-build progress in an installed terminal, then opens the launcher. See
-[Quiver setup and limitations](docs/QUIVER.md).
+```sh
+./Build_Monado_II.sh
+./Play_Monado_II.sh
+```
+
+That route generates its checked launcher AppImage locally. Keep its complete
+installation folder; a launcher image is not a standalone game. Quiver's source-kit
+entrypoint remains **`App_Monado_II.sh`**. See [Quiver setup and limitations](docs/QUIVER.md).
 
 Since 0.1.13, the build checks prerequisites before compilation and reports the matching
 distribution packages when something is missing. In a supported Fedora 45
@@ -152,7 +161,7 @@ launcher. It never presses Play.
   rebuild the game locally.
 - Saves, settings and shared game input stay in the original installation.
   Failed or cancelled preparation keeps the previous version selected.
-- **Updating to 0.1.16 requires a full local game rebuild** for the updated build
+- **Updating to 0.1.17 requires a full local game rebuild** for the updated build
   runtime and build recipes. The updater handles this without converting, replacing or
   deleting your saves. Missing prerequisites leave the working version selected
   and show instructions for retrying.
@@ -162,16 +171,30 @@ launcher. It never presses Play.
   version. After successful activation, only the current launcher and its game
   payload are retained. Older releases can be downloaded and built manually.
 
+If the game-input folder moves, reopen Monado II and use **Locate game files** to
+select its new location. The supported version and executable identity are checked
+before reconnecting; saves/settings stay put and the game is not immediately
+rebuilt. Close other sessions for that installation first. A later update may
+rebuild once to record the new path. Moving the entire installed build still
+requires rebuilding at its final location.
+
+Existing host-Python source installations retain their workspace launcher when
+updating. Installations using the graphical builder's private Python can produce
+a full standalone setup image during updates. The original installation icon still
+forwards to the active build. A new graphical AppImage can adopt an existing
+installation without moving its input or profile.
+
 The updater is available from **0.1.3**. **0.1.2 has no updater**: apply a verified
 0.1.3-or-newer Linux source kit to the same original installation and rebuild once,
 preserving input and profile directories. A fresh kit in a new folder is a separate
 installation and does not import an older profile. Follow
 [Linux updates and storage](docs/BUILD_LINUX.md#4-update-and-roll-back).
 
-New downloads use the **`-setup` kit**. A legacy Linux **`-source`** archive remains
+Source-kit downloads use the **`-setup` kit**. A legacy Linux **`-source`** archive remains
 in releases solely for installed-updater compatibility. Both contain source, not
 precompiled playable games. No compiled game binary, private vendor SDK binary,
-game-derived cache or user data is distributed. **0.1.16 is a regular stable
+game-derived cache or user data is distributed. The graphical AppImage contains
+only setup software and its reviewed startup dependencies. **0.1.17 is a regular
 release**; the optional Quick Step feature is stable, while frame generation
 remains experimental. Windows has no updater in this release.
 
@@ -194,7 +217,7 @@ RX 7600 artifacts; thanks to **patrickksmdev** for isolating and testing it.
 | Platform | Current state |
 |---|---|
 | **Linux x86-64** | Native SDL/Vulkan port. Opening cutscenes and battles through first character control were tested by the maintainer. Expanded saves, scan responsiveness, Quick Step, trading and the Bionis Interior crash correction received positive manual feedback. |
-| **Windows x86-64** | Original Monado implementation retained. The original author reported full-game playability on NVIDIA RTX; this fork has not independently built or validated Windows. Linux backports are not currently planned. |
+| **Windows x86-64** | Original Monado implementation retained. The original author reported full-game playability on NVIDIA RTX; this fork has not independently built or validated Windows. Linux additions are not included in this Windows download. |
 
 Full-game, **Future Connected**, long-session, other-GPU/driver and save/recovery
 coverage remain incomplete. Passing source CI and component tests do not establish
@@ -213,7 +236,8 @@ incomplete.
 
 | Guide | What you’ll find |
 |---|---|
-| [Linux build instructions](docs/BUILD_LINUX.md) | Requirements, game-input layout, building, updates and storage. |
+| [Linux setup and build instructions](docs/BUILD_LINUX.md) | Graphical setup, requirements, terminal builds, updates and storage. |
+| [Graphical builder](docs/GRAPHICAL_BUILDER.md) | Folder selection, local build progress, existing installs and moved-input recovery. |
 | [Windows build instructions](docs/BUILD_WINDOWS.md) | Building the preserved Windows implementation. |
 | [Cheats guide](docs/CHEATS.md) | Optional multipliers, no fall damage, controls and save behavior. |
 | [Quick Step guide](docs/QUICKSTEP.md) | Enabling the optional slot, equipping gems and keeping save metadata. |

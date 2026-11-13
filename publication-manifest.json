@@ -14,7 +14,7 @@
     },
     ".github/workflows/source-release.yml": {
       "bytes": 3263,
-      "sha256": "7b48085823421dccf7014fea1f1a1ff9259e9aad5a1f7e1f5e609a79384032b0"
+      "sha256": "853f832968fd28d179b66e7a8a77f18651cee6b862923ae266df09acd382495d"
     },
     ".gitignore": {
       "bytes": 968,
@@ -29,8 +29,8 @@
       "sha256": "fc908ddd148e06cb024ce9ea9f98307c32af7147bcba2504b8b6a726526197cc"
     },
     "CHANGELOG.md": {
-      "bytes": 31417,
-      "sha256": "3daee9a0389c462daaf196061672cf892ce6d14946cc86fb8ee8df7272512177"
+      "bytes": 33592,
+      "sha256": "2c7fd2815fda5f792a5f299b4ccce82d8a81cbf251e9c20df95f23c548d517a9"
     },
     "CONTRIBUTING.md": {
       "bytes": 1798,
@@ -809,8 +809,8 @@
       "sha256": "5989e814a827628c1acb9fc6dd51e9a91102bb3b3ad421592c1f4475408d5e7d"
     },
     "Monado_Linux/scripts/build_linux.py": {
-      "bytes": 30282,
-      "sha256": "953eea3a5d93098f6a0e67101309e6345625dc9e7745a71383516476ed2ef30b"
+      "bytes": 30762,
+      "sha256": "3cac1e3edbd5f06e2a1e417f6cae078530d1b41fb76e914002dce05f0d33573e"
     },
     "Monado_Linux/scripts/build_rt_gfx.sh": {
       "bytes": 4258,
@@ -868,6 +868,10 @@
       "bytes": 6635,
       "sha256": "071f62173f7b9888d3f53c4fd454b43904a187cb3f6c261fd8daa4bdef7157e1"
     },
+    "Monado_Linux/scripts/input_location.py": {
+      "bytes": 29351,
+      "sha256": "c902f7309bcb74bedec5c378e3cdeb91e03269511b18bdee4b5c27e60ad93b85"
+    },
     "Monado_Linux/scripts/install_layout.py": {
       "bytes": 7883,
       "sha256": "a50d8767a9e2f6ef26b3b3c463841491dbc436efe728df5804b427ff04156976"
@@ -877,8 +881,8 @@
       "sha256": "92159e7ad6f0fb5c32d9346bb51b60aaed9e97bb0e58eb3adfa9d2f6ce5fcab9"
     },
     "Monado_Linux/scripts/launcher_linux.py": {
-      "bytes": 23815,
-      "sha256": "d8e775641a9788d327355f8a8c0f9d35ad09fb8d589c0b7bbf15d0fdd7c319b1"
+      "bytes": 30205,
+      "sha256": "28fa6932e3030faa4deb25f31c8c93422394d11d07a9d9904a7aa1a20aa1a3a8"
     },
     "Monado_Linux/scripts/launcher_precompile_integration_linux.py": {
       "bytes": 10734,
@@ -1976,6 +1980,14 @@
       "bytes": 2008,
       "sha256": "c80b19322ee8f68a6ddaac13cf9c76c72fbcdbf8da58e85d5689825f8bb0f426"
     },
+    "Monado_Linux/tools/builder/builder.cpp": {
+      "bytes": 24957,
+      "sha256": "128ab9cdea321ffa9fafcbd40944d2aa6757e02d4cd6c9be6da2ab0106578c0b"
+    },
+    "Monado_Linux/tools/builder/json.h": {
+      "bytes": 5928,
+      "sha256": "f4a2fef88dab224c07b3b5ae5689e3bc8294ee2d584e03c5819109c6ad15c93c"
+    },
     "Monado_Linux/tools/classify_br.py": {
       "bytes": 2994,
       "sha256": "4f3671afc29b823d2e3ee20b8a3c6308ec84dedde69d456b2dd141b95386c393"
@@ -2005,8 +2017,8 @@
       "sha256": "6caf2992676d4056a124823bb75d185f9c0ed470e52c3026c39d9ea259573774"
     },
     "Monado_Linux/tools/gen_all.py": {
-      "bytes": 2670,
-      "sha256": "cd82e7c55e52e00b54ee43a3214d16bc5eb04e42c725345f6e44700bebb2e5cd"
+      "bytes": 3033,
+      "sha256": "acf979845884751cee4235ba75746562ea76855f3611df6afe34b3afa176677a"
     },
     "Monado_Linux/tools/gen_smaa_inc.py": {
       "bytes": 606,
@@ -2060,9 +2072,13 @@
       "bytes": 876,
       "sha256": "26dda9b9cbdb39f83dfc740b912563764cabc8e2efc7d6e3651e613ea23d6cd6"
     },
+    "Monado_Linux/tools/launcher/input_recovery.h": {
+      "bytes": 4274,
+      "sha256": "7a149e3f168996f26c71cc798a63f9f88fb595c0e4ca1941d130e2d06ff3a183"
+    },
     "Monado_Linux/tools/launcher/launcher.cpp": {
-      "bytes": 108318,
-      "sha256": "8774c2b6a62df4a3852ce5236ea74587b84234f9318b1b2d93eb0ebc904ff7e3"
+      "bytes": 108519,
+      "sha256": "0b82c65c1ba8364e61e427e86a2c3ac795d322e5b15fee123552203175776193"
     },
     "Monado_Linux/tools/launcher/linux_config_test.cpp": {
       "bytes": 8360,
@@ -3545,16 +3561,16 @@
       "sha256": "f1d5b04a7bf449c648da89950cda19185cea1c059fd3d5fc2397d323578e15f9"
     },
     "NOTICE.md": {
-      "bytes": 5087,
-      "sha256": "a58f6b9dd92c13ea654c9a1bb34d3ca209fa5799ef2b84d6e134f547b2a14025"
+      "bytes": 5777,
+      "sha256": "5836253342d932aa25c9ecb4b7d01ee5cafd7ce38c887e2eca842ca328db3d66"
     },
     "Play_Monado_II.sh": {
       "bytes": 673,
       "sha256": "111d3bdcc8b4dd86e9bc0b59a2431dd5439c4de0ba94c9bee96756ad5399a053"
     },
     "README.md": {
-      "bytes": 14884,
-      "sha256": "3e44776d5ad62a97ee7946f82ddf677cb8bcb08eb9c8373d7f7711766fc712bb"
+      "bytes": 16783,
+      "sha256": "3bed4bbc4d1b15e7255c3e1decc7a47fee823abd4f4e1242c0cedd111273e227"
     },
     "Rollback_Monado_II.sh": {
       "bytes": 8873,
@@ -3573,8 +3589,8 @@
       "sha256": "b02349c0967589923977560a06075fd048ec31817a67e6ede518c5d2886a7004"
     },
     "docs/BUILD_LINUX.md": {
-      "bytes": 22770,
-      "sha256": "1f0c15909887ea42a4507b308c24849f201a9f4266a1e195ee4dcc85d007f4ad"
+      "bytes": 26277,
+      "sha256": "818ec2eb72ec6dccec1d22b7caa95099783f952edb121f263cc58bd6f83a6114"
     },
     "docs/BUILD_WINDOWS.md": {
       "bytes": 3259,
@@ -3583,6 +3599,10 @@
     "docs/CHEATS.md": {
       "bytes": 3024,
       "sha256": "510c569c854f928c52e2b6f5b08c0b272caa6ad524f4dc09b3e52eca3684514e"
+    },
+    "docs/GRAPHICAL_BUILDER.md": {
+      "bytes": 6971,
+      "sha256": "6b77242f728c2c155df930534561d119d5c1b8c292b34da549868e53042073fe"
     },
     "docs/HANDHELD_CONTROLLERS.md": {
       "bytes": 3242,
@@ -3597,16 +3617,20 @@
       "sha256": "45adc68ffacd925cfef323f10a7cddfb5e5cb022597d934cb48083b327f73e1d"
     },
     "docs/QUIVER.md": {
-      "bytes": 4801,
-      "sha256": "720b87b4e5578bb0b96f56cecf86b6019aebbc894b807ee711cf4ab69a764fbb"
+      "bytes": 5776,
+      "sha256": "ce4c8d6a5ffb65a08a25abb6450235929887d2079cb63321c327261b123b1eec"
     },
     "docs/RELEASING.md": {
-      "bytes": 11995,
-      "sha256": "a6a76598f2c59dc6a6c3bc12f08336390033760da0c2a7bb846489e59a55f828"
+      "bytes": 14334,
+      "sha256": "a321d085a504cf75b3e7d5afdd15d596641f93019230ed5a92e93d93355bc052"
     },
     "publication-policy.json": {
       "bytes": 792,
       "sha256": "8f08c5c695dd1a771a6359d59697019813e29754a2af567ad52e0b79414df6ff"
+    },
+    "tests/native/test_builder_json.cpp": {
+      "bytes": 3911,
+      "sha256": "f6e7d110e0fdc9270bf94c860e759a6b648c5c87a62bed372b03ac4b0f1cf9da"
     },
     "tests/native/test_controller_discovery.c": {
       "bytes": 5856,
@@ -3628,6 +3652,10 @@
       "bytes": 20855,
       "sha256": "b607b6ee2fd22352e120d23ac7d1f6c935e70e541b4e3100adf0ca1c4630dd28"
     },
+    "tests/native/test_launcher_input_recovery.cpp": {
+      "bytes": 2506,
+      "sha256": "1365c320ff157269e362afd2649d8bf40c2b67e8b768b1a4cbd3ad2445b2c6d4"
+    },
     "tests/native/test_launcher_updates_ipc.cpp": {
       "bytes": 4399,
       "sha256": "ffeb8a9a02eec4caff125d0e25a1595ea6db56f2bc4dead509e4761a72b32dc1"
@@ -3647,6 +3675,34 @@
     "tests/native/test_temporal_stability.cpp": {
       "bytes": 16570,
       "sha256": "87f2a6ddaf6dde4fd8cde356d88608be823a7d97d703f2c39f7ea3ce18b3e64b"
+    },
+    "tests/test_builder_backend.py": {
+      "bytes": 29814,
+      "sha256": "964d33936f198d2460f17c9d125e65377e616d34527d2e701df5abb3199844d8"
+    },
+    "tests/test_builder_bytecode.py": {
+      "bytes": 4118,
+      "sha256": "f6c7573d624e5d574a400191c12eaf29e64790fea70f49709ebaaebb58353969"
+    },
+    "tests/test_builder_json.py": {
+      "bytes": 2353,
+      "sha256": "6bf2d8a9f9b29cd3395716e5958822cce5c1a3938bd15d12941d0a4806e8ed06"
+    },
+    "tests/test_builder_migration_startup.py": {
+      "bytes": 10308,
+      "sha256": "ce64dcb6c22c5cef8a285977df26608f73bab0793a196c7f7ec4df424ea790f1"
+    },
+    "tests/test_builder_packaging.py": {
+      "bytes": 13286,
+      "sha256": "2c3b65d40490d6ef83f22bf9a8c3762a63fd432d7f82e97dde6b2183d3e9bcb3"
+    },
+    "tests/test_builder_runtime_sources.py": {
+      "bytes": 10505,
+      "sha256": "5ce9710348b94ee0b6dcb2117b5da38929031d292f47956c24bb22561f68be66"
+    },
+    "tests/test_builder_update_python.py": {
+      "bytes": 4656,
+      "sha256": "fa884a85341d37e7af1b9d5107c2208736b660c370da253065e2e47f4e08507e"
     },
     "tests/test_cheats_combat.py": {
       "bytes": 2009,
@@ -3696,9 +3752,25 @@
       "bytes": 17520,
       "sha256": "1ecdb18ab710263d71b4144ae0fd2756fc6f166c3df276c285d8f5bdb5e48ebc"
     },
+    "tests/test_gui_build_mode.py": {
+      "bytes": 3703,
+      "sha256": "b25bbb4076542809aae5ec53acb5f49f3b5110c97d3bf5c347546e532b21316d"
+    },
     "tests/test_input_camera.py": {
       "bytes": 6307,
       "sha256": "edb9d653422b0ef7551f1ed4bbacb9a497aa8db1bd4ac14a9b194b254c26e5ec"
+    },
+    "tests/test_input_location.py": {
+      "bytes": 17454,
+      "sha256": "27bd721bd788c0efa2a714dedf61e043949df7308c5f701f1dec5e219d6b630a"
+    },
+    "tests/test_input_location_update.py": {
+      "bytes": 3433,
+      "sha256": "b97745cb440b44b9432dc07dcd6a0c948ee0eb67e3d4ece32874243ceadffac1"
+    },
+    "tests/test_input_recovery_flow.py": {
+      "bytes": 18911,
+      "sha256": "047cb942fb65aa2d1d3659228bc755d7dee1c774d6aaf39c4553e95572e02bb4"
     },
     "tests/test_install_layout.py": {
       "bytes": 11440,
@@ -3719,6 +3791,10 @@
     "tests/test_launcher_cheats.py": {
       "bytes": 9623,
       "sha256": "c3142da97e3a787cc6fd63999decd65321427341a5ff444f32bb48bebf2c35f2"
+    },
+    "tests/test_launcher_input_recovery.py": {
+      "bytes": 3562,
+      "sha256": "2255b852693295e18d8b54c0386c71b77dfcbeae16589ed5d9579e1e2ae6d5f0"
     },
     "tests/test_launcher_updates.py": {
       "bytes": 15209,
@@ -3884,6 +3960,10 @@
       "bytes": 17140,
       "sha256": "de60a2a7f2fa52d274d314e53551697e95f48e791f57e364123f4dc5bb60f87d"
     },
+    "tests/test_standalone_appimage_adapter.py": {
+      "bytes": 13932,
+      "sha256": "1ec04ecb82752a32ea37e662b8b1e2017b685aa19359206de4d4c6efb25a29ed"
+    },
     "tests/test_title_exit.py": {
       "bytes": 2508,
       "sha256": "35481cfbcbbd0d6b753c65894e28fa55a1b6d79d8fbe1b14dde174d237e21cc0"
@@ -3893,16 +3973,16 @@
       "sha256": "07d6a9d169cf8dff9d20e97600356973f06fab75ec59b11dae50dccaac69765e"
     },
     "tests/test_update_linux.py": {
-      "bytes": 47052,
-      "sha256": "149038169f4e4c36d5f1874f1508bdf730fe2d8c7daabfbbae3e51170f01522f"
+      "bytes": 47135,
+      "sha256": "5c9d4d55ea91d0a36a108af58db4efc28e567497f098bc1a2f3b8c3dde546c59"
     },
     "tests/test_update_release.py": {
       "bytes": 25818,
       "sha256": "318126f035182e041ef3557d003e3b27d91e921a00da0a4bf40e51f886d0a23b"
     },
     "tests/test_update_retention.py": {
-      "bytes": 22732,
-      "sha256": "487a4c5b829e5753c00d76665daf5df6ab485ad3c8517525797fe60fa5d03eff"
+      "bytes": 24031,
+      "sha256": "b05df6b78dc477a118d47eeff2dfa5c66d22b7fc4eef18a050972101b1a9c3a0"
     },
     "tests/test_update_worker.py": {
       "bytes": 8723,
@@ -3956,13 +4036,53 @@
       "bytes": 1549,
       "sha256": "7055266497633c9025b777c78eb7235af13922117480ed5c674677adc381c9d8"
     },
+    "tools/build_builder_appimage.py": {
+      "bytes": 19453,
+      "sha256": "ba644c84e91ab75bcc4b0490366030dfea148838ebb918e33a9b651fb05e0541"
+    },
     "tools/build_launcher_appimage.py": {
-      "bytes": 16439,
-      "sha256": "2a4980d4adb76ab49d91f6eae8f42c7b45ad65a1559d72eeac5087710788dc6e"
+      "bytes": 24189,
+      "sha256": "d3bda3e16300ef916fc67514426562c74c3232d6057f482b1a3fd02a5742d0b0"
     },
     "tools/build_linux_app.py": {
-      "bytes": 37816,
-      "sha256": "2b681fc67a38ec9dde3a316b1d6c008f44caa3fb14c79b780726d69d12ff3ba7"
+      "bytes": 40072,
+      "sha256": "9ef18bf513ba968038f2481c190b224e0a3ea46aa86a3250ab71ce0440d14a7d"
+    },
+    "tools/builder_appimage/APPIMAGE_RUNTIME_NOTICES.txt": {
+      "bytes": 2622,
+      "sha256": "914900561a8b1c97ceb44512deb22dcadacf834d637736536f5f38beede08b42"
+    },
+    "tools/builder_appimage/AppRun": {
+      "bytes": 371,
+      "sha256": "20e830f7fdd55cb9bd18f7993e707387770fec872edc9597b1a64f4b64b33fb6"
+    },
+    "tools/builder_appimage/BUNDLE_NOTICES.md": {
+      "bytes": 2756,
+      "sha256": "94ae1abdd2a35e7ac9c59635b95f4f364c3797f712607580b5426c9b7531384b"
+    },
+    "tools/builder_appimage/Dockerfile.runtime-relink": {
+      "bytes": 971,
+      "sha256": "50ca7a648ee416cd64dc08a59426a0d011f7b86393f159b1210abd8f4af77001"
+    },
+    "tools/builder_appimage/RUNTIME_SOURCES.md": {
+      "bytes": 5214,
+      "sha256": "be9de005941bbb54bfab654096ed5ca8ff0a2a5aeecec8059a5387f6826c82a6"
+    },
+    "tools/builder_appimage/python_entry.c": {
+      "bytes": 2824,
+      "sha256": "510ce7a4bcf996b33cc186ccdb7e6c9ab32f12df64bee71ed3a21b9f8b8f4791"
+    },
+    "tools/builder_appimage/runtime-sources.lock.json": {
+      "bytes": 1726,
+      "sha256": "cfa50bde50cf1812157ebd681d09c33468676d4b120c0520d79eceec833d50ff"
+    },
+    "tools/builder_backend.py": {
+      "bytes": 41513,
+      "sha256": "99c63b4c4da71602c8838164cbc957a9a9bfbe515d17b465e910d19278c01c89"
+    },
+    "tools/builder_bootstrap.py": {
+      "bytes": 22079,
+      "sha256": "4cf766d0b67c42898176c0371779335c4f7906fc8a2c0edbfdef8ed2f4a516c4"
     },
     "tools/installation_version.py": {
       "bytes": 2868,
@@ -3975,6 +4095,10 @@
     "tools/linux_prerequisites.sh": {
       "bytes": 11450,
       "sha256": "a930c54f7175fbd05af6057189b8d7c82e587f9ae0ee680fd74cba056b7f662b"
+    },
+    "tools/package_builder_runtime_sources.py": {
+      "bytes": 16166,
+      "sha256": "afc0a6c76c637a31a0f278c0a8f8bc65f3257dcb5ba5bed49d50576252c12e9d"
     },
     "tools/package_source_release.py": {
       "bytes": 19899,
@@ -3989,20 +4113,20 @@
       "sha256": "ab40a19e5b8fb3b63091d7f40f5e67b781273f26aeaae8f1edd4ff807d4783ed"
     },
     "tools/update_linux.py": {
-      "bytes": 51635,
-      "sha256": "1b6a6530721222c6e3e368b5882a782d23071098acbc3d9781b700532a933aec"
+      "bytes": 54909,
+      "sha256": "4ad4807590f9acf3d9b15eb1fdc63e375759eecc24e55c750ae8c6b5c07716aa"
     },
     "tools/update_release.py": {
       "bytes": 20597,
       "sha256": "bb47e389d0d9bca0473a5dce03d0540f94e57c45d9c837bcc7b733aedbc092a3"
     },
     "tools/update_retention.py": {
-      "bytes": 30071,
-      "sha256": "1bb79bcb8f4911fe9be51d542363df15a4139cb30fae8b96880add891232517c"
+      "bytes": 30298,
+      "sha256": "a1f359d7ebe2b6fab603b90d70005e644473ded833dff25063609ed27c222876"
     },
     "update-version.json": {
       "bytes": 58,
-      "sha256": "1e48a68957da8e655991e3666791a4757893d068a15c2f3139c601f11df24e0d"
+      "sha256": "5a377f80186867978fe7c7f3f04f5196527cbf12124873f55049bdbcccc6f7eb"
     }
   },
   "project": "Monado II",

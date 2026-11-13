@@ -97,6 +97,29 @@ class Retention(unittest.TestCase):
         self.assertTrue(self.current.is_dir())
         verified(self.current / 'workspace')
 
+    def test_gui_first_install_without_an_adjacent_image_reclaims_obsolete_outputs(self):
+        identity = 'gui-20261113T120000Z-0123abcd'
+        for relative in ('generated/' + identity, 'build/' + identity + '-game', 'build/' + identity + '-launcher'):
+            path = self.owner / 'Monado_Linux' / relative
+            path.mkdir(parents=True)
+            (path / 'authored-synthetic-output.txt').write_text('authored obsolete build fixture')
+        self.assertFalse((self.owner / 'Monado-II-x86_64.AppImage').exists())
+        report = self.clean(include_bootstrap=True)
+        self.assertEqual(report['status'], 'complete', report)
+        self.assertFalse((self.owner / 'Monado_Linux/build').exists())
+        self.assertFalse((self.owner / 'Monado_Linux/generated').exists())
+        self.assert_protected()
+
+    def test_unknown_gui_output_identity_stays_protected(self):
+        path = self.owner / 'Monado_Linux/build/gui-my-unrelated-folder'
+        path.mkdir(parents=True)
+        sentinel = path / 'keep.txt'
+        sentinel.write_text('preserve unknown folder')
+        report = self.clean(include_bootstrap=True)
+        self.assertEqual(report['status'], 'pending')
+        self.assertEqual(sentinel.read_text(), 'preserve unknown folder')
+        self.assert_protected()
+
     def test_legacy_accumulation_keeps_only_current_and_protected_data(self):
         old = [self.version('update-legacy-' + str(i), '0.1.'+str(i)) for i in range(5,12)]
         archive = self.current/'download'

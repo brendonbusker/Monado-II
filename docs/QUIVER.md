@@ -1,17 +1,33 @@
 # Quiver setup and review information
 
-The primary release downloads are **setup/build kits**, named
-`monado-ii-<version>-linux-setup.tar.gz` and
-`monado-ii-windows-original-implementation-setup.zip`. They contain reviewed authored source and
-setup entrypoints. The player builds locally using their own legally dumped,
-already-extracted Switch Definitive Edition 2.0.0 files. No game files, keys,
-firmware, generated game code/binaries, translated game shaders/caches, saves or
-private SDK binaries are distributed. A local build is required before playing.
+Linux 0.1.17 offers a graphical builder AppImage alongside the established
+source/setup archive. Both build the game locally using the player's own legally
+dumped, already-extracted Switch Definitive Edition 2.0.0 `exefs` and `romfs`.
+The AppImage contains setup software and its reviewed startup dependencies, not a
+playable game. No game files, keys, firmware, generated game code/binaries,
+translated shaders/caches, saves or private SDK binaries are distributed.
 
-Windows remains the original implementation without the Linux additions. Its
-version-free filename does not advance with Linux release numbers.
+The Windows kit remains **`monado-ii-windows-original-implementation-setup.zip`**.
+It is the original implementation without the Linux additions; its version-free
+filename does not advance with Linux release numbers.
 
-## Linux entrypoint
+## Graphical Linux download
+
+The recommended standalone download is
+**`monado-ii-0.1.17-linux-builder-x86_64.AppImage`**. When configuring an app
+manager that supports native AppImages, select that file. It provides input and
+installation-folder selection, build choices, progress and errors, then opens the
+settings launcher after a checked local build. The player chooses Play themselves.
+Subsequent opens return to the registered installation. Existing installations
+can be adopted in place; input, saves and settings are not moved or converted.
+
+A source-kit catalog entry is a separate route. If Quiver installs the Linux
+`-setup.tar.gz` archive, continue using the source-kit entrypoint below. Do not
+assume an older verified Quiver catalog version has changed merely because a new
+GitHub release exists. Catalog acceptance and end-to-end graphical AppImage
+integration inside Quiver have not been qualified by this release.
+
+## Linux source-kit entrypoint
 
 Configure Quiver's preferred Linux executable as **`App_Monado_II.sh`**, using a
 direct/native runner. The name also sorts before the build-only shell entrypoint
@@ -38,7 +54,7 @@ local adjacent outputs and game input; it is not a standalone distributed game.
 Settings, caches and saves remain under `Monado_Linux/play/launcher`, outside the
 read-only game input. Changing a Quiver program selection does not copy or move
 these files. Use Monado II's in-launcher updater for its checked local rebuild,
-profile preservation and rollback behavior.
+profile preservation and current-version cleanup behavior.
 
 ## Windows boundary
 
@@ -67,9 +83,9 @@ Sources: [asset selection](https://github.com/tgeorgiadis/quiver-launcher/blob/4
 [archive and executable handling](https://github.com/tgeorgiadis/quiver-launcher/blob/41eec97383adc05bc30c8a9a54686b9fc75bf8ce/apps/launcher/src-tauri/src/install.rs),
 [native launch handling](https://github.com/tgeorgiadis/quiver-launcher/blob/41eec97383adc05bc30c8a9a54686b9fc75bf8ce/apps/launcher/src-tauri/src/lib.rs).
 
-## Suggested re-review explanation
+## Source-kit re-review explanation
 
-Monado II now publishes platform-specific setup/build kits as GitHub Release
+Monado II publishes platform-specific setup/build kits as GitHub Release
 assets, rather than filenames identified as auxiliary source archives. The Linux
 kit's `App_Monado_II.sh` provides visible first-run local setup and subsequently
 opens the native launcher. Users must supply their own supported legal game dump;

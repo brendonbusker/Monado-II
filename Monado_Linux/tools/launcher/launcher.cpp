@@ -17,6 +17,7 @@
 #ifdef __linux__
 #include "linux_host.h"
 #include "linux_precompile.h"  // [XCDE] LINUX-018
+#include "input_recovery.h" // Native picker before profile, state or game initialization.
 #endif
 
 #include "imgui.h"
@@ -1384,6 +1385,7 @@ static void linux_update_popup() {
 int main(int argc, char **argv) {
     int result = 0;
 #ifdef __linux__
+    if (argc > 1 && !strcmp(argv[1], "--locate-game-files")) return launcher_input_recovery::run(argc, argv);
     const char *project = nullptr, *game_project = nullptr, *input = nullptr, *game = nullptr, *state = nullptr, *shot = nullptr, *script = nullptr;
     int update_channel = -1;
     int shot_tab = 0, shot_frame = 5, frame_no = 0;

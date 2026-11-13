@@ -17,6 +17,8 @@ import stat
 import subprocess
 import sys
 import hashlib
+import importlib.util
+import selectors
 
 import run_linux
 
@@ -245,6 +247,120 @@ def check_input(source):
     return check.stdout.strip()
 
 
+def input_location_module():
+    path = ROOT / 'scripts/input_location.py'
+    ordinary_path(path)
+    if not path.is_file():
+        raise ValueError('missing ordinary input-location helper')
+    spec = importlib.util.spec_from_file_location('_monado_launcher_input_location', path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def input_independent_runtime(executable, *, launcher=False):
+    """Check the same native identity/closure before a locator can execute.
+
+    run_linux.plan also requires available game input and prepares game-specific
+    namespace arguments. Recovery needs neither, and never creates a profile.
+    """
+    port = run_linux.install_layout.build_port(ROOT, executable)
+    binary = run_linux.checked_path(executable, [port / name for name in ('build', 'runs', 'accepted')], exists=True)
+    receipt = json.loads((binary.parent / 'receipt.json').read_text())
+    if launcher:
+        if receipt.get('artifact_kind') != 'linux-launcher':
+            raise ValueError('input locator requires a linux-launcher build receipt')
+    elif receipt.get('artifact_kind') == 'linux-launcher' or not receipt.get('generated'):
+        raise ValueError('game executable must have a complete generated-game build receipt')
+    if receipt.get('status') != 'passed' or receipt.get('executable', {}).get('path') != str(binary):
+        raise ValueError('executable does not match a successful build receipt')
+    run_linux.runtime_check.native_file(binary)
+    with binary.open('rb') as stream:
+        identity = hashlib.file_digest(stream, 'sha256').hexdigest()
+    if not os.access(binary, os.X_OK) or identity != receipt.get('executable', {}).get('sha256'):
+        raise ValueError('executable does not match a successful build receipt')
+    run_linux.verify_runtime_resources(binary, receipt)
+    sysroot = Path(receipt.get('dependencies', {}).get('sysroot', ''))
+    if not sysroot.is_absolute() or sysroot.resolve() != sysroot or not sysroot.is_relative_to(port / '.deps/graphics/sysroots'):
+        raise ValueError('build receipt has no valid local graphics sysroot')
+    marker = json.loads((sysroot / '.monado-deps.json').read_text())
+    expected_lock = receipt.get('sources_before', {}).get('graphics-deps-linux.lock.json')
+    if not expected_lock or marker.get('lock_sha256') != expected_lock or not (sysroot / 'usr/lib/x86_64-linux-gnu').is_dir():
+        raise ValueError('graphics sysroot identity differs from the build receipt')
+    run_linux.runtime_check.require_receipt_validation(receipt, marker)
+    policy, _ = run_linux.runtime_check.load_policy(port, sysroot, expected_lock=expected_lock,
+        expected_policy=receipt.get('runtime_validation', {}).get('runtime_policy_sha256'))
+    library_path = run_linux.runtime_check.library_path(sysroot, policy)
+    run_linux.runtime_check.check_receipted(binary, port)
+    return binary, receipt['executable']['sha256'], library_path
+
+
+def locate_game_files(binary, library_path, previous):
+    """Run only the checked settings GUI's standalone picker, with bounded IPC."""
+    command = [str(binary), '--locate-game-files', '--missing-input', previous]
+    child = subprocess.Popen(command, cwd=str(ROOT), env=clean_environment(library_path),
+                             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                             close_fds=True)
+    output, errors = bytearray(), bytearray()
+    try:
+        with selectors.DefaultSelector() as selector:
+            selector.register(child.stdout, selectors.EVENT_READ, output)
+            selector.register(child.stderr, selectors.EVENT_READ, errors)
+            while selector.get_map():
+                for key, _ in selector.select(.2):
+                    data = os.read(key.fileobj.fileno(), 4097)
+                    if not data:
+                        selector.unregister(key.fileobj)
+                        continue
+                    key.data.extend(data)
+                    if len(output) > 4096 or len(errors) > 16384:
+                        raise ValueError('input locator returned excessive output')
+        code = child.wait()
+        if code:
+            raise ValueError('input locator failed: ' + errors.decode('utf-8', errors='replace').strip())
+        if not output:
+            return None
+        if output[-1:] != b'\0' or b'\0' in output[:-1]:
+            raise ValueError('input locator returned an invalid folder selection')
+        selected = output[:-1].decode('utf-8', errors='strict')
+        if not selected or not Path(selected).is_absolute() or any(ord(c) < 32 for c in selected):
+            raise ValueError('input locator returned an invalid folder selection')
+        return selected
+    finally:
+        if child.poll() is None:
+            child.terminate()
+            try:
+                child.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                child.kill(); child.wait()
+        child.stdout.close(); child.stderr.close()
+
+
+def recover_input(args):
+    # Scripted validation/capture/precompile routes stay noninteractive. Their
+    # existing missing-input failure remains useful to callers and update jobs.
+    if (args.dry_run or args.shot or args.shot_tab is not None or args.shot_frame is not None or
+            args.ui_script or args.test_child_env or args.test_exit_after_child):
+        return True
+    helper = input_location_module()
+    location = helper.inspect(ROOT, args.game_executable)
+    if not location['missing']:
+        return True
+    binary, identity, library_path = input_independent_runtime(args.launcher_executable, launcher=True)
+    input_independent_runtime(args.game_executable)
+    if args.packaged_launcher is not None:
+        # Still validate the AppImage copy, but use the receipted workspace GUI
+        # outside the game's private DLSS /tmp namespace for this early mode.
+        verified_packaged_launcher(args.packaged_launcher, identity)
+    helper.require_idle(ROOT)
+    replacement = locate_game_files(binary, library_path, location['previous'])
+    if replacement is None:
+        return False
+    helper.relocate(ROOT, args.game_executable, replacement, checker=check_input)
+    return True
+
+
 def mkdir_private(path):
     """Create/open directories through nofollow dirfds; never replace anything."""
     fd = os.open('/', os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
@@ -388,6 +504,8 @@ def main(argv=None):
     restart = None
     result = 1
     try:
+        if not recover_input(args):
+            return 0
         launch = prepare(args)
         launch['input_check'] = check_input(launch['input'])
         if args.dry_run:

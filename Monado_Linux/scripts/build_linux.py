@@ -505,7 +505,13 @@ def main():
             builder.receipt['generated'] = {str(p.relative_to(ROOT)): digest(p) for p in generated}
             builder.save()
         with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as pool:
-            list(pool.map(builder.compile, [*available, *generated]))
+            pending = {pool.submit(builder.compile, source): source for source in [*available, *generated]}
+            for completed, future in enumerate(concurrent.futures.as_completed(pending), 1):
+                result = future.result()
+                # A frontend can report actual completed compilation units;
+                # it must never substitute an estimated timer for build work.
+                print(f'[compile {completed}/{len(pending)}] '
+                      f'{"done" if result is not None else "failed/skipped"}', flush=True)
         if generated and not builder.failed.is_set():
             executable = builder.link()
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError, KeyboardInterrupt) as failure:

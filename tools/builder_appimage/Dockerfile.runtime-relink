@@ -1,0 +1,19 @@
+# Authored Monado II recipe under MIT. Matches the upstream Alpine build design.
+# This is a container-only build; it does not install host packages.
+FROM alpine:3.21 AS build
+RUN apk add --no-cache bash alpine-sdk util-linux strace file autoconf automake \
+    libtool xz eudev-dev gettext-dev linux-headers meson \
+    zstd-dev zstd-static zlib-dev zlib-static clang musl-dev mimalloc-dev
+COPY fuse-3.15.0 /tmp/fuse-3.15.0
+COPY squashfuse-0.5.2 /tmp/squashfuse-0.5.2
+COPY type2-runtime-fedfad51acc2860b2916a1eef32ba4a500ff31ef /ws
+WORKDIR /tmp/fuse-3.15.0
+RUN meson setup build --prefix=/usr --default-library=static && ninja -C build -v install
+WORKDIR /tmp/squashfuse-0.5.2
+RUN ./autogen.sh && CFLAGS="-ffunction-sections -fdata-sections -Os" \
+    ./configure LDFLAGS="-static" && make -j2 && make install && \
+    /usr/bin/install -c -m 644 ./*.h /usr/local/include/squashfuse
+WORKDIR /ws
+RUN bash scripts/build-runtime.sh
+FROM scratch
+COPY --from=build /ws/out/ /

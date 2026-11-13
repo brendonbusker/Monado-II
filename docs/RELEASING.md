@@ -1,16 +1,44 @@
-# Source releases
+# Release artifacts and publication boundaries
 
-Monado II release assets are `monado-ii-<version>-linux-setup.tar.gz` and
-`monado-ii-windows-original-implementation-setup.zip` **source/setup kits**. They contain reviewed authored/licensed source and tooling,
-not playable game binaries. Each player generates game code locally from their
-own legally dumped input. No game content, generated code, translated shaders,
-caches, seeds, keys, firmware, saves, mods or private SDK binaries are distributed.
+Linux 0.1.17 adds the graphical setup AppImage
+**`monado-ii-0.1.17-linux-builder-x86_64.AppImage`**. It contains the authored
+setup frontend, Python runtime, selected reviewed startup dependencies and source
+template. It generates and builds the game locally from the player's own extracted
+input. It contains no game executable, generated game code, game assets, vendor
+SDK, translated game shaders/caches, keys, firmware, saves or user data.
 
-Version 0.1.16 is a regular release, with GitHub's prerelease option disabled.
-A regular release does not establish Windows game-build or full-game coverage.
-The exact reviewed generated launcher illustration is included with its
+This binary has a separate, explicit packaging boundary in
+`tools/build_builder_appimage.py`. Its file inventory, copyright/license notices,
+source-template guard, private-runtime checks and exact archive readback are
+required. Before public distribution, review the exact dependency licenses and
+fulfil applicable corresponding-source/build-material obligations. A successful
+hash check alone does not establish redistribution rights. See
+`tools/builder_appimage/BUNDLE_NOTICES.md`. This does not authorize packaging a
+whole development sysroot, the media runtime or any game-derived binary.
+
+The Linux `monado-ii-<version>-linux-setup.tar.gz` and Windows
+`monado-ii-windows-original-implementation-setup.zip` remain **source/setup kits**.
+Their existing source-only guards stay strict. Keep the byte-identical Linux
+`-source.tar.gz` compatibility alias for older updaters. No game or SDK binary is
+added to these archives. Each player generates game code locally from their own
+legally dumped input.
+
+Version 0.1.17 is a regular release, with GitHub's prerelease option disabled.
+This status does not establish Windows, full-game, all-distro or handheld gameplay
+coverage. The reviewed generated illustration remains subject to its exact
 [provenance](../Monado_Linux/tools/launcher/assets/ARTWORK_PROVENANCE.md) and root
-notice; other unreviewed imagery remains excluded.
+notice; other unreviewed imagery stays excluded.
+
+The maintainer completed fresh graphical setup/build and accepted reopen, then
+manually confirmed an updated existing installation opened and played normally.
+That update needed two manually resumed packaging/startup corrections; do not
+present it as an uninterrupted automatic-updater pass. Recovery has automated and
+hidden-UI coverage; a real moved-folder picker test remains unqualified. Keep
+these limits separate from native build and source-test results in release notes.
+Updating preserves the original profile and shared input, and may require a full
+local game rebuild. The new full-image path applies to installations using the
+persistent private Python. Ordinary host-Python source clients retain their
+workspace bootstrap; a new graphical AppImage can adopt them in place.
 
 Windows uses a version-free filename and internal root, with `version: "original"`.
 Do not assign the Linux release version to Windows or imply feature parity.
@@ -78,9 +106,10 @@ an update. Preserve optional Quick Step assignment metadata with its save folder
 The builder fetches the compatible media libraries privately; source kits and
 launcher images do not distribute those runtime libraries or vendor SDK binaries.
 
-The Linux kit includes `Build_Monado_II.sh` and `Play_Monado_II.sh`. Users create
-their launcher AppImage locally beside their own input/build workspace; neither
-that image nor its receipt/staging files is a source release asset. Use a fresh
+The Linux source kit includes `Build_Monado_II.sh` and `Play_Monado_II.sh`. Users
+can still create a workspace launcher locally. Native local images, receipts and
+staging trees are not source-kit assets. The separately reviewed graphical builder
+is an authored setup-binary asset, never a precompiled game. Use a fresh
 reviewed export for release checks, not an end-user folder containing input or
 generated builds. Never remove a user's input/state to make a release guard pass.
 
@@ -125,8 +154,8 @@ From a reviewed clean public checkout:
 MONADO_RELEASE_SOURCE="$(pwd -P)"
 MONADO_RELEASE_PARENT="$(dirname "$MONADO_RELEASE_SOURCE")"
 python -B tools/publication_guard.py "$MONADO_RELEASE_SOURCE"
-python -B tools/package_source_release.py --source "$MONADO_RELEASE_SOURCE" --platform linux --version 0.1.16 --output "$MONADO_RELEASE_PARENT/monado-ii-linux-release"
-python -B tools/package_source_release.py --source "$MONADO_RELEASE_SOURCE" --platform windows --version 0.1.16 --output "$MONADO_RELEASE_PARENT/monado-ii-windows-release"
+python -B tools/package_source_release.py --source "$MONADO_RELEASE_SOURCE" --platform linux --version 0.1.17 --output "$MONADO_RELEASE_PARENT/monado-ii-linux-release"
+python -B tools/package_source_release.py --source "$MONADO_RELEASE_SOURCE" --platform windows --version 0.1.17 --output "$MONADO_RELEASE_PARENT/monado-ii-windows-release"
 ```
 
 Outputs must be fresh. The packager verifies the exact publication manifest and
@@ -146,13 +175,16 @@ the maintainer must attach the verified archives to the matching GitHub Release.
 CI runs authored source-tooling tests on Linux and Windows; it is not a Windows
 game-build or gameplay pass.
 
-For a normal release, verify both platform checksum lists, combine them into one
-`SHA256SUMS`, and upload **all three archives plus that checksum file**. The Linux
+For a normal release, verify both platform source-kit checksum lists. Build and
+audit the standalone setup image separately, including its required notices and
+corresponding-source/build materials. Combine their verified checksums into one
+`SHA256SUMS`. Upload the builder AppImage, all three source/setup archives, the
+checksum file and any required dependency-source/build-material artifact. The Linux
 setup and compatibility alias must have equal bytes and digests. For example,
 from the parent of the two fresh local packaging output directories:
 
 ```sh
-MONADO_RELEASE_VERSION=0.1.16
+MONADO_RELEASE_VERSION=0.1.17
 (cd monado-ii-linux-release && sha256sum -c SHA256SUMS)
 (cd monado-ii-windows-release && sha256sum -c SHA256SUMS)
 cmp "monado-ii-linux-release/monado-ii-${MONADO_RELEASE_VERSION}-linux-setup.tar.gz" "monado-ii-linux-release/monado-ii-${MONADO_RELEASE_VERSION}-linux-source.tar.gz"
@@ -164,7 +196,10 @@ gh release create "v${MONADO_RELEASE_VERSION}" --verify-tag --repo brendonbusker
   "monado-ii-windows-release/monado-ii-windows-original-implementation-setup.zip" SHA256SUMS
 ```
 
-The same four files may be attached through GitHub's release editor instead.
+The source archives and checksum file above may also be attached through GitHub's
+release editor. The separately audited builder AppImage and its required source/
+build materials must be attached to the same release as well; the source-kit
+workflow does not create or audit that binary.
 Leave the prerelease option disabled for the normal stable updater channel;
 label frame generation experimental in the notes and keep its warning/default.
 After publication verify the remote filenames, byte sizes and digests, including
@@ -173,7 +208,7 @@ against that release. Never overwrite an existing published archive to repair it
 publish a new version with a matching source manifest and version metadata.
 
 Never use the inherited `scripts/make_dist.sh`: it bundled game/user data and is
-excluded from the public export. A future binary launcher/installer needs its own
+excluded from the public export. The graphical setup binary needs its separate
 dependency/asset/license review; a compiled game-derived executable remains outside
 the allowed release contents. Hash/signature guards supplement, rather than
 replace, provenance review. Any uncertain file stays out until resolved.

@@ -552,6 +552,22 @@ def game_features(game):
     return receipt
 
 
+def input_path_changed(receipt, current):
+    """Relocation keeps a playable binary, but a later reuse needs a fresh payload.
+
+    Immutable native build receipts are never rewritten to bless a new path.
+    Legacy receipts without this field retain their existing validation path;
+    the native builder's strict input identity checks remain authoritative.
+    """
+    recorded = receipt.get('input')
+    if recorded is None:
+        return False
+    if (not isinstance(recorded, dict) or not isinstance(recorded.get('path'), str)
+            or not Path(recorded['path']).is_absolute()):
+        raise ValueError('The selected game has invalid recorded input metadata')
+    return recorded['path'] != str(current)
+
+
 
 def verify_runtime_selection(workspace, state):
     """Recheck real game/GUI loading before selecting an update; no state writes."""
@@ -586,8 +602,33 @@ def verify_runtime_selection(workspace, state):
             'scope': 'Current native dependency checks before update activation; no game/UI or profile writes'}
 
 
+def private_build_python():
+    """Reuse the standalone launcher's persistent interpreter, never its mount.
+
+    Ordinary installations keep the existing shell/doctor entry. The bundled
+    interpreter has a manifest-bound marker at its stable base prefix; a new
+    update workspace does not yet have a virtualenv and must not require a
+    separately installed system Python just to create it.
+    """
+    marker = Path(sys.base_prefix) / 'monado-private-python.json'
+    if not marker.exists() and not marker.is_symlink():
+        return None
+    prefix = ordinary(Path(sys.base_prefix))
+    value = json_read(ordinary(marker), 16384)
+    if (sys.version_info[:2] != (3, 14) or value.get('schema') != 1 or
+            value.get('project') != 'Monado II' or value.get('python') != [3, 14] or
+            value.get('runtime_kind') != 'standalone-builder'):
+        raise ValueError('Invalid standalone build interpreter identity')
+    executable = ordinary(Path(getattr(sys, '_base_executable', sys.executable)))
+    if not executable.is_relative_to(prefix) or not os.access(executable, os.X_OK):
+        raise ValueError('Standalone build interpreter escaped its persistent prefix')
+    return executable
+
+
 def build_command(workspace, game, rebuild):
-    command = [str(workspace / 'Build_Monado_II.sh')]
+    private_python = private_build_python()
+    command = ([str(private_python), '-I', '-B', str(workspace / 'tools/build_linux_app.py')]
+               if private_python is not None else [str(workspace / 'Build_Monado_II.sh')])
     receipt = game_features(game)
     framegen = receipt.get('framegen_enabled', False)
     if not receipt['dlss_enabled']:
@@ -689,10 +730,26 @@ def run_build(command, workspace, log, emit, cancelled, *, lock_fd=None):
         raise ValueError('Update build failed; previous version remains selected. Log: ' + str(log))
 
 
+def checked_worker_command(workspace, command):
+    """Allow only the legacy entry or the exact persistent-Python entry."""
+    if (not isinstance(command, list) or not command or
+            any(not isinstance(arg, str) or '\x00' in arg for arg in command)):
+        raise ValueError('invalid build worker command')
+    if command[0] == str(workspace / 'Build_Monado_II.sh'):
+        return command
+    private_python = private_build_python()
+    prefix = ([str(private_python), '-I', '-B', str(workspace / 'tools/build_linux_app.py')]
+              if private_python is not None else None)
+    if prefix is None or command[:4] != prefix:
+        raise ValueError('build worker must use its fixed candidate build command')
+    return command
+
+
 def build_worker(workspace, log, command, lock_fd):
     """Trusted cleanup process, never the GUI's broad session reaper."""
     workspace, log = ordinary(workspace), ordinary(log, missing=True)
-    if not log.is_relative_to(workspace.parent) or command[0] != str(workspace / 'Build_Monado_II.sh'):
+    checked_worker_command(workspace, command)
+    if not log.is_relative_to(workspace.parent):
         raise ValueError('build worker must use its fixed candidate build command and log')
     import fcntl
     binding = json_read(workspace / 'installation.json', 8192)
@@ -853,6 +910,11 @@ class Session:
         if cancelled():
             raise update_release.UpdateCancelled('Update cancelled.')
         baseline = installed_sources(self.workspace)
+        try:
+            current_input = self.layout.shared_input(self.workspace / 'Monado_Linux')
+        except FileNotFoundError as error:
+            raise ValueError('Game files could not be found. Close the launcher and reopen Monado II '
+                             'to choose Locate game files, then retry this update. Saves stay in place.') from error
         directory = self._lock()
         active = directory / 'active.json'
         prior = json_read(active, 8192) if active.exists() else None
@@ -872,6 +934,7 @@ class Session:
             raise ValueError('downloaded version metadata differs from release')
         rebuild = update_release.classify(baseline, candidate_manifest) == 'game'
         features = game_features(self.game)
+        rebuild = rebuild or input_path_changed(features, current_input)
         # Native FG support is part of the normal DLSS build. A launcher-only
         # update cannot reuse an older game that lacks that capability.
         rebuild = rebuild or (features['dlss_enabled'] and not features.get('framegen_enabled', False))

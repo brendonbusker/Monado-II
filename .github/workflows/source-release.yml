@@ -6,7 +6,7 @@ on:
       version:
         description: Linux release/source snapshot version; Windows remains original
         required: true
-        default: 0.1.16
+        default: 0.1.17
         type: string
 
 permissions:

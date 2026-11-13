@@ -26,6 +26,14 @@ def tree_hash(path):
     return h.hexdigest()
 
 
+def generator_command(python, generator, module, exefs, output, simd, patches, hle):
+    # -B is an interpreter flag, not an inherited process setting. -E ignores
+    # PYTHONDONTWRITEBYTECODE, so each generated-module child needs its own flag.
+    return [python, '-B', '-E', '-s', generator, module['name'],
+            os.path.join(exefs, module['name']), module['base'], output,
+            '--simd', simd, '--patches', patches, '--hle', hle]
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument('--profile', default=os.path.join(ROOT, 'games', 'xcde', 'profile.json'))
@@ -43,8 +51,7 @@ def main(argv=None):
         if not m['lift']:
             continue
         out = os.path.join(a.out, m['name'])
-        cmd = [sys.executable, '-E', '-s', gen, m['name'], os.path.join(a.exefs, m['name']), m['base'], out,
-               '--simd', a.simd, '--patches', a.patches, '--hle', a.hle]
+        cmd = generator_command(sys.executable, gen, m, a.exefs, out, a.simd, a.patches, a.hle)
         log = open(os.path.join(a.out, m['name'] + '.log'), 'w') if os.path.isdir(a.out) else None
         if log is None:
             os.makedirs(a.out, exist_ok=True)

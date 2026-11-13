@@ -403,8 +403,11 @@ def _bootstrap_owned(root, owner, verify_workspace):
     # Local build identities are emitted by the reviewed builder, not arbitrary
     # user directories. Refuse unexpected siblings rather than treating a whole
     # source checkout as disposable. Profiles/caches have separate roots.
-    pattern = (r'local-\d{8}T\d{6}Z-[a-f0-9]{8}(?:-game|-launcher|-appimage)'
-               if root.name == 'build' else r'local-\d{8}T\d{6}Z-[a-f0-9]{8}')
+    # The graphical builder emits the same timestamp/hash shape with a gui-
+    # prefix. Its first install has no adjacent AppImage, but its obsolete native
+    # artifacts still belong to this original owner after a verified update.
+    identity = r'(?:local|gui)-\d{8}T\d{6}Z-[a-f0-9]{8}'
+    pattern = identity + (r'(?:-game|-launcher|-appimage)' if root.name == 'build' else '')
     for name, identity in nodes.items():
         if name == '.':
             continue

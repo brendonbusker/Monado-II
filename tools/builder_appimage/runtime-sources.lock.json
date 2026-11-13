@@ -1,0 +1,38 @@
+{
+  "schema": 1,
+  "project": "Monado II",
+  "purpose": "AppImage runtime corresponding source and relinking materials",
+  "runtime": {
+    "repository": "AppImage/type2-runtime",
+    "revision": "fedfad51acc2860b2916a1eef32ba4a500ff31ef",
+    "binary_sha256": "617aa77314d57c8b8e4fae9c3f0b35af7b30d5529cb69e98f64f92510ed98a46",
+    "libfuse_version": "3.15.0",
+    "squashfuse_version": "0.5.2"
+  },
+  "sources": [
+    {
+      "name": "appimage-type2-runtime-fedfad51.tar.gz",
+      "url": "https://codeload.github.com/AppImage/type2-runtime/tar.gz/fedfad51acc2860b2916a1eef32ba4a500ff31ef",
+      "bytes": 31128,
+      "sha256": "e27ea3c837e9c660e1a9a2993b673ae93bbb53077330efba8654031e302d4e8e",
+      "root": "type2-runtime-fedfad51acc2860b2916a1eef32ba4a500ff31ef",
+      "required": ["LICENSE", "BUILD.md", "src/runtime/runtime.c", "src/runtime/Makefile", "src/runtime/data_sections.ld", "scripts/common/install-dependencies.sh", "scripts/build-runtime.sh", "scripts/docker/Dockerfile", "patches/libfuse/mount.c.diff"]
+    },
+    {
+      "name": "fuse-3.15.0.tar.xz",
+      "url": "https://github.com/libfuse/libfuse/releases/download/fuse-3.15.0/fuse-3.15.0.tar.xz",
+      "bytes": 4589124,
+      "sha256": "70589cfd5e1cff7ccd6ac91c86c01be340b227285c5e200baa284e401eea2ca0",
+      "root": "fuse-3.15.0",
+      "required": ["LGPL2.txt", "meson.build", "lib/mount.c"]
+    },
+    {
+      "name": "squashfuse-0.5.2.tar.gz",
+      "url": "https://github.com/vasi/squashfuse/archive/0.5.2.tar.gz",
+      "bytes": 75404,
+      "sha256": "db0238c5981dabbd80ee09ae15387f390091668ca060a7bc38047912491443d3",
+      "root": "squashfuse-0.5.2",
+      "required": ["LICENSE", "autogen.sh", "configure.ac", "Makefile.am"]
+    }
+  ]
+}

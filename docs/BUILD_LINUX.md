@@ -1,15 +1,59 @@
 # Build and play on Linux
 
-Download and extract **`monado-ii-0.1.13-linux-setup.tar.gz`** from
-[Releases](https://github.com/brendonbusker/Monado-II/releases). Open a terminal in
-the extracted folder. The current pinned baseline is **Linux x86-64 (x86-64-v2),
-CPython 3.14, glibc 2.43 or newer**, and a native GNU C++ runtime exporting
-`GLIBCXX_3.4.32` and the required C++ ABI versions. Required tools are bash,
-pkg-config, dpkg-deb, binutils (`readelf` and `nm`) and squashfs-tools
-(`mksquashfs` and `unsquashfs`). The standard DLSS build also needs executable
-`/usr/bin/bwrap` (bubblewrap). GNU C++ is discovered in the host's native library
-directories; an Ubuntu multiarch path is not required. Compatible host graphics,
-audio and session libraries are also required as described below.
+The recommended download is **`monado-ii-0.1.17-linux-builder-x86_64.AppImage`** from
+[Releases](https://github.com/brendonbusker/Monado-II/releases/latest). It provides
+folder selection, local build progress and the normal settings launcher after
+building. The source/setup archive and terminal route remain available below.
+
+## Graphical setup (recommended)
+
+1. Verify the downloaded AppImage against the release's `SHA256SUMS`. Allow it to
+   execute in your file manager's permissions, then open it.
+2. Choose **Set up Monado II**. Select your own extracted **Definitive Edition
+   2.0.0** folder containing `exefs` and `romfs`, then check the files. No game
+   input is copied, moved or uploaded.
+3. Choose an empty final installation folder. The default is `~/Games/Monado-II`;
+   you can choose another drive or type a new folder path. Keep this location after
+   building because native build receipts use absolute paths.
+4. Choose whether to include NVIDIA DLSS support and prepare shaders. Advanced
+   settings limit parallel build workers to 1–6. These choices do not enable
+   experimental frame generation automatically.
+5. Build. The window reports actual stages and compilation progress, with details
+   and retained logs. When ready, open the settings launcher and press **Play**
+   yourself. Later opens of the same AppImage return to that installation.
+
+If FUSE is unavailable, extraction mode works without installing it:
+
+```sh
+chmod +x monado-ii-0.1.17-linux-builder-x86_64.AppImage
+./monado-ii-0.1.17-linux-builder-x86_64.AppImage --appimage-extract-and-run
+```
+
+**Use an existing installation** links a checked installation in place, preserving
+its original input, saves, settings and current update. If the input folder moves,
+**Locate game files** checks its new location before reconnecting it; no immediate
+rebuild or save conversion is required. The full [graphical builder guide](GRAPHICAL_BUILDER.md)
+covers cancellation, persistent tool caches, relocation and update behavior.
+
+The graphical AppImage includes CPython 3.14, so this entrypoint does not require a
+separately installed Python. It downloads the compiler and pinned private build
+dependencies as needed. It still needs compatible host tools and native libraries;
+missing requirements receive diagnostics rather than an automatic host install.
+The baseline is **Linux x86-64-v2, glibc 2.43+**, and a native GNU C++ runtime
+exporting `GLIBCXX_3.4.32` and the required C++ ABI versions. Host tools include
+bash, pkg-config, dpkg-deb, binutils (`readelf` and `nm`) and squashfs-tools
+(`mksquashfs` and `unsquashfs`). The DLSS build also needs `/usr/bin/bwrap`
+(bubblewrap). GNU C++ is discovered through native library directories; an Ubuntu
+multiarch path is not required. Compatible graphics, audio and session libraries
+remain necessary. Build and run in the same compatible environment when using
+Distrobox. No universal distro or handheld-gameplay compatibility is implied.
+
+## Terminal/source setup
+
+Download and extract **`monado-ii-0.1.17-linux-setup.tar.gz`** into its final folder.
+This route additionally requires a host **CPython 3.14**. Open a terminal in the
+extracted folder and follow the input/build instructions below. Neither ordinary
+builds nor background updates install system packages or run sudo.
 
 The builder fetches hash-locked media, codec and other ordinary user-space
 libraries into `Monado_Linux/.deps`. This includes libbluray 1.4.1 (package
@@ -345,7 +389,7 @@ experimental. Edited release-owned source files also stop automatic installation
 so local changes can be merged manually. Normal settings changes do not modify
 the release-owned source.
 
-**Updating to 0.1.13 requires a full local game rebuild** for the changed build
+**Updating to 0.1.17 requires a full local game rebuild** for the changed build
 recipes and checks. The normal updater performs this rebuild before activation.
 It preserves the original
 `Monado_Linux/play/launcher` save/settings profile and shared input in place;
@@ -386,8 +430,12 @@ manually move or rename an installed source/build/image directory.
 
 The original root AppImage remains the entry point and selects the checked active
 version. Keep the original folder, its Python support environment and the current
-managed directories together. The updater preserves original authored source and
-support files; it does not turn the installation into a standalone game AppImage.
+managed directories together. Ordinary host-Python source installations retain
+that workspace launcher on update. Installations using the graphical builder's
+persistent private Python can package a full standalone setup image on update.
+A newly downloaded graphical AppImage can also adopt an existing installation in
+place. None of these paths turns the installed game into a single-file game image.
+The updater preserves original authored source and support files.
 Downloads, native outputs and generated content under `Monado_Linux/updates` stay
 local and must not be committed or included in source releases.
 
@@ -404,6 +452,16 @@ build it manually. Keep your original installation/profile intact; a kit in a
 new folder uses a separate profile and does not automatically import saves. Back
 up the complete save/settings profile before manually transferring it. The updater
 never restores or deletes user progress as part of changing program versions.
+If the remembered game-input folder disappears, close other sessions and reopen
+Monado II. **Locate game files** accepts the supported extracted folder at its new
+location and checks its executable hashes against the existing build before
+reconnecting only known input links. Cancel or a mismatch preserves the old
+selection. It keeps the original profile and does not immediately rebuild the game.
+A later update may rebuild once to record that path; native build receipts are
+not rewritten. An existing ordinary input directory is never replaced. Moving
+the complete installed build remains a separate action requiring a fresh build
+at its destination.
+
 The updater remains Linux-only; no Windows updater/backport is included.
 
 If a stage fails, use the log path printed by the builder. A successful local build

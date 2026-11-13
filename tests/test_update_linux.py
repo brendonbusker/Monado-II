@@ -74,7 +74,8 @@ class Transactions(unittest.TestCase):
             data=bytearray(64);data[:6]=b'\x7fELF\x02\x01';data[18:20]=(62).to_bytes(2,'little')
             game.write_bytes(data);game.chmod(0o700)
             flags={'dlss_enabled':'--without-dlss' not in command,'framegen_enabled':'--without-dlss' not in command}
-            native_receipt=dict(status='passed',executable={'path':str(game),'sha256':u._file_digest(game)},**flags)
+            native_receipt=dict(status='passed',executable={'path':str(game),'sha256':u._file_digest(game)},
+                input={'path':str((workspace/'game_files').resolve(strict=True))},**flags)
             (game.parent/'receipt.json').write_text(json.dumps(native_receipt))
             run=port/'runs/local-build'/build_id;run.mkdir(parents=True)
             (run/'receipt.json').write_text(json.dumps({'schema':1,'status':'passed','commands':[]}))
