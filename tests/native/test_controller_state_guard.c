@@ -4,6 +4,7 @@
 #endif
 #include MONADO_GUARD_SOURCE
 #include <assert.h>
+#include <sys/wait.h>
 
 static void denied_write(const char *path) {
     errno = 0;
@@ -12,6 +13,51 @@ static void denied_write(const char *path) {
     errno = 0;
     fd = open(path, O_WRONLY | O_TRUNC | O_CLOEXEC);
     assert(fd < 0 && errno == EACCES);
+}
+
+// [XCDE] LINUX-089: SDL evdev has a read-only event fallback after its
+// rumble-capable read/write open is denied. A newly replaced path must retain
+// this read access without granting writes to future files under /dev/input.
+static int replaced_read_only(const char *state, const char *node) {
+    int ready[2], replaced[2];
+    assert(!pipe2(ready, O_CLOEXEC) && !pipe2(replaced, O_CLOEXEC));
+    pid_t child = fork();
+    assert(child >= 0);
+    if (!child) {
+        close(ready[0]); close(replaced[1]);
+        char error[512], marker;
+        if (!rt_linux_state_guard(state, error, sizeof error)) {
+            fprintf(stderr, "%s\n", error);
+            _exit(strstr(error, "Landlock ABI >=3 required") ? 77 : 1);
+        }
+        assert(write(ready[1], "r", 1) == 1);
+        assert(read(replaced[0], &marker, 1) == 1);
+        denied_write(node);
+        int descriptor = open(node, O_RDONLY | O_CLOEXEC);
+        assert(descriptor >= 0);
+        char text[16] = {0};
+        assert(read(descriptor, text, sizeof text) == 15);
+        assert(!memcmp(text, "authored future", 15));
+        close(descriptor);
+        assert(unlink(node) < 0 && errno == EACCES);
+        _exit(0);
+    }
+    close(ready[1]); close(replaced[0]);
+    char marker;
+    ssize_t count = read(ready[0], &marker, 1);
+    if (count == 1) {
+        char stash[PATH_MAX];
+        assert(snprintf(stash, sizeof stash, "%s.pending", node) < (int)sizeof stash);
+        assert(!rename(stash, node));
+        assert(write(replaced[1], "r", 1) == 1);
+    }
+    close(ready[0]); close(replaced[1]);
+    int status;
+    assert(waitpid(child, &status, 0) == child && WIFEXITED(status));
+    if (WEXITSTATUS(status) == 77) return 77;
+    assert(count == 1 && WEXITSTATUS(status) == 0);
+    puts("controller state guard: PASS replacement remains read-only");
+    return 0;
 }
 
 int main(int argc, char **argv) {
@@ -25,6 +71,10 @@ int main(int argc, char **argv) {
         puts("controller state guard: PASS names"); return 0;
     }
 #endif
+    if (!strcmp(argv[1], "replacement")) {
+        assert(argc == 4);
+        return replaced_read_only(argv[2], argv[3]);
+    }
     assert(argc == 5);
     const char *state = argv[2], *protected = argv[3], *node = argv[4];
     int inherited = -1;

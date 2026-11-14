@@ -4,6 +4,7 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #include "../../runtime/platform/sdl_controller_diagnostics.h"  // [XCDE] LINUX-077
+#include "../../runtime/settings.h" // [XCDE] LINUX-089: shared aspect indices/default.
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -86,6 +87,7 @@ static int key_from_ini(const char *v) {
 
 struct Cfg {
     bool fullscreen = false;
+    int aspect = ASPECT_ORIGINAL; // [XCDE] LINUX-089: non-original framing is opt-in.
     int win = 0;            // index into k_wins
     int res = 0;            // index into k_res
     int upscaler = 1;       // 0 bilinear, 1 FSR 1, 2 FSR 3.1, 3 DLSS
@@ -138,7 +140,12 @@ static int icons_effective(int sel) {
 }
 static const char *const k_ups_ini[] = {"bilinear", "fsr", "fsr3", "dlss"};
 static const char *const k_uq_ini[] = {"native", "quality", "balanced", "performance", "ultra"};
-static const char *const k_wins[] = {"1280x720", "1600x900", "1920x1080", "2560x1440", "3840x2160"};
+// [XCDE] LINUX-089: stable native/original keys; fixed ratios are independent of window size.
+static const char *const k_aspect_ini[N_ASPECTS] = {"native", "original", "16:10", "21:9", "32:9"};
+// [XCDE] LINUX-089: retain the old preset indices, then add native handheld/ultrawide sizes.
+static const char *const k_wins[] = {"1280x720", "1600x900", "1920x1080", "2560x1440", "3840x2160",
+    "1280x800", "1920x1200", "2560x1600", "2560x1080", "3440x1440", "5120x1440", "7680x2160"};
+static constexpr int N_WINS = sizeof k_wins / sizeof *k_wins;
 static const char *const k_res_ini[] = {"match", "1", "2", "3", "75%", "50%", "dynamic"};
 static const char *const k_res_ui[] = {"Igual que la ventana (recomendado)", "1x - 720p (como Switch)", "2x - 1440p",
                                        "3x - 2160p (4K)", "75% de la ventana", "50% de la ventana", "Dinámica (según rendimiento)"};
@@ -243,6 +250,16 @@ static const char *const k_en[][2] = {
     {"Dinámica (según rendimiento)", "Dynamic (by performance)"},
     {"Inglés (por defecto)", "English (default)"}, {"Inglés", "English"}, {"Español", "Spanish"}, {"Francés", "French"},
     {"Alemán", "German"}, {"Italiano", "Italian"}, {"Japonés", "Japanese"},
+    {"Relación de aspecto", "Aspect ratio"},
+    {"Original (16:9)", "Original (16:9)"},
+    {"Igual que la pantalla (experimental)", "Match the display (experimental)"},
+    {"16:10 (experimental)", "16:10 (experimental)"},
+    {"21:9 (experimental)", "21:9 (experimental)"},
+    {"32:9 (experimental)", "32:9 (experimental)"},
+    {"Vista 3D adaptada; menús y HUD conservan sus proporciones en una zona central de 16:9.",
+     "Adapt the 3D view; menus and HUD keep their proportions in a centered 16:9 area."},
+    {"Las proporciones fijas añaden bandas cuando no coinciden con la ventana o pantalla.",
+     "Fixed ratios add bars when they differ from the window or display."},
     {"Pantalla", "Display"}, {"Pantalla completa", "Fullscreen"}, {"Tamaño de la ventana", "Window size"},
     {"Resolución y escalado", "Resolution and scaling"}, {"Resolución interna", "Internal resolution"},
     {"El juego original renderiza a 720p. Más resolución = imagen más nítida y más carga para la GPU.",
@@ -461,6 +478,7 @@ static int find(const char *const *list, int n, const char *v) {
 }
 
 static void load() {
+    g.aspect = ASPECT_ORIGINAL; // [XCDE] LINUX-089: missing/invalid preference preserves vanilla framing.
     g.menu_navigation_speed = 0;
     g.quickstep_slot = false; // [XCDE] LINUX-039: missing/invalid key resets OFF
     cheats_reset(); // [XCDE] LINUX-072: old/missing configurations always opt out.
@@ -484,8 +502,9 @@ static void load() {
         while (*v == ' ' || *v == '\t') v++;
         for (char *e = v + strlen(v); e > v && (e[-1] == ' ' || e[-1] == '\t' || e[-1] == '\r' || e[-1] == '\n'); ) *--e = 0;
         int i;
-        if (!strcmp(k, "fullscreen")) g.fullscreen = atoi(v) != 0;
-        else if (!strcmp(k, "window") && (i = find(k_wins, 5, v)) >= 0) g.win = i;
+        if (!strcmp(k, "aspect_ratio")) g.aspect = (i = find(k_aspect_ini, N_ASPECTS, v)) >= 0 ? i : ASPECT_ORIGINAL;
+        else if (!strcmp(k, "fullscreen")) g.fullscreen = atoi(v) != 0;
+        else if (!strcmp(k, "window") && (i = find(k_wins, N_WINS, v)) >= 0) g.win = i;
         else if (!strcmp(k, "resolution") && (i = find(k_res_ini, 7, v)) >= 0) g.res = i;
         else if (!strcmp(k, "upscaler")) g.upscaler = !strcmp(v, "fsr") ? 1 : !strcmp(v, "fsr3") ? 2 : !strcmp(v, "dlss") ? 3 : 0;
         else if (!strcmp(k, "upscale_quality") && (i = find(k_uq_ini, 5, v)) >= 0) {
@@ -527,12 +546,12 @@ static void load() {
         else if (!strcmp(k, "mouse_invert")) g.mouse_invert = atoi(v) != 0;
         else if (!strcmp(k, "button_icons") && (i = find(k_icon_ini, 5, v)) >= 0) g.icons = i;
 #ifdef __linux__
-        if ((!strcmp(k, "window") && find(k_wins, 5, v) >= 0) ||
+        if ((!strcmp(k, "window") && find(k_wins, N_WINS, v) >= 0) ||
             (!strcmp(k, "resolution") && find(k_res_ini, 7, v) >= 0) ||
             (!strcmp(k, "fps") && find(k_fps_ini, 6, v) >= 0) ||
             (!strcmp(k, "language") && find(k_lang_ini, 7, v) >= 0)) g_custom.erase(k);
         if (!strcmp(k, "volume")) g.volume = std::clamp(g.volume, 0, 200);
-        if (!strcmp(k, "window") && find(k_wins, 5, v) < 0) {
+        if (!strcmp(k, "window") && find(k_wins, N_WINS, v) < 0) {
             int w = 0, h = 0; char extra;
             if (sscanf(v, "%dx%d%c", &w, &h, &extra) == 2 && w >= 320 && h >= 180 && w <= 7680 && h <= 4320) g_custom[k] = v;
         }
@@ -547,7 +566,7 @@ static void load() {
             const char *extra[] = {"zh-CN", "ko", "nl", "pt", "ru"};
             if (find(extra, 5, v) >= 0) g_custom[k] = v;
         }
-        const char *known[] = {"fullscreen","window","resolution","upscaler","upscale_quality","frame_gen","antialias","depth_of_field",
+        const char *known[] = {"aspect_ratio","fullscreen","window","resolution","upscaler","upscale_quality","frame_gen","antialias","depth_of_field",
             "game_blur","vsync","cutscenes","party_switch","show_fps","fps","menu_navigation_speed","quickstep_slot","volume","movie_audio","language","bind_layout",
             "mouse_look","mouse_sens","stick_deadzone","launcher_lang","mouse_invert","button_icons"};
         if (is_cheat_key(k)) g_extra.erase(k); // [XCDE] LINUX-072: never serialize stale duplicate cheat keys.
@@ -580,6 +599,7 @@ static bool save() {
     fprintf(f, "party_switch = %d\n", g.party_switch);
     fprintf(f, "volume = %d\nmovie_audio = %d\nlanguage = %s\nfps = %s\n", g.volume, g.movie_audio, cfg_value("language", k_lang_ini[g.lang]), cfg_value("fps", k_fps_ini[g.fps]));
     fprintf(f, "menu_navigation_speed = %s\n", g.menu_navigation_speed == 1 ? "fast" : "normal");
+    fprintf(f, "aspect_ratio = %s\n", k_aspect_ini[g.aspect >= 0 && g.aspect < N_ASPECTS ? g.aspect : ASPECT_ORIGINAL]); // [XCDE] LINUX-089
     fprintf(f, "quickstep_slot = %d\n", g.quickstep_slot); // [XCDE] LINUX-039
     cheats_save(f); // [XCDE] LINUX-072
     for (const Mod &m : g_mods) if (!is_icon_mod(m.name)) fprintf(f, "mod_%s = %d", m.name.c_str(), m.on), fputc(10, f);
@@ -871,11 +891,17 @@ static void tab_graphics() {
     launcher_theme::checkbox(T("Pantalla completa"), &g.fullscreen);
     ImGui::SetNextItemWidth(260 * g_scale);
 #ifdef __linux__
-    if (launcher_theme::combo(T("Tamaño de la ventana"), &g.win, k_wins, 5)) g_custom.erase("window");
+    if (launcher_theme::combo(T("Tamaño de la ventana"), &g.win, k_wins, N_WINS)) g_custom.erase("window");
     custom_note("window");
 #else
-    launcher_theme::combo(T("Tamaño de la ventana"), &g.win, k_wins, 5);
+    launcher_theme::combo(T("Tamaño de la ventana"), &g.win, k_wins, N_WINS);
 #endif
+    // [XCDE] LINUX-089: projection/culling and centered native UI, never image stretching.
+    const char *aspect_ui[N_ASPECTS] = {T("Igual que la pantalla (experimental)"), T("Original (16:9)"),
+        T("16:10 (experimental)"), T("21:9 (experimental)"), T("32:9 (experimental)")};
+    launcher_theme::combo(T("Relación de aspecto"), &g.aspect, aspect_ui, N_ASPECTS);
+    ImGui::TextDisabled("%s", T("Vista 3D adaptada; menús y HUD conservan sus proporciones en una zona central de 16:9."));
+    ImGui::TextDisabled("%s", T("Las proporciones fijas añaden bandas cuando no coinciden con la ventana o pantalla."));
     launcher_theme::section(T("Resolución y escalado"));
     ImGui::SetNextItemWidth(360 * g_scale);
 #ifdef __linux__

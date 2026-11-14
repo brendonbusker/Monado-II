@@ -64,6 +64,7 @@ static void scaling(void) {
     for (int base = 0; base < 2; base++) {
         output_scale_set_base(base ? 1920 : 1280, base ? 1080 : 720);
         for (unsigned i = 0; i < sizeof sizes / sizeof *sizes; i++) for (int reshape = 0; reshape < 2; reshape++) {
+            g_settings.aspect = reshape ? ASPECT_UNLOCKED : ASPECT_ORIGINAL;
             for (unsigned k = 0; k < sizeof modes / sizeof *modes; k++) {
                 g_settings.upscale_quality = UQ_NATIVE; g_settings.res_mode = modes[k];
                 OutScale o; output_scale(sizes[i][0],sizes[i][1],reshape,1,-1,&o);
@@ -103,6 +104,7 @@ static void roundoff_probe(void) {
         const int bw = base ? 1920 : 1280, bh = base ? 1080 : 720;
         output_scale_set_base(bw,bh);
         for (int w = 320; w <= 7680; w++) for (int reshape = 0; reshape < 2; reshape++) {
+            g_settings.aspect = reshape ? ASPECT_UNLOCKED : ASPECT_ORIGINAL;
             const int h = (int)ceil(w * 9.0 / 16) + 10;
             output_scale(w,h,reshape,1,-1,&o);
             assert(lroundf(bw * (float)o.sx) == lround((float)o.vw));
@@ -111,6 +113,23 @@ static void roundoff_probe(void) {
         }
     }
     printf("DLAA integer render/output extent agreement: %u additional size/aspect/base cases passed\n", checked);
+    // LINUX-090: fixed choices on another display ratio must quantize the
+    // fitted content canvas, not silently return to full-window dimensions.
+    unsigned fixed_checked = 0;
+    for (int base=0;base<2;++base) {
+        const int bw=base?1920:1280,bh=base?1080:720;output_scale_set_base(bw,bh);
+        for(int aspect=ASPECT_16_10;aspect<=ASPECT_32_9;++aspect) {
+            g_settings.aspect=aspect;
+            for(int w=320;w<=7680;++w) {
+                const int h=(int)ceil(w*9.0/16)+10;output_scale(w,h,true,1,-1,&o);
+                assert(lroundf(bw*(float)o.sx)==lround((float)o.vw));
+                assert(lroundf(bh*(float)o.sy)==lround((float)o.vh));
+                assert(o.vx>=-1e-8 && o.vy>=-1e-8 && o.vw<=w+1e-8 && o.vh<=h+1e-8);
+                fixed_checked++;
+            }
+        }
+    }
+    printf("DLAA explicit fitted aspect extent agreement: %u additional size/aspect/base cases passed\n",fixed_checked);
 }
 int main(int argc, char **argv) {
     if (argc > 2) return original_settings_test_main(argc, argv);

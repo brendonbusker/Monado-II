@@ -14,6 +14,7 @@
 #include "../hle.h"
 #include "../settings.h"
 #include "output_scale.h"
+#include "../host/xcde_aspect.h" // [XCDE] LINUX-089: unsupported window shapes retain 16:9.
 
 #define MAX_TEX 16384.0
 
@@ -72,9 +73,14 @@ void output_scale(double dw, double dh, bool reshape_allowed, double now, double
     static double forced = -1, wide_test = -1;
     if (forced < 0) forced = getenv("LARECOMP_SCALE") ? atof(getenv("LARECOMP_SCALE")) : 0;
     if (wide_test < 0) wide_test = getenv("LARECOMP_WIDE_TEST") ? atof(getenv("LARECOMP_WIDE_TEST")) : 0;
-    double shape = wide_test > 0 ? wide_test : (dw / dh) / (16.0 / 9.0);
-    bool reshape = reshape_allowed && fabs(shape - 1.0) > 0.005;
+    double shape = wide_test > 0 ? wide_test : xcde_aspect_target_factor((dw / dh) / (16.0 / 9.0));
+    bool reshape = reshape_allowed && xcde_aspect_supported_factor((float)shape) && fabs(shape - 1.0) > 0.005;
     if (!reshape) shape = 1.0;
+    // [XCDE] LINUX-090: a selected ratio is a content canvas, independent of
+    // the screen/window. Render and present the same fitted canvas with bars.
+    // Retain the exact original and Match display arithmetic for existing users.
+    bool fixed_canvas = reshape && g_settings.aspect != ASPECT_UNLOCKED;
+    double canvas_fit = fixed_canvas ? fmin(dw / (g_base_w * shape), dh / g_base_h) : fit;
     // render height in units of the Switch's 1080 lines
     double h;
     int mode = g_settings.res_mode;
@@ -83,7 +89,7 @@ void output_scale(double dw, double dh, bool reshape_allowed, double now, double
     if (forced > 0) h = forced;
     else if (mode >= 1 && mode <= 8) h = mode;
     else {
-        h = reshape ? dh / g_base_h : fit;  // Match display
+        h = fixed_canvas ? canvas_fit : reshape ? dh / g_base_h : fit;
         if (mode == RES_DYNAMIC) { dyn_update(now, gpu_ms); h *= g_dyn; }
         else if (mode == RES_Q75) h *= 0.75;
         else if (mode == RES_Q25) h *= 0.25;
@@ -101,7 +107,8 @@ void output_scale(double dw, double dh, bool reshape_allowed, double now, double
     if (cap < 1.0) { sx *= cap; sy *= cap; }
     o->sx = sx; o->sy = sy; o->shape = shape;
     // where the image goes in the window: fills it when reshaped, else a fitted 16:9 box
-    if (reshape) { o->vw = dw; o->vh = dh; }
+    if (fixed_canvas) { o->vw = g_base_w * shape * canvas_fit; o->vh = g_base_h * canvas_fit; }
+    else if (reshape) { o->vw = dw; o->vh = dh; }
     else { o->vw = g_base_w * fit; o->vh = g_base_h * fit; }
     if (wide_test > 0) {
         double f2 = fmin(dw / (g_base_w * wide_test), dh / g_base_h);

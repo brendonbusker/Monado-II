@@ -65,6 +65,9 @@
 
 // SDL
 #include <SDL3/SDL.h>
+// [XCDE] LINUX-089: bounded event-thread recovery for Steam/QAM virtual pads.
+#include "../../../runtime/platform/sdl_controller_recovery.h"
+#include "../../../runtime/platform/sdl_controller_diagnostics.h"
 #if defined(__APPLE__)
 #include <TargetConditionals.h>
 #endif
@@ -113,6 +116,9 @@ struct ImGui_ImplSDL3_Data
     ImVector<SDL_Gamepad*>      Gamepads;
     ImGui_ImplSDL3_GamepadMode  GamepadMode;
     bool                        WantUpdateGamepadsList;
+    RtControllerRecovery        GamepadRecovery;          // [XCDE] LINUX-089
+    unsigned                    GamepadOpenFailures;
+    bool                        GamepadInputsActive;
 
     ImGui_ImplSDL3_Data()   { memset((void*)this, 0, sizeof(*this)); }
 };
@@ -430,6 +436,10 @@ bool ImGui_ImplSDL3_ProcessEvent(const SDL_Event* event)
             if (ImGui_ImplSDL3_GetViewportForWindowID(event->window.windowID) == nullptr)
                 return false;
             io.AddFocusEvent(event->type == SDL_EVENT_WINDOW_FOCUS_GAINED);
+            // [XCDE] LINUX-089: another loop/overlay may have consumed device
+            // events. A healthy selected handle remains owned and open.
+            if (event->type == SDL_EVENT_WINDOW_FOCUS_GAINED)
+                rt_controller_recovery_request(&bd->GamepadRecovery);
             return true;
         }
         case SDL_EVENT_GAMEPAD_ADDED:
@@ -707,31 +717,63 @@ static void ImGui_ImplSDL3_UpdateGamepads()
     ImGuiIO& io = ImGui::GetIO();
     ImGui_ImplSDL3_Data* bd = ImGui_ImplSDL3_GetBackendData();
 
-    // Update list of gamepads to use
-    if (bd->WantUpdateGamepadsList && bd->GamepadMode != ImGui_ImplSDL3_GamepadMode_Manual)
+    // [XCDE] LINUX-089: recover missed add/remove events and transient open
+    // failures. Keep healthy automatic handles, especially AutoFirst: another
+    // controller arriving or an enumeration-order change must not steal input.
+    // Manual mode retains its caller's complete handle ownership.
+    if (bd->GamepadMode != ImGui_ImplSDL3_GamepadMode_Manual &&
+        (bd->WantUpdateGamepadsList || rt_controller_recovery_due(&bd->GamepadRecovery, SDL_GetTicks())))
     {
-        ImGui_ImplSDL3_CloseGamepads();
-        int sdl_gamepads_count = 0;
-        SDL_JoystickID* sdl_gamepads = SDL_GetGamepads(&sdl_gamepads_count);
-        for (int n = 0; n < sdl_gamepads_count; n++)
-            if (SDL_Gamepad* gamepad = SDL_OpenGamepad(sdl_gamepads[n]))
+        rt_controller_recovery_scanned(&bd->GamepadRecovery, SDL_GetTicks());
+        bd->WantUpdateGamepadsList = false;
+        for (int n = 0; n < bd->Gamepads.Size; )
+        {
+            if (SDL_GamepadConnected(bd->Gamepads[n])) { ++n; continue; }
+            SDL_CloseGamepad(bd->Gamepads[n]);
+            bd->Gamepads.erase(bd->Gamepads.Data + n);
+        }
+        if (bd->Gamepads.Size == 0 || bd->GamepadMode == ImGui_ImplSDL3_GamepadMode_AutoAll)
+        {
+            int sdl_gamepads_count = 0;
+            SDL_JoystickID* sdl_gamepads = SDL_GetGamepads(&sdl_gamepads_count);
+            for (int n = 0; sdl_gamepads && n < sdl_gamepads_count; n++)
             {
+                bool already_open = false;
+                for (SDL_Gamepad* gamepad : bd->Gamepads)
+                    if (SDL_GetGamepadID(gamepad) == sdl_gamepads[n]) { already_open = true; break; }
+                if (already_open) continue;
+                SDL_Gamepad* gamepad = SDL_OpenGamepad(sdl_gamepads[n]);
+                if (!gamepad)
+                {
+                    if (bd->GamepadOpenFailures < 16)
+                    {
+                        ++bd->GamepadOpenFailures;
+                        char error[193];
+                        SDL_LogWarn(SDL_LOG_CATEGORY_INPUT, "[input:imgui] cannot open gamepad id=%u: %s",
+                            (unsigned)sdl_gamepads[n], rt_input_log_error(SDL_GetError(), error));
+                    }
+                    continue;
+                }
                 bd->Gamepads.push_back(gamepad);
                 if (bd->GamepadMode == ImGui_ImplSDL3_GamepadMode_AutoFirst)
                     break;
             }
-        bd->WantUpdateGamepadsList = false;
-        SDL_free(sdl_gamepads);
+            SDL_free(sdl_gamepads);
+        }
     }
 
     // FIXME: Technically feeding gamepad shouldn't depend on this now that they are regular inputs.
     if ((io.ConfigFlags & ImGuiConfigFlags_NavEnableGamepad) == 0)
         return;
     io.BackendFlags &= ~ImGuiBackendFlags_HasGamepad;
-    if (bd->Gamepads.Size == 0)
+    if (bd->Gamepads.Size == 0 && !bd->GamepadInputsActive)
         return;
-    io.BackendFlags |= ImGuiBackendFlags_HasGamepad;
+    bd->GamepadInputsActive = bd->Gamepads.Size > 0;
+    if (bd->GamepadInputsActive)
+        io.BackendFlags |= ImGuiBackendFlags_HasGamepad;
 
+    // [XCDE] LINUX-089: an empty list emits one neutral snapshot after device
+    // loss, releasing cached navigation buttons/axes even without an SDL UP.
     // Update gamepad inputs
     const int thumb_dead_zone = 8000;           // SDL_gamepad.h suggests using this value.
     ImGui_ImplSDL3_UpdateGamepadButton(bd, io, ImGuiKey_GamepadStart,       SDL_GAMEPAD_BUTTON_START);

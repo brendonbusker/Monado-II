@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.1.19 — November 13, 2026
+
+- Recover missed controller connection/removal events and retry failed opens on
+  focus return or bounded idle checks. Preserve healthy controller selection and
+  release cached held input after an overlay/disconnection, in the game and launcher.
+- Keep Steam controller metadata live across atomic file replacements through a
+  validated, session-scoped private read-only snapshot; preserve filesystem and
+  save confinement. Actual Steam Deck/ROG Ally overlay-return testing is pending.
+- Add Match the display and explicit 16:10, 21:9 and 32:9 aspect choices alongside
+  Original 16:9, plus handheld/ultrawide window presets. Fixed ratios fit inside
+  any screen/window with centered bars instead of stretching; choices are not
+  hidden based on the monitor. Checked camera, culling and HUD-marker adapters support 16:10,
+  21:9 and 32:9; menus/HUD retain a centered, proportional 16:9 canvas. Original
+  16:9 remains the default. Gameplay, cutscene/effect and resize validation is
+  pending; see [aspect-ratio notes](docs/ASPECT_RATIOS.md). No save conversion.
+- Publish all five aspect choices on every monitor, independent of the window-size
+  presets. Use the selected ratio for the first camera and subsequent render
+  targets; retain native DLAA/SR content-extent agreement and centered bars.
+- Updating requires a full local game rebuild and preserves the original saves,
+  settings and shared input. Quick Step, cheats and frame generation remain off
+  by default; frame generation remains experimental. Windows stays the unchanged
+  original implementation with a version-free download name.
+
 ## 0.1.18 — November 13, 2026
 
 - Fix Linux updates that fail during `package-appimage` with

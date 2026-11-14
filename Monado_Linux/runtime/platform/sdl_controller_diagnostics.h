@@ -16,6 +16,18 @@ static inline const char *rt_input_log_name(const char *name, char text[97]) {
     return text;
 }
 
+// [XCDE] LINUX-089: driver/open errors can include a virtual device's text too.
+static inline const char *rt_input_log_error(const char *error, char text[193]) {
+    unsigned n = 0;
+    if (!error) error = "(unknown)";
+    while (*error && n < 192) {
+        unsigned char value = (unsigned char)*error++;
+        text[n++] = value < 32 || value == 127 ? '?' : (char)value;
+    }
+    text[n] = 0;
+    return text;
+}
+
 static inline void rt_input_inventory(FILE *output, const char *component, const char *reason) {
     static unsigned reports;
     if (!output || reports >= 16) return;

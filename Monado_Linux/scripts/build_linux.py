@@ -36,7 +36,7 @@ RUNTIME = '''loader dispatch kernel ipc fnprof platform/linux platform/linux_sta
 services/am services/acc services/time services/hid_set services/kbicons services/misc services/audio services/hwopus
 hle/heaps hle/pl hle/vi hle/nvn_boot hle/fibers hle/fiber_context_linux hle/input hle/party hle/bindings hle/movie
 hle/framepace hle/title_exit hle/desktop_exit_caption hle/system_exit hle/expanded_saves hle/expanded_save_scan
-hle/quickstep_slot hle/quickstep_save hle/quickstep_native hle/quickstep_picker hle/quickstep_stats hle/quickstep_stats_ui hle/quickstep_ui_memory hle/cheats_rewards hle/cheats_combat host/stubs host/settings_ini host/stubs_gfx host/gamelib_static host/main_boot
+hle/quickstep_slot hle/quickstep_save hle/quickstep_native hle/quickstep_picker hle/quickstep_stats hle/quickstep_stats_ui hle/quickstep_ui_memory hle/cheats_rewards hle/cheats_combat host/stubs host/settings_ini host/stubs_gfx host/xcde_aspect host/gamelib_static host/main_boot
 diag/diag diag/sampler diag/watchdog diag/crashdump paths'''.split()
 NVN = '''astc cmdbuf formats maxwell/translate objects output_scale smaa_data tegra texpatch
 vulkan/device vulkan/exec vulkan/host_import vulkan/driver_heap vulkan/radv_dcc_compat vulkan/precompile vulkan/shaders vulkan/textures vulkan/temporal'''.split()

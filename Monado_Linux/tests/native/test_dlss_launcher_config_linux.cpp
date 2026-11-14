@@ -17,8 +17,15 @@ namespace ImGui { static bool ConfigTestCombo(const char *, int *, const char *c
 #undef fork
 
 static int requested_upscaler = -1, requested_quality = -1, seen_upscalers, seen_qualities;
+static int requested_aspect = -1, seen_aspects; // [XCDE] LINUX-089: actual Graphics-tab callback.
 namespace ImGui {
 static bool ConfigTestCombo(const char *, int *selected, const char *const items[], int count, int) {
+    if (strstr(items[0], "Match the display")) {
+        seen_aspects = count;
+        assert(count == 5 && !strcmp(items[1], "Original (16:9)"));
+        assert(strstr(items[2], "16:10") && strstr(items[3], "21:9") && strstr(items[4], "32:9"));
+        if (requested_aspect >= 0) { *selected = requested_aspect; return true; }
+    }
     if (count >= 2 && strstr(items[0], "Biline")) {
         seen_upscalers = count;
         if (requested_upscaler >= 0) { assert(requested_upscaler < count); *selected = requested_upscaler; return true; }
@@ -83,9 +90,46 @@ int main(int argc, char **argv) {
         assert(saved.find("upscaler = dlss\n") != std::string::npos && saved.find("upscale_quality = " + std::string(k_uq_ini[q]) + "\n") != std::string::npos);
         reset_cfg(); load(); linux_graphics_normalize(); assert(g.upscaler == 3 && g.uquality == q && !g.frame_gen && !g.cut_fg);
     }
+    // [XCDE] LINUX-089: old/malformed files never silently enable native aspect.
+    for (const char *value : {"", "original", "bogus", "0", "nativejunk", "NATIVE", "16:9", "16:10junk", " 21:9junk", "32:0"}) {
+        reset_cfg(); g.aspect = 0;
+        put(path("xcde.ini"), std::string("aspect_ratio = ") + value + "\n"); load();
+        assert(g.aspect == 1); assert(save());
+        assert(read(path("xcde.ini")).find("aspect_ratio = original\n") != std::string::npos);
+    }
+    // [XCDE] LINUX-089: every supported aspect's preset survives actual load/save.
+    for (const char *window : {"1280x800", "1920x1200", "2560x1080", "3440x1440", "5120x1440", "7680x2160"}) {
+        reset_cfg(); put(path("xcde.ini"), std::string("window = ") + window + "\naspect_ratio = native\n");
+        load(); assert(!strcmp(k_wins[g.win], window) && g.aspect == 0); assert(save());
+        reset_cfg(); load(); assert(!strcmp(k_wins[g.win], window) && g.aspect == 0);
+    }
+    const char *aspect_values[] = {"native", "original", "16:10", "21:9", "32:9"};
+    for (int expected = 0; expected < 5; ++expected) {
+        const char *value = aspect_values[expected];
+        reset_cfg(); put(path("xcde.ini"), std::string("aspect_ratio = ") + value + "\n"); load();
+        assert(g.aspect == expected);
+        assert(save()); reset_cfg(); load(); assert(g.aspect == expected);
+        std::string data = read(path("xcde.ini")); size_t at = data.find("aspect_ratio = ");
+        assert(at != std::string::npos && data.find("aspect_ratio = ", at + 1) == std::string::npos);
+        assert(data.find("aspect_ratio = " + std::string(value) + "\n") != std::string::npos);
+    }
+    for (const char *value : aspect_values) {
+        reset_cfg(); put(path("xcde.ini"), std::string("aspect_ratio = ") + value + "\naspect_ratio = invalid\n");
+        load(); assert(g.aspect == 1);
+    }
+    reset_cfg(); put(path("xcde.ini"), "aspect_ratio = invalid\naspect_ratio = 32:9\n"); load(); assert(g.aspect == 4);
+    reset_cfg(); g.aspect = 42; assert(save()); assert(read(path("xcde.ini")).find("aspect_ratio = original\n") != std::string::npos);
+    reset_cfg(); g.aspect = 0; assert(!unlink(path("xcde.ini").c_str())); load(); assert(g.aspect == 1);
     ImGui::CreateContext();
     ImGuiIO &io = ImGui::GetIO(); io.IniFilename = nullptr; io.DisplaySize = ImVec2(980,680); io.DeltaTime = 1.f / 60;
     unsigned char *pixels; int w,h; io.Fonts->GetTexDataAsRGBA32(&pixels,&w,&h); assert(pixels && w > 0 && h > 0);
+    reset_cfg(); assert(g.aspect == 1);
+    for (int expected = 0; expected < 5; ++expected) {
+        requested_aspect = expected; seen_aspects = 0; frame();
+        assert(seen_aspects == 5 && g.aspect == expected);
+        assert(save()); reset_cfg(); load(); assert(g.aspect == expected);
+    }
+    requested_aspect = -1;
     // Actual Graphics-tab handlers: entering DLSS defaults to native, while
     // staying on DLSS or choosing another quality does not overwrite it.
     for (int source : {0, 1}) {

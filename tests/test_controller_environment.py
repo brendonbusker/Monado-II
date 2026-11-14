@@ -88,45 +88,50 @@ class ControllerEnvironment(unittest.TestCase):
         self.assertIsNone(context.metadata_file(str(self.root)))
         self.assertIsNone(context.metadata_file('relative/path'))
 
-    def test_metadata_bind_precedes_private_tmp_and_has_canonical_target(self):
+    def test_only_private_metadata_directory_is_readonly_at_both_aliases(self):
         state = self.root / 'private-state'
         source = {context.STEAM_INFO: str(self.metadata)}
         with mock.patch.dict(os.environ, source, clear=True):
             command, namespace = native.dlss_namespace(['/authored/executable'], state)
         metadata = namespace['controller_metadata']
         target = str(state / context.PRIVATE_INFO)
-        self.assertEqual(metadata, {'source': str(self.metadata), 'target': target})
-        bind = command.index(str(self.metadata))
+        directory = str(state/context.PRIVATE_DIRECTORY)
+        self.assertEqual(metadata, {'source': str(self.metadata), 'target': target,
+                                    'directory': directory, 'kind': 'private-mirror-v1'})
+        self.assertNotIn(str(self.metadata), command)
+        bind = command.index(directory)
         private_tmp = next(i for i in range(len(command)-2)
                            if command[i:i+3] == ['--bind', str(state), '/tmp'])
-        self.assertLess(bind, private_tmp)
-        self.assertEqual(command[bind-1:bind+2], ['--ro-bind', str(self.metadata), target])
+        self.assertGreater(bind, private_tmp)
+        self.assertEqual(command[bind-1:bind+2], ['--ro-bind', directory, directory])
+        self.assertIn('/tmp/'+context.PRIVATE_DIRECTORY, command)
         result = native.private_runtime_environment(source, state, planned_namespace=True)
         self.assertEqual(result[context.STEAM_INFO], target)
         self.assertEqual(source[context.STEAM_INFO], str(self.metadata))
-        native.prepare_namespace_state({'state': str(state), 'namespace': namespace})
-        self.assertEqual((state/context.PRIVATE_INFO).read_bytes(), b'')
+        mirror = native.prepare_namespace_state({'state': str(state), 'namespace': namespace},controller_refresh=True)
+        self.addCleanup(mirror.close)
+        self.assertEqual((state/context.PRIVATE_INFO).read_text(), 'authored SDL controller metadata fixture\n')
         self.assertEqual(self.metadata.read_text(), 'authored SDL controller metadata fixture\n')
 
     def test_placeholder_never_overwrites_existing_data(self):
         state = self.root / 'private-state'; (state/'runtime').mkdir(parents=True)
         (state/'runtime').chmod(0o700)
-        target = state/context.PRIVATE_INFO; target.write_text('existing private data'); target.chmod(0o600)
-        namespace = {'controller_metadata': {'source': str(self.metadata), 'target': str(target)}}
-        with self.assertRaisesRegex(ValueError, 'private empty ordinary'):
+        target = state/context.PRIVATE_INFO; target.parent.mkdir(mode=0o700)
+        target.write_text('existing private data'); target.chmod(0o600)
+        namespace = {'controller_metadata': context.namespace_metadata({context.STEAM_INFO: str(self.metadata)},state)}
+        with self.assertRaisesRegex(ValueError, 'unrecognized files'):
             native.prepare_namespace_state({'state': str(state), 'namespace': namespace})
         self.assertEqual(target.read_text(), 'existing private data')
 
     def test_inherited_rebased_metadata_is_retained_without_rebinding(self):
         state = self.root / 'private-state'; (state/'runtime').mkdir(parents=True)
         (state/'runtime').chmod(0o700)
-        target = state/context.PRIVATE_INFO; target.write_text('authored inherited metadata'); target.chmod(0o600)
+        target = state/context.PRIVATE_INFO; target.parent.mkdir(mode=0o700)
+        target.write_text('authored inherited metadata'); target.chmod(0o600)
         environment = {context.STEAM_INFO: str(target)}
-        self.assertEqual(context.namespace_metadata(environment, state),
-                         {'source': str(target), 'target': str(target)},
-                         'matching filename cannot bypass read-only binding on a cold launch')
-        native.prepare_namespace_state({'state': str(state), 'namespace': {
-            'controller_metadata': context.namespace_metadata(environment, state)}})
+        self.assertIsNone(context.namespace_metadata(environment, state),
+                          'matching filename cannot bypass isolation on a cold launch')
+        self.assertNotIn(context.STEAM_INFO, context.private_environment(environment,state,True))
         self.assertEqual(target.read_text(), 'authored inherited metadata')
         with mock.patch.object(native, 'private_tmp_alias', return_value=True):
             self.assertEqual(native.private_runtime_environment(environment, state), environment)
@@ -142,11 +147,12 @@ class ControllerEnvironment(unittest.TestCase):
 class SteamControllerContextNative(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        wrapper = PORT/'.deps/bin/pkg-config-graphics'
-        compiler = os.environ.get('MONADO_TEST_CC') or str(PORT/'.deps/bin/clang-cc')
+        dependency_port = Path(os.environ.get('MONADO_TEST_SDL_PORT', PORT))
+        wrapper = dependency_port/'.deps/bin/pkg-config-graphics'
+        compiler = os.environ.get('MONADO_TEST_CC') or str(dependency_port/'.deps/bin/clang-cc')
         if not wrapper.is_file() or not Path(compiler).is_file():
             raise unittest.SkipTest('Pinned SDL3/Clang dependencies unavailable')
-        marker = PORT/'.deps/graphics/active-sysroot.txt'
+        marker = dependency_port/'.deps/graphics/active-sysroot.txt'
         root = Path(marker.read_text().strip())
         cls.environment = {'PATH': '/usr/bin:/bin', 'LANG': 'C.UTF-8', 'LC_ALL': 'C.UTF-8',
                            'LD_LIBRARY_PATH': str(root/'usr/lib/x86_64-linux-gnu'),
@@ -201,7 +207,7 @@ import errno,importlib.util,os,sys
 source,target,state,runner = map(Path,sys.argv[1:])
 assert not source.exists(), 'host /tmp source unexpectedly visible'
 expected='Monado authored metadata, no game content\\n'
-for path in [target,Path('/tmp')/'runtime/steam-virtual-gamepad-info']:
+for path in [target,Path('/tmp')/'steam-controller-metadata/info']:
  assert path.read_text()==expected, 'metadata alias unreadable: '+str(path)
  try:
   with path.open('wb') as stream: stream.write(b'forbidden')
@@ -224,7 +230,8 @@ print('PASS read-only metadata both aliases and inherited GUI/game namespace reu
                      str(state), str(SCRIPTS/'run_linux.py')], state, pid_namespace=False)
                 environment = native.private_runtime_environment(
                     launcher.clean_environment('/authored/private-libs'), state, planned_namespace=True)
-            native.prepare_namespace_state({'state': str(state), 'namespace': namespace})
+            mirror = native.prepare_namespace_state({'state': str(state), 'namespace': namespace},controller_refresh=True)
+            self.addCleanup(mirror.close)
             result = subprocess.run(command, env=environment, capture_output=True, text=True, timeout=20)
             if result.returncode:
                 denied = ('bwrap: no permissions to create a new namespace',
@@ -235,7 +242,7 @@ print('PASS read-only metadata both aliases and inherited GUI/game namespace reu
             self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
             self.assertIn('PASS read-only metadata both aliases', result.stdout)
             self.assertEqual(metadata.read_text(), 'Monado authored metadata, no game content\n')
-            self.assertEqual(target.read_bytes(), b'', 'private placeholder changed outside namespace')
+            self.assertEqual(target.read_bytes(), metadata.read_bytes(), 'only private snapshot should receive metadata')
 
 
 if __name__ == '__main__':

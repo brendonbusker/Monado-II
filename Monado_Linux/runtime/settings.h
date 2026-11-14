@@ -2,7 +2,9 @@
 #pragma once
 #include <stdbool.h>
 
-enum { ASPECT_UNLOCKED = 0, ASPECT_ORIGINAL = 1 };
+// [XCDE] LINUX-089: preserve the existing native/original indices and add fixed
+// framing choices independent of the monitor or window's dimensions.
+enum { ASPECT_UNLOCKED = 0, ASPECT_ORIGINAL = 1, ASPECT_16_10 = 2, ASPECT_21_9 = 3, ASPECT_32_9 = 4, N_ASPECTS = 5 };
 enum { RES_MATCH = 0, /* 1..8 = 1x..8x */ RES_DYNAMIC = 9, RES_Q75 = 10, RES_Q25 = 11, RES_Q50 = 12 };
 // (11 was 67% of the display: larecomp.ini "67%" now loads as RES_Q75)
 enum { UPSCALE_BILINEAR = 0, UPSCALE_METALFX = 1 /* macOS */, UPSCALE_FSR1 = 2 /* Windows: AMD FSR 1 */,
@@ -27,7 +29,7 @@ extern const char *const g_language_codes[N_LANGUAGES];  // what the game is tol
 extern const char *const g_language_names[N_LANGUAGES];  // for the menu ("Auto", "Japanese", ..., "Spanish")
 
 typedef struct {
-    int aspect;          // ASPECT_*: unlocked = fill the window (wider/taller views), original = 16:9 with bars
+    int aspect;          // ASPECT_*: match display, original 16:9, or fixed ratio fitted with bars as needed
     bool fullscreen;
     int res_mode;        // RES_MATCH, 1..4 (N x the Switch's 1080p), RES_DYNAMIC, RES_Q75/50/25 (share of the display)
     int upscaler;        // UPSCALE_*: how a lower internal resolution reaches the window (MetalFX: macOS, FSR 1: Windows)

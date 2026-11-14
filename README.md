@@ -33,6 +33,8 @@ quality-of-life features, while preserving the original Windows implementation.
 | Exit to desktop | Native title-screen and in-game System menu entries, with confirmation and Cancel/No selected by default. Exiting does not save progress. |
 | Built-in updates | Stable-release notifications, local rebuilds when required, progress, cancellation and automatic cleanup of superseded builds. |
 | Optional cheats | A separate Cheats tab with off-by-default damage/reward multipliers (0x–20x in 0.01x steps) and no fall damage. [Controls and limits](docs/CHEATS.md). |
+| Handheld controller recovery | Recheck detection after focus/device changes and keep Steam controller metadata current. Steam Deck/ROG Ally hardware testing is still needed. [Compatibility notes](docs/HANDHELD_CONTROLLERS.md). |
+| Aspect-ratio choices | Original 16:9, Match the display and experimental 16:10 / 21:9 / 32:9, with proportional menus/HUD. [Controls and limits](docs/ASPECT_RATIOS.md). |
 | Clearer Linux setup | Early dependency checks, distro-specific package instructions and optional guided Fedora 45 Distrobox repair. |
 
 The Linux-specific launcher, timing, menu, save, Quick Step and cheat improvements have
@@ -71,8 +73,8 @@ one graphical builder AppImage. **The game is still built locally from your own 
 
 | Platform | Recommended download | Full instructions |
 |---|---|---|
-| Linux x86-64 | [Graphical builder AppImage](https://github.com/brendonbusker/Monado-II/releases/download/v0.1.18/monado-ii-0.1.18-linux-builder-x86_64.AppImage) | [Linux setup and build guide](docs/BUILD_LINUX.md) |
-| Windows x86-64 | [Original Windows implementation `.zip`](https://github.com/brendonbusker/Monado-II/releases/download/v0.1.18/monado-ii-windows-original-implementation-setup.zip) | [Windows build guide](docs/BUILD_WINDOWS.md) |
+| Linux x86-64 | [Graphical builder AppImage](https://github.com/brendonbusker/Monado-II/releases/download/v0.1.19/monado-ii-0.1.19-linux-builder-x86_64.AppImage) | [Linux setup and build guide](docs/BUILD_LINUX.md) |
+| Windows x86-64 | [Original Windows implementation `.zip`](https://github.com/brendonbusker/Monado-II/releases/download/v0.1.19/monado-ii-windows-original-implementation-setup.zip) | [Windows build guide](docs/BUILD_WINDOWS.md) |
 
 > **Windows is the original implementation.** Linux release numbers and the
 > Linux features shown above do not describe the Windows download. Its version-free
@@ -95,7 +97,7 @@ game. Keep the installed build folder and its input available. If you already
 have Monado II installed, **Use an existing installation** adopts it in place,
 including its settings, saves and current update. See the [graphical setup guide](docs/GRAPHICAL_BUILDER.md).
 
-The [Linux source/setup kit](https://github.com/brendonbusker/Monado-II/releases/download/v0.1.18/monado-ii-0.1.18-linux-setup.tar.gz)
+The [Linux source/setup kit](https://github.com/brendonbusker/Monado-II/releases/download/v0.1.19/monado-ii-0.1.19-linux-setup.tar.gz)
 remains available for terminal builds and existing updaters. After extracting it
 and arranging its `game_files/exefs` and `game_files/romfs` input, the established
 commands are still:
@@ -161,11 +163,11 @@ launcher. It never presses Play.
   rebuild the game locally.
 - Saves, settings and shared game input stay in the original installation.
   Failed or cancelled preparation keeps the previous version selected.
-- **Updating to 0.1.18 requires a full local game rebuild** under the updater’s
-  conservative compatibility checks. This hotfix corrects update packaging without
-  changing gameplay code or the native save format. The updater handles this without converting, replacing or
-  deleting your saves. Missing prerequisites leave the working version selected
-  and show instructions for retrying.
+- **Updating to 0.1.19 requires a full local game rebuild** for the controller
+  and game-camera changes. The updater handles this while keeping your existing
+  saves, settings and game input in place; no save conversion is needed.
+  Missing prerequisites leave the working version selected and show instructions
+  for retrying.
 - Keep the **complete save folder, including hidden files**, when backing up or
   moving saves. Quick Step metadata accompanies the unchanged native `.sav` files.
 - From **0.1.6**, the original folder’s `update-version.json` reflects the active
@@ -195,9 +197,10 @@ Source-kit downloads use the **`-setup` kit**. A legacy Linux **`-source`** arch
 in releases solely for installed-updater compatibility. Both contain source, not
 precompiled playable games. No compiled game binary, private vendor SDK binary,
 game-derived cache or user data is distributed. The graphical AppImage contains
-only setup software and its reviewed startup dependencies. **0.1.18 is a regular
-hotfix release**; the optional Quick Step feature is stable, while frame generation
-remains experimental. Windows has no updater in this release.
+only setup software and its reviewed startup dependencies. **0.1.19 is a regular
+Linux release**; the optional Quick Step feature is stable, while frame generation
+and the new aspect modes remain experimental. Original 16:9 is still the default.
+Windows has no updater in this release.
 
 Version **0.1.14** targets severe AMD/RADV submission overhead with a
 capability-gated memory path and safe fallback. **AMD gameplay performance still
@@ -205,13 +208,21 @@ needs testing**, including on the reported RX 6700 XT. NVIDIA gameplay received
 positive maintainer feedback. See [AMD / RADV compatibility notes](docs/AMD_RADV.md)
 for the distinction between memory tests and game-performance coverage.
 
-Linux **0.1.16** preserves Steam/SDL controller context and improves HIDAPI access
-and device selection. This likely addresses the reported **Steam Deck** detection
-issue; **ROG Ally X remains unconfirmed** and neither handheld has been tested on
-this release. Desktop/NVIDIA gameplay received positive manual feedback. See
-[handheld controller notes](docs/HANDHELD_CONTROLLERS.md) for restart limitations
-and reporting guidance. The RADV-only `nodcc` workaround targets colorful
+Linux **0.1.19** builds on 0.1.16’s Steam/SDL controller support with recovery
+checks after focus/device changes and live Steam controller metadata. It targets
+loss of controls after opening Steam/QAM, but **actual Steam Deck and ROG Ally X
+validation is still needed**. The maintainer does not have either handheld to
+verify it. See [handheld controller notes](docs/HANDHELD_CONTROLLERS.md) for limits
+and reporting guidance. The retained RADV-only `nodcc` workaround targets colorful
 RX 7600 artifacts; thanks to **patrickksmdev** for isolating and testing it.
+
+In Graphics, **Aspect ratio** now offers **Original (16:9)**, **Match the display**,
+**16:10**, **21:9** and **32:9** on every monitor. Original remains the default.
+Fixed choices fit inside the screen/window with bars when the proportions differ;
+Match the display follows the drawable. Menus and HUD keep their proportions.
+These new modes are **experimental**: actual handheld/ultrawide gameplay,
+cutscenes, effects and live resizing still need testing. See the
+[aspect-ratio guide](docs/ASPECT_RATIOS.md).
 
 ## Platform status and limitations
 

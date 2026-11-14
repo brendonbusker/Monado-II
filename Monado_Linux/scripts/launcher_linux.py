@@ -407,7 +407,7 @@ def acquire_lock(state):
         os.close(state_fd)
 
 
-def wait_session(argv, environment, lock_fd, log_fd, updates=None, runtime_fd=None):
+def wait_session(argv, environment, lock_fd, log_fd, updates=None, runtime_fd=None, metadata_mirror=None):
     """Keep the lock until the GUI and adopted descendants exit naturally.
 
     The GUI retains an inherited lock as protection if this wrapper dies. The
@@ -438,6 +438,11 @@ def wait_session(argv, environment, lock_fd, log_fd, updates=None, runtime_fd=No
         if updates is not None:
             command += ['--update-fd', str(updates.child_fd())]
             descriptors += (updates.child_fd(),)
+        # [XCDE] LINUX-089: refresh only the fixed private metadata export on
+        # the host. Keep it alive through worker joins and adopted-game reaping;
+        # existing update cancellation, signals, leases and waits stay unchanged.
+        if metadata_mirror is not None:
+            metadata_mirror.start(log_fd=log_fd)
         child = subprocess.Popen(command, cwd=ROOT, env=environment,
                                  stdin=subprocess.DEVNULL, stdout=log_fd, stderr=log_fd,
                                  start_new_session=True, pass_fds=descriptors)
@@ -473,6 +478,8 @@ def wait_session(argv, environment, lock_fd, log_fd, updates=None, runtime_fd=No
             if updates is not None and not updates_finished:
                 updates.finish(1)
         finally:
+            if metadata_mirror is not None:
+                metadata_mirror.stop()
             for number, handler in handlers.items():
                 signal.signal(number, handler)
             if libc.prctl(36, previous.value, 0, 0, 0):
@@ -502,6 +509,7 @@ def main(argv=None):
     lock_fd = log_fd = runtime_fd = None
     updates = None
     restart = None
+    metadata_mirror = None
     result = 1
     try:
         if not recover_input(args):
@@ -549,7 +557,7 @@ def main(argv=None):
         with os.fdopen(os.dup(log_fd), 'a', encoding='utf-8') as log:
             log.write('[launcher-selection] ' + json.dumps(selection, sort_keys=True) + '\n')
         if 'namespace' in launch:
-            run_linux.prepare_namespace_state(launch)
+            metadata_mirror = run_linux.prepare_namespace_state(launch, controller_refresh=True)
         if not args.no_updates and not args.shot and not args.ui_script and (ROOT.parent / 'update-version.json').exists():
             # Load only the local authored updater, on the host side of bwrap.
             import importlib.util
@@ -567,7 +575,8 @@ def main(argv=None):
                 os.write(log_fd, ('[updates] unavailable: ' + str(error) + '\n').encode('utf-8', errors='replace'))
         params = (launch.get('execution_argv', launch['argv']),
                   launch.get('runtime_environment', clean_environment(launch['library_path'])), lock_fd, log_fd)
-        result = wait_session(*params, updates=updates, runtime_fd=runtime_fd)
+        result = wait_session(*params, updates=updates, runtime_fd=runtime_fd,
+                              metadata_mirror=metadata_mirror)
         # Every owned child is reaped. Drop SH before the updater requests EX;
         # separate descriptors avoid flock conversion/upgrade deadlocks.
         install_lease.release(runtime_fd)
@@ -579,6 +588,8 @@ def main(argv=None):
     except (ValueError, OSError, RuntimeError, subprocess.SubprocessError) as error:
         parser.exit(1, str(error) + '\n')
     finally:
+        if metadata_mirror is not None:
+            metadata_mirror.close()
         if updates is not None and restart is None:
             updates._close_staging()
         if log_fd is not None:

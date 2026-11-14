@@ -701,3 +701,33 @@ fixtures exercise these paths without game data. No third-party controller
 implementation, game-derived mapping, renderer policy or native save format is
 changed. Actual Steam Deck/ROG Ally X testing remains pending; see repository-root
 docs/HANDHELD_CONTROLLERS.md.
+
+
+## LINUX-089 — controller lifecycle and XCDE native aspect adapters
+
+Authored input.c recovery and the Linux copy of upstream MIT ImGui's
+imgui_impl_sdl3.cpp gain bounded missed-event/disconnected-handle recovery,
+healthy automatic-selection preservation and neutral input release. SDL handle
+ownership remains on its event thread. No Windows-reference files changed.
+
+Controller metadata now uses a validated, marker-owned private snapshot directory
+with atomic live refresh through the outer Python supervisor; safe external paths
+remain direct. The directory is read-only at both namespace aliases. The Landlock
+write policy, updater cancellation, save/profile confinement and session leases
+are unchanged. Existing startup hidraw-inode restrictions remain; this does not
+claim universal physical hotplug/suspend support. Synthetic recovery/namespace
+checks do not establish actual Steam Deck/ROG Ally compatibility.
+
+New authored xcde_aspect.c plus build-ID/instruction/context-checked scalar
+adapters update XCDE logical cameras/culling, renderer projection and HUD markers.
+The existing output-scale/presented-UI fitting foundation is retained; native
+aspect is opt-in and original mode is identity. UI canvas math is component-tested.
+No upstream widescreen implementation or third-party mod was copied; no game code
+or generated data is included. Real gameplay/effect/resize coverage is manual.
+
+LINUX-090 extends the authored settings, launcher and output policy with explicit
+16:10/21:9/32:9 selections independent of the drawable. Chosen cameras and render
+targets use the same shape from startup; existing Vulkan upscaler/present and FG
+rectangles fit the chosen content inside the screen with bars. Original/native
+configuration values and defaults remain compatible. No upstream camera or
+presentation code was imported for these choices; real gameplay remains manual.

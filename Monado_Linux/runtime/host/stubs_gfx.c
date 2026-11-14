@@ -1,10 +1,11 @@
-// Stubs for the Link's Awakening-only hooks the LAS renderer calls (widescreen patching, mirror mode, pot tinting,
+// Compatibility hooks the LAS renderer calls (mirror mode, pot tinting,
 // pet cursor, save editor, input glue) and for SMAA data. XCDE has none of these game features.  [XCDE]
-// They are removed from the renderer as M4/M10 generalize it; until then every one is a neutral no-op.
+// [XCDE] LINUX-089: native XCDE camera/aspect support lives in xcde_aspect.c; other legacy hooks remain neutral.
 #include <stdbool.h>
 #include <stdint.h>
 
 #include "../settings.h"
+#include "xcde_aspect.h" // [XCDE] LINUX-089
 
 
 int rt_reboot_requested(void) { return 0; }
@@ -13,7 +14,7 @@ void warp_frame(uint64_t frame) { (void)frame; }
 void save_editor_frame(uint64_t frame) { (void)frame; }
 const char *game_level_name(void) { return ""; }
 
-bool widescreen_allowed(void) { return false; }
+bool widescreen_allowed(void) { return xcde_aspect_enabled(); } // [XCDE] LINUX-089/090
 void widescreen_backdrop_seen(uint64_t hash) { (void)hash; }
 float widescreen_effect_stretch(uint64_t fs_hash) { (void)fs_hash; return 1.0f; }
 void widescreen_frame_end(uint64_t frame) { (void)frame; }
@@ -23,7 +24,7 @@ void widescreen_present_crop(uint64_t a, double b, float *c, double *d, double *
     c[0] = 0.0f, c[1] = 0.0f, c[2] = 1.0f, c[3] = 1.0f;
 }
 void widescreen_scene_ubo(const float *u, uint64_t size) { (void)u; (void)size; }
-void widescreen_set_factor(float f) { (void)f; }
+void widescreen_set_factor(float f) { xcde_aspect_set_factor(f); } // [XCDE] LINUX-089
 
 bool mirror_draw(bool composite) { (void)composite; return false; }
 bool pets_hide_item_cursor(void) { return false; }

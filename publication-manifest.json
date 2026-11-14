@@ -14,7 +14,7 @@
     },
     ".github/workflows/source-release.yml": {
       "bytes": 3263,
-      "sha256": "401335012a978369e0aeff907ca648ac65200d2e3c7a4eed433b8a213412e562"
+      "sha256": "7e7957a235faa15660844451a7d27ea15e38dc26ef840781208dd34ea9849636"
     },
     ".gitignore": {
       "bytes": 968,
@@ -29,8 +29,8 @@
       "sha256": "fc908ddd148e06cb024ce9ea9f98307c32af7147bcba2504b8b6a726526197cc"
     },
     "CHANGELOG.md": {
-      "bytes": 34494,
-      "sha256": "6600b0ed8a0d9601c39c1a8971b35543fe18be868fe40fa809c72a7ddb2225cf"
+      "bytes": 36132,
+      "sha256": "3ec7adb1555e988696ebb709f059d792eda0be6ea013ee1c24f050311591dc84"
     },
     "CONTRIBUTING.md": {
       "bytes": 1798,
@@ -77,8 +77,8 @@
       "sha256": "f15076a14b594f71dad68413b094b74242f0f190c044bdbe03ccc56c39fb21ea"
     },
     "Monado_Linux/docs/UPSTREAM.md": {
-      "bytes": 49139,
-      "sha256": "64edb8a1bf454841317d83759ddcd642de5aebdf21d56e8a63895c8e981c9459"
+      "sha256": "769aec1bcd9e3f452d8dcbef8cee8a893b8225882f7603d3712cc856b5e6bb08",
+      "bytes": 51026
     },
     "Monado_Linux/docs/adr/0001-base-lasrecomp.md": {
       "bytes": 910,
@@ -157,8 +157,8 @@
       "sha256": "5b5946195152a2e24d9e1feeed5160899add47f16802eda6dbf24614d25ccd6b"
     },
     "Monado_Linux/games/xcde/patches.py": {
-      "bytes": 44521,
-      "sha256": "faee7ff66b22cedf4d2378e8facbe794cddd48e23e67b74cc2227d3cf5315910"
+      "bytes": 49084,
+      "sha256": "6ce04ce85ea2574266ad6c2139aec813eb756a339c01afffa9189b4e3f1f31a1"
     },
     "Monado_Linux/games/xcde/profile.json": {
       "bytes": 1299,
@@ -297,8 +297,8 @@
       "sha256": "53f1069d8ff4d35f5fb754ecae61c8f9ad0bd384e2f129dc381ed3a0b404c5c9"
     },
     "Monado_Linux/runtime/hle/input.c": {
-      "bytes": 44032,
-      "sha256": "342bd90f5bc569c49543ab7282b25d6cf8aaadb8b2f1fedd95fbd300a337c0fa"
+      "bytes": 45813,
+      "sha256": "e757999662325a6b41f941f975967a964ffd5420d9c83984f086c402595afa74"
     },
     "Monado_Linux/runtime/hle/movie.c": {
       "bytes": 38214,
@@ -429,20 +429,28 @@
       "sha256": "3365a00dfff89c544a645129ff69d22e2772636cc848646380193e33c02cc699"
     },
     "Monado_Linux/runtime/host/settings_boot.c": {
-      "bytes": 767,
-      "sha256": "a3987c159bae2efc079c3fcb0ba7a4df2310bd82478b705c2dd15872171b6b4f"
+      "bytes": 794,
+      "sha256": "39adfa5b92b64779fa898fd76a071be67c54bc021e3889bd3a6f82a45c2040c6"
     },
     "Monado_Linux/runtime/host/settings_ini.c": {
-      "bytes": 13072,
-      "sha256": "843cc0e08e7bb644d894dffd3ba25bf313bb07dd7f8fea338087260f04c2d2a3"
+      "sha256": "4d3c8eae99a3f5571ac670588aebecb815d2584e2d80c3d022d1e081daa12899",
+      "bytes": 13902
     },
     "Monado_Linux/runtime/host/stubs.c": {
       "bytes": 1314,
       "sha256": "e3af1d9cf7a24c7154ff11c5c8d893abe395a557b053512fa392a47c2b0d3006"
     },
     "Monado_Linux/runtime/host/stubs_gfx.c": {
-      "bytes": 2793,
-      "sha256": "0d5fd04ec7730dd96db5829cf60ddd70f52d0c853dc02150f838484a6682680d"
+      "sha256": "d8fa88899373a6cf5296c7e338a5b45e1965ad6a47fc67c5778735be41e38577",
+      "bytes": 2883
+    },
+    "Monado_Linux/runtime/host/xcde_aspect.c": {
+      "sha256": "d8bef336e9f66f9757f7e76f8be69eb14f2a722e6ad8134c9ed3d32ebf921b54",
+      "bytes": 4920
+    },
+    "Monado_Linux/runtime/host/xcde_aspect.h": {
+      "sha256": "1e00e4c4caf5957a96bb46d1f2acde8a1edad69ef011ef403ac1f8b035b0fa37",
+      "bytes": 1254
     },
     "Monado_Linux/runtime/input_bind.h": {
       "bytes": 4378,
@@ -467,6 +475,10 @@
     "Monado_Linux/runtime/loader.c": {
       "bytes": 7376,
       "sha256": "7474ec725f771e5f706fca6804359131d0885a8b0ce429002c0bb923d5e4c9dd"
+    },
+    "Monado_Linux/runtime/nvn/aspect_canvas.h": {
+      "bytes": 956,
+      "sha256": "8a214cf9a119432ed68a1600978311b06eec12994cd78bb518efaa739697ab5c"
     },
     "Monado_Linux/runtime/nvn/astc.c": {
       "bytes": 22360,
@@ -505,12 +517,12 @@
       "sha256": "b225e41f50ecdc68d2367122894fb3d32c57f6818c630c64fb566ddc259c5f7d"
     },
     "Monado_Linux/runtime/nvn/output_scale.c": {
-      "bytes": 6491,
-      "sha256": "f28448504e5af4196384fc008f4de7666556ec5723ec407f02def37c9be8090f"
+      "sha256": "4f579cfc72855a80e5594636d353f6a990035d3addd80678914648475b1fbf94",
+      "bytes": 7171
     },
     "Monado_Linux/runtime/nvn/output_scale.h": {
-      "bytes": 860,
-      "sha256": "5bf0bfc078db7cfc59bb742b44d6ca1669381a6026e3a7e19532944a6ba0d6a2"
+      "sha256": "14bbebb2a3e703bccc5a9845610995b31486e0ea971945f244363c58b7c6365f",
+      "bytes": 856
     },
     "Monado_Linux/runtime/nvn/program_binding.h": {
       "bytes": 990,
@@ -545,8 +557,8 @@
       "sha256": "7747d5ff2f8fe5f311ebdde7cd2c034de77a69ff69303bfccca9909d2f726c70"
     },
     "Monado_Linux/runtime/nvn/vulkan/device.c": {
-      "bytes": 91950,
-      "sha256": "10b4a671fd69678ef7affca1b2d903e1219e52a0fc3d87569e3819ea94b04b01"
+      "sha256": "2431f23106b054947374d94a5d3d58e3530357a955bc140207a3cdfc7c01b3ff",
+      "bytes": 92621
     },
     "Monado_Linux/runtime/nvn/vulkan/dlss.cpp": {
       "bytes": 20741,
@@ -581,8 +593,8 @@
       "sha256": "025402d28fe388b8b8ff471671e8ed3cdcea97255125c9205de0459b30345b7d"
     },
     "Monado_Linux/runtime/nvn/vulkan/exec.c": {
-      "bytes": 433306,
-      "sha256": "e6ea43c4cfe2e78998feb7e49ec1061eaebfbca7f641c4f454028686143953bf"
+      "bytes": 433579,
+      "sha256": "2517c8d7bae992b23e2716a42063d37ce3ed7675c6b42e06bb53702ab007bfe1"
     },
     "Monado_Linux/runtime/nvn/vulkan/framegen_linux.cpp": {
       "bytes": 19318,
@@ -697,8 +709,12 @@
       "sha256": "cb20afd7043ad433ee42d883f2a956c8f038ae2ae314abb659a9bfe8d60bee8e"
     },
     "Monado_Linux/runtime/platform/sdl_controller_diagnostics.h": {
-      "bytes": 2034,
-      "sha256": "9a64fe3fbcf88fc606d9fef43e2f0af0a2515b0f291580386079970e9e6067b6"
+      "bytes": 2452,
+      "sha256": "016c6699e695df10918081367c40fca6b98e82c06fb22f70a9c770261837f587"
+    },
+    "Monado_Linux/runtime/platform/sdl_controller_recovery.h": {
+      "bytes": 1311,
+      "sha256": "1297f5c5c4fd40968517ad929666940e13209bc929242392f05f8960bfb85019"
     },
     "Monado_Linux/runtime/platform/win_compat.h": {
       "bytes": 2632,
@@ -765,8 +781,8 @@
       "sha256": "cda53f9d564132b8f85efc20481e1376e42c884502e0ed61cc83bac0d09b4b96"
     },
     "Monado_Linux/runtime/settings.h": {
-      "bytes": 7122,
-      "sha256": "1159a3c5de185d0cdf7c91d4c6b1cd69129c4c6bfd25ff325b8bccbf1e7cff5a"
+      "sha256": "445a0b5bcb1abebd8064e4f4dd9dda25af9311a102064facd88c967d5da265a3",
+      "bytes": 7337
     },
     "Monado_Linux/runtime/simd.h": {
       "bytes": 41985,
@@ -809,8 +825,8 @@
       "sha256": "5989e814a827628c1acb9fc6dd51e9a91102bb3b3ad421592c1f4475408d5e7d"
     },
     "Monado_Linux/scripts/build_linux.py": {
-      "bytes": 30762,
-      "sha256": "3cac1e3edbd5f06e2a1e417f6cae078530d1b41fb76e914002dce05f0d33573e"
+      "bytes": 30779,
+      "sha256": "ec1370ed62950874e3c943ef6c5c0ed20fa79235d69c433702950262cb9306e9"
     },
     "Monado_Linux/scripts/build_rt_gfx.sh": {
       "bytes": 4258,
@@ -821,16 +837,16 @@
       "sha256": "addf2a53a0e119ad9a2e8cccdbf2dcde2f6af117ee12a4a648b48ebf2bf0b2dd"
     },
     "Monado_Linux/scripts/controller_environment.py": {
-      "bytes": 4461,
-      "sha256": "e9b567b7aa01063b193e86c7d736343768fc65bdd9d4a512946b663456af54a1"
+      "bytes": 14957,
+      "sha256": "3276cfc5f540ca33229c4a8c2017cb90e3dc2a24456912dcf83370e03bace6de"
     },
     "Monado_Linux/scripts/copy_upscaler_dlls.sh": {
       "bytes": 826,
       "sha256": "3b55bbcc995a3c7cd131c070cbcde7e9a4615f202147c65424fd7b6f5f4641cc"
     },
     "Monado_Linux/scripts/dlss_config_tests_linux.py": {
-      "bytes": 8405,
-      "sha256": "2814cab1fca3c0a8e45c2e3da90053c7c9b92e571fc820957004248a033cc9f5"
+      "bytes": 8569,
+      "sha256": "f9721a00dc9bb5e62352907557056dc417157eb0cfe82a42d29cd9e6457718c4"
     },
     "Monado_Linux/scripts/dlss_requirements_tests_linux.py": {
       "bytes": 4475,
@@ -881,8 +897,8 @@
       "sha256": "92159e7ad6f0fb5c32d9346bb51b60aaed9e97bb0e58eb3adfa9d2f6ce5fcab9"
     },
     "Monado_Linux/scripts/launcher_linux.py": {
-      "bytes": 30205,
-      "sha256": "28fa6932e3030faa4deb25f31c8c93422394d11d07a9d9904a7aa1a20aa1a3a8"
+      "bytes": 30849,
+      "sha256": "0b0c9a86ba384ec899c27631474feeeb61754e77d199e72f38f6b741d51645da"
     },
     "Monado_Linux/scripts/launcher_precompile_integration_linux.py": {
       "bytes": 10734,
@@ -989,8 +1005,8 @@
       "sha256": "3326e658ae221388f06c5a7ccd647b54c1badc0e5ba885437516725226232bcf"
     },
     "Monado_Linux/scripts/run_linux.py": {
-      "bytes": 20312,
-      "sha256": "308857e30eea36e6f915b5460ec9cc347c9a0c6e0500597740c2ab7dcfb2c82d"
+      "bytes": 20968,
+      "sha256": "2e14ed71e8d84542f5259312d79d51e112bfde612e31fd95eafa17d19eda9dce"
     },
     "Monado_Linux/scripts/save_tests_linux.py": {
       "bytes": 4319,
@@ -1053,12 +1069,12 @@
       "sha256": "93d50387c0b0abb1944dac17444581e25d814b5181be36e53a1828b5d9008742"
     },
     "Monado_Linux/tests/native/test_dlss_config_linux.c": {
-      "bytes": 7258,
-      "sha256": "222ccbd3b1d33f9f994412c25fc7e5231a8d2befd1399d9b44aa6c80a33150b4"
+      "sha256": "b1ffde39137d565b8666381dfb9c9098b46d3fbbc088f9b064f3c8394ece95fd",
+      "bytes": 8354
     },
     "Monado_Linux/tests/native/test_dlss_launcher_config_linux.cpp": {
-      "bytes": 7709,
-      "sha256": "9e9501c69f656a3bbd4430ec8bb3cf0be56ba1c967df1007c4f06e54729d2964"
+      "sha256": "dc08f25f70efa8ac6fe13132e3c58616d09fd2b5251e591155a926bc9bcb87e7",
+      "bytes": 10698
     },
     "Monado_Linux/tests/native/test_dlss_linux.cpp": {
       "bytes": 29279,
@@ -1717,8 +1733,8 @@
       "sha256": "5a1a022ee8c32e3e5f448f40ac5245033ee2a269ce9228b5fbefde0cc3f8db11"
     },
     "Monado_Linux/third_party/imgui/backends/imgui_impl_sdl3.cpp": {
-      "bytes": 40277,
-      "sha256": "f6973eebab67a6e2c6cad4a495c20d453c714b43ff90d8e444dd88a98c73c7e5"
+      "bytes": 42738,
+      "sha256": "0e81295a3d215b33086c73a31a3744ba16168e55674fb081379c6783911e43e9"
     },
     "Monado_Linux/third_party/imgui/backends/imgui_impl_sdl3.h": {
       "bytes": 3040,
@@ -2077,8 +2093,8 @@
       "sha256": "7a149e3f168996f26c71cc798a63f9f88fb595c0e4ca1941d130e2d06ff3a183"
     },
     "Monado_Linux/tools/launcher/launcher.cpp": {
-      "bytes": 108519,
-      "sha256": "0b82c65c1ba8364e61e427e86a2c3ac795d322e5b15fee123552203175776193"
+      "sha256": "9b5e79b357ebd2b27d798aeaa6f4ebebda48a23f7c14f5bb1e628ffaef54c0f8",
+      "bytes": 110854
     },
     "Monado_Linux/tools/launcher/linux_config_test.cpp": {
       "bytes": 8360,
@@ -3569,8 +3585,8 @@
       "sha256": "111d3bdcc8b4dd86e9bc0b59a2431dd5439c4de0ba94c9bee96756ad5399a053"
     },
     "README.md": {
-      "bytes": 16896,
-      "sha256": "3e92947fd20cb178bd56f329f8ac22134ba6f53acc5a767349a85914da8143f9"
+      "bytes": 17814,
+      "sha256": "fe59480d2a61d6a22ad85a63e1200cc0055dc143e7ad76fe7f47b31798d9fad1"
     },
     "Rollback_Monado_II.sh": {
       "bytes": 8873,
@@ -3588,9 +3604,13 @@
       "bytes": 4567,
       "sha256": "b02349c0967589923977560a06075fd048ec31817a67e6ede518c5d2886a7004"
     },
+    "docs/ASPECT_RATIOS.md": {
+      "bytes": 2519,
+      "sha256": "d1d167225af63b2f5862add287e1dd92fe0b650ca6797c0d3fe3bd2259814127"
+    },
     "docs/BUILD_LINUX.md": {
-      "bytes": 27675,
-      "sha256": "4e66f78670217fd3d5475a367514dd2ff7f731f32e981b9c613ad7ab61c4a79e"
+      "bytes": 27677,
+      "sha256": "e633e7ddfffdbd992843ccf7062d2f2967b9a038dddd9230c5806cb4cdf4d6f6"
     },
     "docs/BUILD_WINDOWS.md": {
       "bytes": 3259,
@@ -3605,8 +3625,8 @@
       "sha256": "6b77242f728c2c155df930534561d119d5c1b8c292b34da549868e53042073fe"
     },
     "docs/HANDHELD_CONTROLLERS.md": {
-      "bytes": 3242,
-      "sha256": "f75f3ac5e539319f13a4c2e6432a26e2d3ccbe675970091e99d71292f8dd62bb"
+      "bytes": 4356,
+      "sha256": "26abd117d0307aa954d851883874a709ea07b994abe69f248d71373100451739"
     },
     "docs/PLATFORM_STATUS.md": {
       "bytes": 10578,
@@ -3628,21 +3648,29 @@
       "bytes": 792,
       "sha256": "8f08c5c695dd1a771a6359d59697019813e29754a2af567ad52e0b79414df6ff"
     },
+    "tests/native/test_aspect_output.c": {
+      "sha256": "c23ec600f5168cc19837adf961d314a08a4b61745d5e3690e3331bd29d10d3d8",
+      "bytes": 16282
+    },
     "tests/native/test_builder_json.cpp": {
       "bytes": 3911,
       "sha256": "f6e7d110e0fdc9270bf94c860e759a6b648c5c87a62bed372b03ac4b0f1cf9da"
     },
     "tests/native/test_controller_discovery.c": {
-      "bytes": 5856,
-      "sha256": "5b8788a5ea44608b05e74838a73ba0189c016d496fab3893fc37132f09c397cf"
+      "bytes": 11100,
+      "sha256": "6278743d8342158de870b61bc7274feffb9a39fbf4581f98b134b1f2bc769e8d"
     },
     "tests/native/test_controller_environment.c": {
       "bytes": 561,
       "sha256": "fc3d564586e25bc003bad3e7d2090822a6250413a3a7ecae9c1b256a40fccc8f"
     },
+    "tests/native/test_controller_imgui_recovery.cpp": {
+      "bytes": 9879,
+      "sha256": "389fbbc2ce2ea66715e73f9457f9691cc31a672cb5150fe979088b4bb4283d54"
+    },
     "tests/native/test_controller_state_guard.c": {
-      "bytes": 2952,
-      "sha256": "17a69abb64e5c2a3d7a0b24a19b5dbab473a6c2577e60408d87bcc2f88325a00"
+      "bytes": 4954,
+      "sha256": "b66643ff89933a7aca73251898a288b1bb6ff5ae29bfe103c2b18a7181ae449f"
     },
     "tests/native/test_dlss_stability.cpp": {
       "bytes": 7171,
@@ -3675,6 +3703,14 @@
     "tests/native/test_temporal_stability.cpp": {
       "bytes": 16570,
       "sha256": "87f2a6ddaf6dde4fd8cde356d88608be823a7d97d703f2c39f7ea3ce18b3e64b"
+    },
+    "tests/native/test_xcde_aspect.c": {
+      "bytes": 7752,
+      "sha256": "3e0519d4a86357504c2ffe0fdbdbc67b75700524d162fe5b4f08be1984cc3c25"
+    },
+    "tests/test_aspect_output.py": {
+      "sha256": "39bd6ea0901d3c2d89e3aff84d538aad585317c543c94a0d51a88dffea81e708",
+      "bytes": 3412
     },
     "tests/test_builder_backend.py": {
       "bytes": 29814,
@@ -3721,16 +3757,24 @@
       "sha256": "c1a78f75e2be0519816018d5129a7b97ca26ae9f27bf84ca5bd13a1efd95b76f"
     },
     "tests/test_controller_discovery.py": {
-      "bytes": 4661,
-      "sha256": "88607e6d73d0b51d4f43ce91c72d0ea22ac18406e28f901fbff15f0a96fc982b"
+      "bytes": 5702,
+      "sha256": "b8da5560a7bf7514bd0e4fb9341162c55015feede24120a206d62246b4cf8394"
     },
     "tests/test_controller_environment.py": {
-      "bytes": 14414,
-      "sha256": "39efe7fba4e447c174b07b602d163171d6c595a4fe0037b1f20aaa8806f34d57"
+      "bytes": 14933,
+      "sha256": "746be3e7366d0651d327b28a11ebc29757bca18041d983a2d6b7e57cd3b3a86e"
+    },
+    "tests/test_controller_imgui_recovery.py": {
+      "bytes": 4380,
+      "sha256": "247167e3cea175909f07b1ad04a18820a28b626455590eb3494d6c823d281cba"
+    },
+    "tests/test_controller_metadata_refresh.py": {
+      "bytes": 20912,
+      "sha256": "e8d6c516547cd63a8a5ef6a81b2203cea82d5881f05591868e857291c5ac8788"
     },
     "tests/test_controller_state_guard.py": {
-      "bytes": 4649,
-      "sha256": "cd625c081c94ba4b2104cbb4c030124a45d6a00b2eb6c8740f2b248d025f9d7b"
+      "bytes": 6740,
+      "sha256": "213727a8f5bc673a0b8290a5017c8c986cbecb19451e830062f86ec9c57a3570"
     },
     "tests/test_dlss_launcher_defaults.py": {
       "bytes": 5092,
@@ -3992,6 +4036,10 @@
       "bytes": 8723,
       "sha256": "3c5cd0078a6f536afd56cba427f161ac7fd0bce2d94402945551b68d19d4cdcb"
     },
+    "tests/test_xcde_aspect.py": {
+      "bytes": 5258,
+      "sha256": "b821f8cb17412cd7d4b6323438c968f3125ae189e4cc6143273bcdaf455b185e"
+    },
     "tools/appimage/AppImage-runtime-LICENSE.txt": {
       "bytes": 1678,
       "sha256": "aa154fc9070614bbe7921f89db11efd1dba7a1f3a41685958110e2230f9c0ca1"
@@ -4130,7 +4178,7 @@
     },
     "update-version.json": {
       "bytes": 58,
-      "sha256": "1d9a4a437456b5bc5b5a720fb8c2bb198031a403b9a2cfa805b6a02a7b526f1c"
+      "sha256": "f81d1f37e7c7e435b52cebdb82c4be7b8ff16b52c02bcd5b90b644681f8e5ad9"
     }
   },
   "project": "Monado II",

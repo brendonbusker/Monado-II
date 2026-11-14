@@ -3,7 +3,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "tools", "lifter"))
-from patchfmt import FunctionEntries, Patch  # noqa: E402,F401
+from patchfmt import FunctionEntries, Patch, PatchMismatch  # noqa: E402,F401
 
 
 # [XCDE] LINUX-041: the native bounded item-kind switch crosses generator
@@ -796,3 +796,85 @@ def _cheats_fall(gen, addr):
 
 PATCHES[0x7000446864] = Patch(0xb9400815, _cheats_fall, 'LINUX-072',
                             'optional ordinary PC fall immunity before nonlethal/lethal split; forced events remain native')
+
+
+# [XCDE] LINUX-089: perspective-camera and CPU-frustum aspect adapters. These
+# checked scalar loads/stores preserve the native camera, projection construction,
+# frustum tests, scripted FOV and near/far planes. They never patch a shared float
+# literal or mutate persistent camera parameters (which would accumulate on each
+# update). The runtime defaults to exact identity and qualifies only 16:9 cameras.
+ASPECT_BUILD_ID = '7e1df8e08d60544bbdca1e333c153c97'
+ASPECT_CAMERA_CONTEXT = {
+    0x70005d9110: 0x6db93bef,  # perspective update entry
+    0x70005d9130: 0xf9404013,  # current camera data -> x19
+    0x70005d994c: 0xf9404013,  # auxiliary frustum camera data -> x19
+    0x70005d87d0: 0xb4000321,  # world-to-screen entry
+    0x70005d8934: 0x1e221821,  # horizontal screen compensation
+    0x70005d894c: 0x1e230842,  # vertical screen compensation
+    0x70006f7d80: 0xd10383ff,  # render-camera update entry
+    0x70006f7e80: 0x2d451504,  # drawable width/height -> s4/s5
+    0x70006f822c: 0xbd04c660,  # renderer camera vertical FOV radians
+    0x70006f82a4: 0xbd018264,  # renderer perspective horizontal focal length
+}
+
+
+def _aspect_plain(gen, addr):
+    if gen.name != 'main' or gen.nso.build_id != ASPECT_BUILD_ID:
+        raise PatchMismatch('LINUX-089: native camera adapter requires checked DE 2.0.0 main')
+    for site, expected in ASPECT_CAMERA_CONTEXT.items():
+        if gen.word(site) != expected:
+            raise PatchMismatch(f'{site:#x}: LINUX-089 native camera context changed')
+    original = gen.lift(addr)
+    if original.kind != 'op':
+        raise ValueError(f'{addr:#x}: LINUX-089 camera adapter requires a plain scalar instruction')
+    return original.code
+
+
+def _aspect_scalar(register, helper, before=False):
+    def emit(gen, addr):
+        original = _aspect_plain(gen, addr)
+        argument = f'(uint32_t)c->v[{register}]'
+        declaration = f'extern uint32_t {helper}(uint32_t);'
+        adapted = f'{{ {declaration} c->v[{register}] = {helper}({argument}); }}'
+        return adapted + ' ' + original if before else original + ' ' + adapted
+    return emit
+
+
+def _aspect_fov(register, data_register, renderer=False):
+    helper = 'xcde_aspect_render_fov_degrees_bits' if renderer else 'xcde_aspect_fov_degrees_bits'
+    offset = 0x4c0 if renderer else 0x1f0
+    def emit(gen, addr):
+        original = _aspect_plain(gen, addr)
+        return (original + ' { extern _Bool xcde_aspect_active(void); '
+                f'extern uint32_t {helper}(uint32_t, uint32_t); '
+                f'if (xcde_aspect_active()) c->v[{register}] = {helper}((uint32_t)c->v[{register}], '
+                f'*(const uint32_t *)(uintptr_t)(c->x[{data_register}] + 0x{offset:x})); }}')
+    return emit
+
+
+def _aspect_hud(register, horizontal):
+    def emit(gen, addr):
+        original = _aspect_plain(gen, addr)
+        return (original + ' { extern uint32_t xcde_aspect_hud_ratio_bits(uint32_t, _Bool); '
+                f'c->v[{register}] = xcde_aspect_hud_ratio_bits((uint32_t)c->v[{register}], '
+                f'{1 if horizontal else 0}); }}')
+    return emit
+
+
+ASPECT_CAMERA_PATCHES = {
+    0x70005d913c: (0xbd41ea60, _aspect_fov(0, 19), 'current perspective FOV degrees'),
+    0x70005d9170: (0xbd41f262, _aspect_scalar(2, 'xcde_aspect_ratio_bits'), 'near-plane horizontal extent'),
+    0x70005d9228: (0xbd41f26f, _aspect_scalar(15, 'xcde_aspect_ratio_bits'), 'perspective-matrix aspect'),
+    0x70005d923c: (0xbd41ea60, _aspect_fov(0, 19), 'perspective-matrix FOV degrees'),
+    0x70005d938c: (0xbd41ea60, _aspect_fov(0, 19), 'CPU frustum FOV degrees'),
+    0x70005d93a0: (0xbd41f10a, _aspect_scalar(10, 'xcde_aspect_ratio_bits'), 'CPU frustum aspect'),
+    0x70005d9958: (0xbd41ea60, _aspect_fov(0, 19), 'auxiliary frustum FOV degrees'),
+    0x70005d9984: (0xbd41f262, _aspect_scalar(2, 'xcde_aspect_ratio_bits'), 'auxiliary frustum aspect'),
+    0x70006f7ea0: (0xbd04c264, _aspect_scalar(4, 'xcde_aspect_ratio_bits', before=True), 'render-camera aspect before native store'),
+    0x70006f8224: (0xbd402be0, _aspect_fov(0, 19, renderer=True), 'render-camera FOV before radians conversion'),
+    0x70005d8930: (0xbd41f142, _aspect_hud(2, True), 'world markers into centered HUD horizontal canvas'),
+    0x70005d8948: (0xbd41f143, _aspect_hud(3, False), 'world markers into centered HUD vertical canvas'),
+}
+for _site, (_word, _emit, _note) in ASPECT_CAMERA_PATCHES.items():
+    assert _site not in PATCHES, f'Conflicting native aspect patch at {_site:#x}'
+    PATCHES[_site] = Patch(_word, _emit, 'LINUX-089', _note)

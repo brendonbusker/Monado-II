@@ -1,6 +1,6 @@
 # Build and play on Linux
 
-The recommended download is **`monado-ii-0.1.18-linux-builder-x86_64.AppImage`** from
+The recommended download is **`monado-ii-0.1.19-linux-builder-x86_64.AppImage`** from
 [Releases](https://github.com/brendonbusker/Monado-II/releases/latest). It provides
 folder selection, local build progress and the normal settings launcher after
 building. The source/setup archive and terminal route remain available below.
@@ -25,8 +25,8 @@ building. The source/setup archive and terminal route remain available below.
 If FUSE is unavailable, extraction mode works without installing it:
 
 ```sh
-chmod +x monado-ii-0.1.18-linux-builder-x86_64.AppImage
-./monado-ii-0.1.18-linux-builder-x86_64.AppImage --appimage-extract-and-run
+chmod +x monado-ii-0.1.19-linux-builder-x86_64.AppImage
+./monado-ii-0.1.19-linux-builder-x86_64.AppImage --appimage-extract-and-run
 ```
 
 **Use an existing installation** links a checked installation in place, preserving
@@ -50,7 +50,7 @@ Distrobox. No universal distro or handheld-gameplay compatibility is implied.
 
 ## Terminal/source setup
 
-Download and extract **`monado-ii-0.1.18-linux-setup.tar.gz`** into its final folder.
+Download and extract **`monado-ii-0.1.19-linux-setup.tar.gz`** into its final folder.
 This route additionally requires a host **CPython 3.14**. Open a terminal in the
 extracted folder and follow the input/build instructions below. Neither ordinary
 builds nor background updates install system packages or run sudo.
@@ -389,8 +389,8 @@ experimental. Edited release-owned source files also stop automatic installation
 so local changes can be merged manually. Normal settings changes do not modify
 the release-owned source.
 
-**Updating to 0.1.17 requires a full local game rebuild** for the changed build
-recipes and checks. The normal updater performs this rebuild before activation.
+**Updating to 0.1.19 requires a full local game rebuild** for the controller and
+game-camera changes. The normal updater performs this rebuild before activation.
 It preserves the original
 `Monado_Linux/play/launcher` save/settings profile and shared input in place;
 it does not convert, replace or delete saves. Preserve optional Quick Step metadata

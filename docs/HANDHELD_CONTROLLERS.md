@@ -34,8 +34,8 @@ that initial permission set. Some native HIDAPI reconnect or resume cases may
 therefore require closing and reopening the launcher with the controller already
 connected. Ordinary event-device input can still work through SDL's read-only
 fallback; this limitation does not establish that every reconnect fails.
-Reopening also refreshes the session metadata if Steam recreates it after a
-controller-mode change or resume.
+Linux 0.1.19 also refreshes validated Steam metadata during a session; reopening
+remains a fallback for host/device changes the application cannot recover from.
 
 ## Reporting a detection failure
 
@@ -57,3 +57,22 @@ missing host discovery support; it is not proof of a GPU problem.
 Game input stays read-only and native save formats remain unchanged. This
 controller work retains the separate RADV `nodcc` workaround and its existing
 validation limits in [AMD/RADV notes](AMD_RADV.md).
+
+
+## Linux 0.1.19 recovery update
+
+Linux 0.1.19 retries missed/failed controller discovery on focus return
+and bounded idle checks. The launcher and game retain healthy selected devices
+and clear held input when a controller disappears or an overlay consumes releases.
+
+Steam's optional metadata remains live across atomic replacement. Files hidden by
+private `/tmp` are exported into a dedicated read-only private directory; a
+session-scoped supervisor refreshes only that validated file. No host `/tmp`
+directory or broader device-write access is exposed. Source disappearance or an
+unsafe replacement retains the last valid snapshot and logs a bounded diagnostic.
+This supersedes the original single-file metadata bind limitation above.
+
+Real Steam/QAM return, Steam Deck and ROG Ally testing is still required. Initial
+desktop-mode exposure also depends on what controller device Steam/HHD presents.
+The original physical hidraw-inode restriction remains; this change does not
+automatically grant writes to newly created HID nodes or change host permissions.

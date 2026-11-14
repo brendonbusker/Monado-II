@@ -18,6 +18,7 @@ SOURCES = ('scripts/dlss_config_tests_linux.py', 'tests/native/test_dlss_config_
            'tests/native/test_launcher_settings_linux.c', 'tests/native/test_dlss_launcher_config_linux.cpp',
            'runtime/host/settings_ini.c', 'runtime/hle/bindings.c', 'runtime/settings.h',
            'runtime/nvn/output_scale.c', 'runtime/nvn/output_scale.h', 'runtime/ui/graphics_options.h',
+           'runtime/host/xcde_aspect.c', 'runtime/host/xcde_aspect.h', # [XCDE] LINUX-089
            'tools/launcher/launcher.cpp', 'tools/launcher/linux_host.h', 'tools/launcher/theme.h',
            *('third_party/imgui/' + p + '.cpp' for p in ('imgui','imgui_draw','imgui_tables','imgui_widgets')))
 
@@ -77,14 +78,14 @@ def main():
             name = 'sdk' if sdk else 'default'
             exe = out / ('test-dlss-config-' + name)
             modeflags = ['-DXCDE_LINUX_DLSS=1'] if sdk else []
-            run('compile-' + name, [cc, *flags, *modeflags, ROOT / SOURCES[1], *pkgflags, '-lm', '-o', exe])
+            run('compile-' + name, [cc, *flags, *modeflags, ROOT / SOURCES[1], ROOT / 'runtime/host/xcde_aspect.c', *pkgflags, '-lm', '-o', exe])
             receipt['artifacts'][str(exe)] = digest(exe)
             for case in ('runtime','scale','forced-scale','roundoff'):
                 state = out / (name + '-' + case); state.mkdir()
                 print(run(name + '-' + case, [exe, case], cwd=state), end='')
         if args.framegen:
             fg_exe = out / 'test-framegen-config'
-            run('compile-framegen', [cc, *flags, '-DXCDE_LINUX_DLSS=1', '-DXCDE_LINUX_FRAMEGEN=1', ROOT / SOURCES[1], *pkgflags, '-lm', '-o', fg_exe])
+            run('compile-framegen', [cc, *flags, '-DXCDE_LINUX_DLSS=1', '-DXCDE_LINUX_FRAMEGEN=1', ROOT / SOURCES[1], ROOT / 'runtime/host/xcde_aspect.c', *pkgflags, '-lm', '-o', fg_exe])
             fg_state = out / 'framegen-settings-state'; fg_state.mkdir()
             print(run('framegen-runtime-policy', [fg_exe, 'runtime'], cwd=fg_state), end='')
         launcher = out / 'test-dlss-launcher-config'

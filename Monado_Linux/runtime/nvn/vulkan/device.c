@@ -12,6 +12,7 @@
 
 #include "../../paths.h"
 #include "../../settings.h"
+#include "../../host/xcde_aspect.h" // [XCDE] LINUX-089
 #include "../../ui/menu.h"
 #include "../../host/applet_lifecycle_ui.h"  // [XCDE] LINUX-007: honor guest exit cleanup
 #include "vk.h"
@@ -1494,6 +1495,11 @@ void ui_window_init(void) {
     pick_device();
     create_device();
     create_swapchain();
+    // [XCDE] LINUX-089/090: first camera and render target use the same selected
+    // ratio. Match display follows the drawable; explicit choices fit inside it.
+    if (g_vk.sc_extent.height)
+        xcde_aspect_set_factor((float)xcde_aspect_target_factor(
+            (double)g_vk.sc_extent.width / (double)g_vk.sc_extent.height / (16.0 / 9.0)));
     vk_exec_init();
     vk_shaders_init();
 }
@@ -1525,13 +1531,18 @@ void backend_clear_window(void) {
     if (g_vk.dev && vk_frame_begin(black)) vk_frame_end(NULL);
 }
 
+// [XCDE] LINUX-089: SDL device ownership stays on this UI event thread.
+extern void input_poll_controller(void);
 int ui_run(void) {
     ui_window_init();
     atomic_store(&ui_ready, true);
     for (;;) {
         if (rt_reboot_requested()) return rt_reboot_requested();  // (runtime/main.c tears the game down)
+        input_poll_controller();
         SDL_Event e;
         while (SDL_WaitEventTimeout(&e, 16)) {
+            // Also service recovery under continuous mouse/controller traffic.
+            input_poll_controller();
             // [XCDE] LINUX-007: close requests notify the guest; LockExit keeps
             // its cleanup running until UnlockExit or the bounded host deadline.
             // Poll before input filtering, including continuous event traffic.

@@ -18,6 +18,7 @@
 #include "../input_bind.h"
 #include "pad_modifier.h"
 #include "../platform/sdl_controller_diagnostics.h"  // [XCDE] LINUX-077
+#include "../platform/sdl_controller_recovery.h"  // [XCDE] LINUX-089
 
 enum {
     BTN_A = 0, BTN_B, BTN_X, BTN_Y, BTN_LSTICK, BTN_RSTICK, BTN_L, BTN_R, BTN_ZL, BTN_ZR, BTN_PLUS, BTN_MINUS,
@@ -354,7 +355,9 @@ static bool input_open_available_pad(SDL_JoystickID removed) {
         if (!candidate) {
             if (failures < 16) {
                 ++failures;
-                LOG("[input] cannot open gamepad id=%u: %.192s\n", (unsigned)ids[i], SDL_GetError());
+                char error[193];
+                LOG("[input] cannot open gamepad id=%u: %s\n", (unsigned)ids[i],
+                    rt_input_log_error(SDL_GetError(), error));
             }
             continue;
         }
@@ -371,12 +374,40 @@ static bool input_open_available_pad(SDL_JoystickID removed) {
     return opened;
 }
 
+// [XCDE] LINUX-089: Steam/QAM or another overlay can consume hotplug/button
+// events. Inspect connectedness and retry discovery on the SDL UI event thread,
+// including its idle timeout. Do not call from input_frame (renderer thread),
+// the guest Npad polling thread, or while the caller holds pad_modifier_lock.
+static RtControllerRecovery pad_recovery;
+void input_poll_controller(void) {
+    if (!rt_controller_recovery_due(&pad_recovery, SDL_GetTicks())) return;
+    bool disconnected = false;
+    SDL_LockSpinlock(&pad_modifier_lock);
+    if (pad && !SDL_GamepadConnected(pad)) {
+        cancel_pad_modifier_locked();
+        SDL_CloseGamepad(pad);
+        pad = NULL;
+        pad_buttons = 0;
+        pad_lx = pad_ly = pad_rx = pad_ry = 0;
+        note_family();
+        disconnected = true;
+    }
+    SDL_UnlockSpinlock(&pad_modifier_lock);
+    if (disconnected) {
+        recompute_pad(0);
+        rt_input_inventory(stderr, "game", "disconnected handle");
+    }
+    if (!pad && input_open_available_pad(0))
+        rt_input_inventory(stderr, "game", "controller recovered");
+}
+
 void input_handle_event(const SDL_Event *e) {
     static bool scanned;  // pads present at startup: their ADDED event may have gone to the start screen's loop
     if (!scanned) {
         scanned = true;
         rt_input_inventory(stderr, "game", "startup");
         input_open_available_pad(0);
+        rt_controller_recovery_scanned(&pad_recovery, SDL_GetTicks());
     }
     switch (e->type) {
     case SDL_EVENT_KEY_DOWN: case SDL_EVENT_KEY_UP:
@@ -428,10 +459,17 @@ void input_handle_event(const SDL_Event *e) {
     case SDL_EVENT_WINDOW_FOCUS_GAINED:
         pad_focus_lost = false;
         cancel_pad_modifier();
+        // An overlay may have swallowed releases or replacement-device events.
+        // Refresh the sampled state without closing a healthy selected pad.
+        rt_input_inventory(stderr, "game", "focus returned");
+        rt_controller_recovery_request(&pad_recovery);
+        input_poll_controller();
+        recompute_pad(0);
         break;
     case SDL_EVENT_GAMEPAD_ADDED: {
         rt_input_inventory(stderr, "game", "gamepad added");
         input_open_available_pad(0);
+        rt_controller_recovery_scanned(&pad_recovery, SDL_GetTicks());
         break;
     }
     case SDL_EVENT_GAMEPAD_REMOVED:
@@ -444,6 +482,7 @@ void input_handle_event(const SDL_Event *e) {
         recompute_pad(0);
         input_open_available_pad(e->gdevice.which);
         rt_input_inventory(stderr, "game", "gamepad removed");
+        rt_controller_recovery_scanned(&pad_recovery, SDL_GetTicks());
         break;
     case SDL_EVENT_GAMEPAD_AXIS_MOTION: case SDL_EVENT_GAMEPAD_BUTTON_DOWN: case SDL_EVENT_GAMEPAD_BUTTON_UP: {
         uint32_t pressed = 0;

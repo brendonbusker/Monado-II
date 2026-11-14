@@ -71,6 +71,35 @@ class ControllerStateGuard(unittest.TestCase):
             self.assertEqual(protected.read_bytes(), b'authored read-only game input sentinel')
             self.assertEqual(list(state.iterdir()), [])
 
+    def test_replaced_input_path_retains_read_only_fallback_without_new_write_rights(self):
+        # Authored ordinary-file stand-in: exercise filesystem access only, no
+        # evdev events, actual devices, host mounts, game inputs or profiles.
+        bwrap = shutil.which('bwrap')
+        if not bwrap:
+            self.skipTest('bwrap required for isolated synthetic input directory')
+        with tempfile.TemporaryDirectory(prefix='replacement-', dir=self.folder) as temporary:
+            case = Path(temporary); state = case/'state'; state.mkdir()
+            devices = case/'devices'; devices.mkdir()
+            future = devices/'event999.pending'; future.write_bytes(b'authored future')
+            command = [bwrap, '--unshare-user', '--unshare-pid', '--unshare-net',
+                       '--die-with-parent', '--new-session', '--ro-bind', '/', '/',
+                       '--dev', '/dev', '--proc', '/proc', '--bind', str(case), str(case),
+                       '--bind', str(devices), '/dev/input', '--', str(self.binary),
+                       'replacement', str(state), '/dev/input/event999']
+            result = subprocess.run(command, env=self.environment, capture_output=True,
+                                    text=True, timeout=20)
+            if result.returncode and ('No permissions to create a new namespace' in result.stderr or
+                                      'Creating new namespace failed' in result.stderr):
+                if os.environ.get('MONADO_REQUIRE_CONTROLLER_GUARD_NAMESPACE') == '1':
+                    self.fail(result.stdout+result.stderr)
+                self.skipTest('host sandbox denies nested bwrap/user namespaces')
+            if result.returncode == 77:
+                self.skipTest('host lacks required Landlock ABI >=3')
+            self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
+            self.assertIn('PASS replacement remains read-only', result.stdout)
+            self.assertEqual((devices/'event999').read_bytes(), b'authored future')
+            self.assertEqual(list(state.iterdir()), [])
+
     def test_existing_character_hidraw_is_admitted(self): self.scenario('valid')
     def test_prefix_lookalike_is_not_admitted(self): self.scenario('malformed')
     def test_hidraw_symlink_is_not_admitted(self): self.scenario('symlink')

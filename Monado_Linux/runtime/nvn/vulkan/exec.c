@@ -15,6 +15,7 @@
 #include "../../kernel.h"
 #include "shaders.h"
 #include "vk.h"
+#include "../aspect_canvas.h" // [XCDE] LINUX-089: do not stretch native UI.
 #include "../program_binding.h"
 #include "host_import.h"  // [XCDE] LINUX-005: shared checked host-memory import
 #ifdef __linux__
@@ -5652,10 +5653,12 @@ static void draw_(CmdRec *r, bool indexed) {
         if (!composite) {
             int pw, ph;
             pass_size(&pw, &ph);
-            float u = fminf(pass_sx, pass_sy);
-            vp_sx = vp_sy = u;
-            vp_ox = (pw - st.rt.color[0]->width * u) * 0.5f;
-            vp_oy = (ph - st.rt.color[0]->height * u) * 0.5f;
+            // [XCDE] LINUX-089: shared/tested canvas math; scene composites
+            // above retain the complete native-aspect target and are not fitted.
+            float uniform;
+            if (xcde_aspect_canvas(st.rt.color[0]->width, st.rt.color[0]->height,
+                                   pw, ph, pass_sx, pass_sy, &uniform, &vp_ox, &vp_oy))
+                vp_sx = vp_sy = uniform;
         }
     }
     float jx = 0, jy = 0;

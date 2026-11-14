@@ -12,6 +12,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import signal
 import stat
 import subprocess
 import sys
@@ -144,17 +145,15 @@ def dlss_namespace(argv, state, *, pid_namespace=True):
     # alive for the existing Python subreaper/lock holder to adopt and wait for.
     command += ['--proc', '/proc'] if pid_namespace else ['--ro-bind', '/proc', '/proc']
     command += ['--bind', str(state), str(state)]
-    # [XCDE] LINUX-077: Steam's optional controller metadata can live in host
-    # /tmp. Admit one validated read-only file before replacing /tmp; point SDL
-    # at its canonical state alias, not an assumed propagated /tmp submount.
+    # [XCDE] LINUX-089: the host supervisor exports only validated metadata into
+    # a dedicated private directory. Bind that directory RO at BOTH aliases;
+    # binding the original file would freeze its inode across Steam replacement.
     metadata = controller_environment.namespace_metadata(os.environ, state)
-    if metadata:
-        command += ['--ro-bind', metadata['source'], metadata['target']]
     command += ['--bind', str(state), '/tmp']
     if metadata:
-        # bwrap's directory bind does not propagate the earlier child file
-        # mount. Expose the same read-only inode at the private /tmp alias too.
-        command += ['--ro-bind', metadata['source'], '/tmp/' + controller_environment.PRIVATE_INFO]
+        command += ['--ro-bind', metadata['directory'], metadata['directory'],
+                    '--ro-bind', metadata['directory'],
+                    '/tmp/' + controller_environment.PRIVATE_DIRECTORY]
     x11 = X11_SOCKETS.is_dir()
     if x11:
         command += ['--ro-bind', str(X11_SOCKETS), '/tmp/.X11-unix']
@@ -172,10 +171,11 @@ def dlss_namespace(argv, state, *, pid_namespace=True):
     return command, result
 
 
-def prepare_namespace_state(launch):
+def prepare_namespace_state(launch, *, controller_refresh=False):
     """Create only validated private directories; dry-run never calls this."""
     state = Path(launch['state'])
     fd = os.open('/', os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+    mirror = None
     try:
         for part in state.parts[1:]:
             try:
@@ -198,25 +198,7 @@ def prepare_namespace_state(launch):
             os.close(child)
         metadata = launch['namespace'].get('controller_metadata')
         if metadata:
-            expected_target = state / controller_environment.PRIVATE_INFO
-            if (metadata.get('target') != str(expected_target)
-                    or controller_environment.metadata_file(metadata.get('source')) is None):
-                raise ValueError('Steam controller metadata changed or has an unsafe bind target')
-            target_fd = os.open('runtime', os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=fd)
-            try:
-                item = os.open('steam-virtual-gamepad-info', os.O_RDONLY | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK,
-                               0o600, dir_fd=target_fd)
-                try:
-                    info = os.fstat(item)
-                    existing_source = metadata['source'] == str(expected_target)
-                    if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
-                            or info.st_uid != os.getuid()
-                            or (not existing_source and (stat.S_IMODE(info.st_mode) != 0o600 or info.st_size != 0))):
-                        raise ValueError('Steam controller metadata bind placeholder must be a private empty ordinary file')
-                finally:
-                    os.close(item)
-            finally:
-                os.close(target_fd)
+            mirror = controller_environment.MetadataMirror.prepare(metadata, state, fd)
         if launch['namespace'].get('x11_socket_bind', False):
             try:
                 os.mkdir('.X11-unix', 0o700, dir_fd=fd)
@@ -224,8 +206,46 @@ def prepare_namespace_state(launch):
                 pass
             child = os.open('.X11-unix', os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=fd)
             os.close(child)
+    except BaseException:
+        if mirror is not None:
+            mirror.close()
+        raise
     finally:
         os.close(fd)
+    if mirror is not None and not controller_refresh:
+        # Precompile/developer namespace callers need only the initial snapshot,
+        # not an input-session watcher or an unowned directory descriptor.
+        mirror.close()
+        return None
+    return mirror
+
+
+def wait_metadata_child(execution, environment, runtime_fd, mirror):
+    """[XCDE] LINUX-089: only hidden-metadata CLI launches need a supervisor.
+
+    Ordinary and inherited launches still exec directly. Keep the readonly
+    installation lease until this one owned child exits; signals do not kill it
+    or interrupt a save. No watcher process, game-controlled IPC or new paths.
+    """
+    interrupted = []
+    def keep_game(number, frame):
+        interrupted.append(number)
+        try:
+            os.write(2, b'Monado session remains active; close its window to finish safely.\n')
+        except OSError:
+            pass
+    handlers = {number: signal.signal(number, keep_game)
+                for number in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)}
+    try:
+        mirror.start(log_fd=2)
+        child = subprocess.Popen(execution, env=environment, close_fds=True,
+                                 pass_fds=(runtime_fd,), start_new_session=True)
+        code = child.wait()
+        return 128 - code if code < 0 else code if code else 128 + interrupted[0] if interrupted else 0
+    finally:
+        mirror.stop()
+        for number, handler in handlers.items():
+            signal.signal(number, handler)
 
 
 def plan(executable, state, precompile=False, *, port=None):
@@ -348,8 +368,9 @@ def main():
             return 0
         launch['runtime_validation'] = validate_runtime(launch)
         os.umask(0o077)
+        mirror = None
         if 'namespace' in launch:
-            prepare_namespace_state(launch)
+            mirror = prepare_namespace_state(launch, controller_refresh=True)
         os.chdir(ROOT)
         # A read-only inherited installation lease pins this game even if its
         # launcher/supervisor dies. No writable regular descriptor is admitted.
@@ -358,12 +379,18 @@ def main():
         # Stdio remains for terminals/pipes; the guard validates file redirections.
         for entry in os.listdir('/proc/self/fd'):
             fd = int(entry)
-            if fd > 2 and fd != runtime_fd:
+            if fd > 2 and fd != runtime_fd and (mirror is None or fd != mirror.fileno()):
                 try:
                     os.close(fd)
                 except OSError:
                     pass
         execution = launch.get('execution_argv', launch['argv'])
+        if mirror is not None:
+            try:
+                return wait_metadata_child(execution, environment, runtime_fd, mirror)
+            finally:
+                mirror.close()
+                install_lease.release(runtime_fd)
         os.execve(execution[0], execution, environment)
     except (ValueError, OSError, subprocess.SubprocessError) as error:
         parser.exit(1, str(error) + '\n')

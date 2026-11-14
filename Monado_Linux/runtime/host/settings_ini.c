@@ -12,7 +12,7 @@
 const char *const g_language_codes[N_LANGUAGES] = {"", "ja", "en-US", "fr", "de", "it", "es", "zh-CN", "ko", "nl", "pt", "ru"};
 const char *const g_language_names[N_LANGUAGES] = {"Auto", "Japanese", "English", "French", "German", "Italian", "Spanish",
                                                    "Chinese", "Korean", "Dutch", "Portuguese", "Russian"};
-Settings g_settings = {.fps = 30, .volume = 1.0f, .movie_audio = true, .res_mode = RES_MATCH, .upscaler = UPSCALE_BILINEAR, .upscale_quality = UQ_QUALITY, .game_blur = true, .vsync = true, .ui_lang = 1,
+Settings g_settings = {.aspect = ASPECT_ORIGINAL, .fps = 30, .volume = 1.0f, .movie_audio = true, .res_mode = RES_MATCH, .upscaler = UPSCALE_BILINEAR, .upscale_quality = UQ_QUALITY, .game_blur = true, .vsync = true, .ui_lang = 1,
     // [XCDE] LINUX-072: slider positions are remembered independently of enable flags.
     .cheat_damage_dealt_percent = 100, .cheat_damage_received_percent = 100,
     .cheat_exp_percent = 100, .cheat_ap_percent = 100, .cheat_sp_percent = 100, .cheat_gold_percent = 100};
@@ -68,7 +68,17 @@ static int cheat_percent(const char *value) {
 #define XCDE_CHEAT_MULTIPLIERS(X) \
     X(damage_dealt) X(damage_received) X(exp) X(ap) X(sp) X(gold)
 
+// [XCDE] LINUX-089: exact opt-ins, shared ordering with ASPECT_*; unknown values
+// preserve original framing, including after reloading a previously fixed ratio.
+static const char *const aspect_values[N_ASPECTS] = {"native", "original", "16:10", "21:9", "32:9"};
+static int aspect_index(const char *value) {
+    for (int i = 0; i < N_ASPECTS; ++i) if (!strcmp(value, aspect_values[i])) return i;
+    return ASPECT_ORIGINAL;
+}
+
 void settings_load(void) {
+    // [XCDE] LINUX-089: native aspect is opt-in, including reload/missing files.
+    g_settings.aspect = ASPECT_ORIGINAL;
     // [XCDE] LINUX-014: absent/invalid new preference defaults to Normal on each
     // load, including a reload after a previously selected Fast preference.
     g_settings.menu_navigation_speed = MENU_NAV_NORMAL;
@@ -92,7 +102,8 @@ void settings_load(void) {
         if (!eq) continue;
         *eq = 0;
         char *k = trim(s), *v = trim(eq + 1);
-        if (!strcmp(k, "fullscreen")) g_settings.fullscreen = atoi(v) != 0;
+        if (!strcmp(k, "aspect_ratio")) g_settings.aspect = aspect_index(v);
+        else if (!strcmp(k, "fullscreen")) g_settings.fullscreen = atoi(v) != 0;
         else if (!strcmp(k, "window")) sscanf(v, "%dx%d", &g_window_w, &g_window_h);
         else if (!strcmp(k, "resolution")) {  // match | 1x..4x | 75% | 50% | 25% | dynamic
             if (!strcmp(v, "match")) g_settings.res_mode = RES_MATCH;
@@ -172,6 +183,7 @@ void settings_save(void) {
     static const char *res[] = {"match", "1", "2", "3", "4", "5", "6", "7", "8", "dynamic", "75%", "25%", "50%"};
     fprintf(f, "# Monado settings (the launcher writes this file)\n");
     fprintf(f, "fullscreen = %d\nwindow = %dx%d\n", g_settings.fullscreen, g_window_w, g_window_h);
+    fprintf(f, "aspect_ratio = %s\n", aspect_values[g_settings.aspect >= 0 && g_settings.aspect < N_ASPECTS ? g_settings.aspect : ASPECT_ORIGINAL]); // [XCDE] LINUX-089
     fprintf(f, "resolution = %s\n", g_settings.res_mode >= 0 && g_settings.res_mode <= 12 ? res[g_settings.res_mode] : "match");
     static const char *up[] = {"bilinear", "bilinear", "fsr", "fsr3", "dlss"};
     static const char *uq[] = {"native", "quality", "balanced", "performance", "ultra"};

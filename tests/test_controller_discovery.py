@@ -1,4 +1,4 @@
-"""LINUX-077: actual input.c selection with authored headless SDL virtual pads."""
+"""LINUX-077/089: actual input.c discovery/recovery with authored SDL virtual pads."""
 from pathlib import Path
 import importlib.util
 import os
@@ -70,6 +70,16 @@ class ControllerDiscovery(unittest.TestCase):
     def test_selected_removal_recovers_existing_other_and_clears_hold(self): self.scenario('replacement')
     def test_reconnect_has_no_stale_held_buttons(self): self.scenario('reconnect')
     def test_inventory_budget_and_device_name_sanitization(self): self.scenario('diagnostics')
+    def test_focus_return_retries_failed_open_without_added_event(self): self.scenario('focus-retry')
+    def test_focus_return_recovers_recreated_device_without_hotplug_events(self): self.scenario('focus-replacement')
+    def test_focus_return_keeps_healthy_controller_and_held_input(self): self.scenario('focus-healthy')
+    def test_focus_return_refreshes_release_consumed_by_overlay(self): self.scenario('focus-release')
+    def test_idle_discovers_controller_after_missed_added_event(self): self.scenario('periodic-discovery')
+    def test_idle_recovers_recreated_device_after_missed_hotplug(self): self.scenario('periodic-replacement')
+    def test_idle_disconnect_clears_old_buttons_and_axes(self): self.scenario('periodic-disconnected')
+    def test_transient_open_retries_use_monotonic_backoff(self): self.scenario('retry-backoff')
+    def test_healthy_controller_not_reopened_or_reenumerated_on_ticks(self): self.scenario('healthy-ticks')
+    def test_idle_startup_without_any_input_events(self): self.scenario('idle-startup')
 
 
 class LauncherControllerOwnership(unittest.TestCase):
