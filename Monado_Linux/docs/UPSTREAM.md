@@ -3,6 +3,34 @@
 
 # Linux change ledger for inherited source
 
+## November 14, 2026: LINUX-094 optional fullscreen FPS counter
+
+- `runtime/settings.h`, `runtime/host/settings_ini.c`, launcher and F1 UI:
+  independent OFF-default `show_fps_overlay`; preserve title-bar FPS settings.
+- New `runtime/ui/fps_meter.h`, `fps_overlay_draw.h`, `menu_vk.cpp` and menu API:
+  monotonic real-frame sampling and separate input-transparent ImGui context,
+  readable physical-output layout, warmup/resume/reset handling.
+- `runtime/nvn/vulkan/device.c`: sample once per real acquired game frame; draw
+  FPS after generation on each output without entering retained/interpolated
+  images. Enabled window captures include it. Reset after render drain on reboot.
+- Extend authored native presentation fixtures with overlay ordering, image
+  layouts, captures and both FG outputs; add meter/config/launcher/UI fixtures.
+  No game data, runtime CPU fallback, new dependencies or global overlay service.
+
+## November 14, 2026: LINUX-093 aspect stability candidate
+
+- `runtime/nvn/vulkan/exec.c`, new `runtime/nvn/aspect_composite.h`: preserve
+  existing scene/HUD rules and recognize a conservative fullscreen scene-source
+  contract for reduced-resolution, multi-input composites. Keep portrait/atlas/
+  minimap/instanced UI handling and proportional HUD. Add bounded decision logs.
+- `runtime/host/xcde_aspect.[ch]`, `games/xcde/patches.py`: use the same checked
+  logical camera for renderer projection/FOV qualification, independent of
+  rounded render dimensions. Preserve Original identity and nonreference cameras.
+- `runtime/nvn/vulkan/device.c`: bounded selected-aspect/output-placement logs.
+- Authored native fixtures reproduce old classifier/camera rounding failures;
+  actual reporter ultrawide gameplay remains to be confirmed. No game data,
+  translated shaders or external renderer implementation added to source.
+
 The supplied archive did not contain `docs/UPSTREAM.md`, despite references to it in its contribution guide and notices. This file begins the Linux ledger; it does not reconstruct or certify the author's missing historical ledger.
 
 Source provenance: the user-selected 547-file snapshot is recorded in project-root `docs/linux_port/source_snapshot_20261104.json`. Its notices attribute the generator/runtime base to LASRecomp commit `136f679` under MIT. No upstream checkout or Git history is bundled or assumed.

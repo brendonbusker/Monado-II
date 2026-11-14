@@ -18,6 +18,9 @@ float xcde_aspect_fov(float original_radians, float original_aspect);
 // Checked scalar guest instructions retain their original load/store, then
 // adapt its low 32 bits. Original mode and unsupported cameras are bit-exact.
 uint32_t xcde_aspect_ratio_bits(uint32_t original_bits);
+// LINUX-093: only the checked renderer-camera hook supplies the corresponding
+// logical camera aspect. Render-size alignment must not decide camera identity.
+uint32_t xcde_aspect_render_ratio_bits(uint32_t original_bits, uint32_t logical_aspect_bits);
 uint32_t xcde_aspect_fov_degrees_bits(uint32_t original_bits, uint32_t original_aspect_bits);
-uint32_t xcde_aspect_render_fov_degrees_bits(uint32_t original_bits, uint32_t rendered_aspect_bits);
+uint32_t xcde_aspect_render_fov_degrees_bits(uint32_t original_bits, uint32_t logical_aspect_bits);
 uint32_t xcde_aspect_hud_ratio_bits(uint32_t original_bits, bool horizontal);

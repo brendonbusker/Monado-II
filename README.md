@@ -35,6 +35,7 @@ quality-of-life features, while preserving the original Windows implementation.
 | Optional cheats | A separate Cheats tab with off-by-default damage/reward multipliers (0x–20x in 0.01x steps) and no fall damage. [Controls and limits](docs/CHEATS.md). |
 | Handheld controller recovery | Recheck detection after focus/device changes and keep Steam controller metadata current. Steam Deck/ROG Ally hardware testing is still needed. [Compatibility notes](docs/HANDHELD_CONTROLLERS.md). |
 | Aspect-ratio choices | Original 16:9, Match the display and experimental 16:10 / 21:9 / 32:9, with proportional menus/HUD. [Controls and limits](docs/ASPECT_RATIOS.md). |
+| On-screen FPS counter | Optional **Show FPS on screen** in **Graphics → Quality**, visible in fullscreen. Off by default; counts rendered game frames rather than generated/repeated presentations. |
 | Clearer Linux setup | Early dependency checks, distro-specific package instructions and optional guided Fedora 45 Distrobox repair. |
 
 The Linux-specific launcher, timing, menu, save, Quick Step and cheat improvements have
@@ -73,8 +74,8 @@ one graphical builder AppImage. **The game is still built locally from your own 
 
 | Platform | Recommended download | Full instructions |
 |---|---|---|
-| Linux x86-64 | [Graphical builder AppImage](https://github.com/brendonbusker/Monado-II/releases/download/v0.1.19/monado-ii-0.1.19-linux-builder-x86_64.AppImage) | [Linux setup and build guide](docs/BUILD_LINUX.md) |
-| Windows x86-64 | [Original Windows implementation `.zip`](https://github.com/brendonbusker/Monado-II/releases/download/v0.1.19/monado-ii-windows-original-implementation-setup.zip) | [Windows build guide](docs/BUILD_WINDOWS.md) |
+| Linux x86-64 | [Graphical builder AppImage](https://github.com/brendonbusker/Monado-II/releases/download/v0.1.20/monado-ii-0.1.20-linux-builder-x86_64.AppImage) | [Linux setup and build guide](docs/BUILD_LINUX.md) |
+| Windows x86-64 | [Original Windows implementation `.zip`](https://github.com/brendonbusker/Monado-II/releases/download/v0.1.20/monado-ii-windows-original-implementation-setup.zip) | [Windows build guide](docs/BUILD_WINDOWS.md) |
 
 > **Windows is the original implementation.** Linux release numbers and the
 > Linux features shown above do not describe the Windows download. Its version-free
@@ -97,7 +98,7 @@ game. Keep the installed build folder and its input available. If you already
 have Monado II installed, **Use an existing installation** adopts it in place,
 including its settings, saves and current update. See the [graphical setup guide](docs/GRAPHICAL_BUILDER.md).
 
-The [Linux source/setup kit](https://github.com/brendonbusker/Monado-II/releases/download/v0.1.19/monado-ii-0.1.19-linux-setup.tar.gz)
+The [Linux source/setup kit](https://github.com/brendonbusker/Monado-II/releases/download/v0.1.20/monado-ii-0.1.20-linux-setup.tar.gz)
 remains available for terminal builds and existing updaters. After extracting it
 and arranging its `game_files/exefs` and `game_files/romfs` input, the established
 commands are still:
@@ -163,9 +164,9 @@ launcher. It never presses Play.
   rebuild the game locally.
 - Saves, settings and shared game input stay in the original installation.
   Failed or cancelled preparation keeps the previous version selected.
-- **Updating to 0.1.19 requires a full local game rebuild** for the controller
-  and game-camera changes. The updater handles this while keeping your existing
-  saves, settings and game input in place; no save conversion is needed.
+- **Updating to 0.1.20 requires a full local game rebuild** for the aspect-ratio
+  corrections and on-screen FPS counter. The updater keeps your existing saves,
+  settings and game input in place; no save conversion is needed.
   Missing prerequisites leave the working version selected and show instructions
   for retrying.
 - Keep the **complete save folder, including hidden files**, when backing up or

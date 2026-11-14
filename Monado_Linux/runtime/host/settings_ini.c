@@ -83,6 +83,7 @@ void settings_load(void) {
     // load, including a reload after a previously selected Fast preference.
     g_settings.menu_navigation_speed = MENU_NAV_NORMAL;
     g_settings.quickstep_slot = false; // [XCDE] LINUX-039: absent/invalid always OFF
+    g_settings.show_fps_overlay = false; // [XCDE] LINUX-094: old/missing configs keep the new overlay OFF
     // [XCDE] LINUX-072: all cheats are opt-in, including absent-file/hidden runs.
 #define RESET_CHEAT(name) g_settings.cheat_##name = false; g_settings.cheat_##name##_percent = 100;
     XCDE_CHEAT_MULTIPLIERS(RESET_CHEAT)
@@ -130,6 +131,7 @@ void settings_load(void) {
         else if (!strcmp(k, "volume")) g_settings.volume = (float)atof(v) / 100.0f;
         else if (!strcmp(k, "movie_audio")) g_settings.movie_audio = atoi(v) != 0;
         else if (!strcmp(k, "show_fps")) g_settings.show_fps = atoi(v) != 0;
+        else if (!strcmp(k, "show_fps_overlay")) g_settings.show_fps_overlay = !strcmp(v, "1") || !strcmp(v, "true");
         else if (!strcmp(k, "fps")) g_settings.fps = !strcmp(v, "unlimited") ? 0 : atoi(v);
         else if (!strcmp(k, "menu_navigation_speed"))
             g_settings.menu_navigation_speed = !strcmp(v, "fast") ? MENU_NAV_FAST : MENU_NAV_NORMAL;
@@ -207,6 +209,7 @@ void settings_save(void) {
     fprintf(f, "cheat_no_fall_damage = %d\n", g_settings.cheat_no_fall_damage);
     fprintf(f, "volume = %d\nmovie_audio = %d\nshow_fps = %d\n", (int)(g_settings.volume * 100 + 0.5f), g_settings.movie_audio,
             g_settings.show_fps);
+    fprintf(f, "show_fps_overlay = %d\n", g_settings.show_fps_overlay); // [XCDE] LINUX-094
     if (g_settings.fps) fprintf(f, "fps = %d\n", g_settings.fps); else fprintf(f, "fps = unlimited\n");
     // [XCDE] LINUX-014: retain the launcher-only preference when F1 saves settings.
     fprintf(f, "menu_navigation_speed = %s\n", g_settings.menu_navigation_speed == MENU_NAV_FAST ? "fast" : "normal");

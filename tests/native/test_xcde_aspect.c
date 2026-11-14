@@ -26,6 +26,7 @@ static void identity(void) {
         for (unsigned i=0;i<sizeof values/sizeof *values;++i) {
             uint32_t v=values[i];
             assert(xcde_aspect_ratio_bits(v)==v);
+            assert(xcde_aspect_render_ratio_bits(v,bits(original_aspect))==v);
             assert(xcde_aspect_fov_degrees_bits(v,bits(original_aspect))==v);
             assert(xcde_aspect_render_fov_degrees_bits(v,bits(original_aspect))==v);
             assert(xcde_aspect_hud_ratio_bits(v,0)==v && xcde_aspect_hud_ratio_bits(v,1)==v);
@@ -67,7 +68,7 @@ static void camera(float factor) {
     float fov=xcde_aspect_fov(old_fov,original_aspect);
     assert(close_to(aspect,original_aspect*factor));
     float degrees=scalar(xcde_aspect_fov_degrees_bits(bits(65.0f),bits(original_aspect)));
-    float render_degrees=scalar(xcde_aspect_render_fov_degrees_bits(bits(65.0f),bits(aspect)));
+    float render_degrees=scalar(xcde_aspect_render_fov_degrees_bits(bits(65.0f),bits(original_aspect)));
     assert(close_to(degrees*pi/180.0f,fov));
     assert(close_to(render_degrees,degrees));
     float old_h=2.0f*atanf(tanf(old_fov/2.0f)*original_aspect);
@@ -131,6 +132,36 @@ static void invalid(void) {
     for (int i=0;i<100;++i) { camera(2.0f);camera(0.9f);camera(1.0f); }
 }
 
+// [XCDE] LINUX-093: authored aligned/rounded dimensions, not game captures.
+// The current logical camera identifies a world perspective independently of
+// its render allocation. Square/offscreen camera parameters remain identity.
+static void render_context(void) {
+    const unsigned sizes[][2]={{1280,720},{854,480},{1365,768},{920,518},
+                               {1208,680},{1128,640},{1056,592},{976,552},{896,504},
+                               {1280,800},{1024,768},{720,720}};
+    const float factors[]={0.9f,21.0f/16.0f,1.34375f,2.0f};
+    const float excluded[]={1.0f,4.0f/3.0f,9.0f/16.0f,2.0f,0.0f,INFINITY,NAN};
+    g_settings.aspect=ASPECT_UNLOCKED;
+    for (unsigned f=0;f<sizeof factors/sizeof *factors;f++) {
+        xcde_aspect_set_factor(factors[f]);
+        for (unsigned i=0;i<sizeof sizes/sizeof *sizes;i++) {
+            uint32_t native=bits((float)sizes[i][0]/(float)sizes[i][1]);
+            uint32_t adapted=xcde_aspect_render_ratio_bits(native,bits(original_aspect));
+            assert(adapted==bits(original_aspect*factors[f]));
+            float fov=scalar(xcde_aspect_render_fov_degrees_bits(bits(65),bits(original_aspect)));
+            assert(close_to(fov,scalar(xcde_aspect_fov_degrees_bits(bits(65),bits(original_aspect)))));
+            for (unsigned j=0;j<sizeof excluded/sizeof *excluded;j++) {
+                assert(xcde_aspect_render_ratio_bits(native,bits(excluded[j]))==native);
+                assert(xcde_aspect_render_fov_degrees_bits(bits(65),bits(excluded[j]))==bits(65));
+            }
+        }
+        const uint32_t bad[]={0,UINT32_C(0x80000000),UINT32_C(0xbf800000),
+                              UINT32_C(0x7f800000),UINT32_C(0x7fc12345)};
+        for (unsigned j=0;j<sizeof bad/sizeof *bad;j++)
+            assert(xcde_aspect_render_ratio_bits(bad[j],bits(original_aspect))==bad[j]);
+    }
+}
+
 static _Atomic bool stop;
 static void *publisher(void *unused) {
     (void)unused;
@@ -159,6 +190,7 @@ int main(int argc,char **argv) {
     else if (!strcmp(argv[1],"hud")) hud();
     else if (!strcmp(argv[1],"invalid")) invalid();
     else if (!strcmp(argv[1],"concurrent")) concurrent();
+    else if (!strcmp(argv[1],"render-context")) render_context();
     else assert(!"unknown fixture");
     puts("native XCDE aspect: PASS");return 0;
 }

@@ -812,7 +812,13 @@ ASPECT_CAMERA_CONTEXT = {
     0x70005d8934: 0x1e221821,  # horizontal screen compensation
     0x70005d894c: 0x1e230842,  # vertical screen compensation
     0x70006f7d80: 0xd10383ff,  # render-camera update entry
+    0x70006f7dc0: 0xf9403c08,  # current logical camera in x0, data pointer +0x78
+    0x70006f7e7c: 0xf944c108,  # render-size owner -> dimensions
     0x70006f7e80: 0x2d451504,  # drawable width/height -> s4/s5
+    0x70006f7e90: 0x5e21d8a5,  # signed integer height -> s5
+    0x70006f7e98: 0x5e21d884,  # signed integer width -> s4
+    0x70006f7e9c: 0x1e251884,  # rounded render dimensions -> native aspect
+    0x70006f7ea4: 0xf9403c0a,  # same current logical camera data -> x10
     0x70006f822c: 0xbd04c660,  # renderer camera vertical FOV radians
     0x70006f82a4: 0xbd018264,  # renderer perspective horizontal focal length
 }
@@ -842,14 +848,37 @@ def _aspect_scalar(register, helper, before=False):
 
 def _aspect_fov(register, data_register, renderer=False):
     helper = 'xcde_aspect_render_fov_degrees_bits' if renderer else 'xcde_aspect_fov_degrees_bits'
-    offset = 0x4c0 if renderer else 0x1f0
     def emit(gen, addr):
         original = _aspect_plain(gen, addr)
+        if renderer:
+            # LINUX-093: no intervening native call changes x0 before this
+            # second adapter. Read that camera's canonical aspect just as the
+            # renderer-ratio adapter does, never infer it from target dimensions.
+            return (original + ' { extern _Bool xcde_aspect_active(void); '
+                    f'extern uint32_t {helper}(uint32_t, uint32_t); '
+                    'if (xcde_aspect_active()) { '
+                    'uint64_t aspect_camera_data = *(const uint64_t *)(uintptr_t)(c->x[0] + 0x78); '
+                    f'c->v[{register}] = {helper}((uint32_t)c->v[{register}], '
+                    '*(const uint32_t *)(uintptr_t)(aspect_camera_data + 0x1f0)); } }')
         return (original + ' { extern _Bool xcde_aspect_active(void); '
                 f'extern uint32_t {helper}(uint32_t, uint32_t); '
                 f'if (xcde_aspect_active()) c->v[{register}] = {helper}((uint32_t)c->v[{register}], '
-                f'*(const uint32_t *)(uintptr_t)(c->x[{data_register}] + 0x{offset:x})); }}')
+                f'*(const uint32_t *)(uintptr_t)(c->x[{data_register}] + 0x1f0)); }}')
     return emit
+
+
+def _aspect_render_ratio(gen, addr):
+    # [XCDE] LINUX-093: x0 remains the selected logical camera through this
+    # guarded native prefix. Its current data (+0x78) supplies canonical aspect,
+    # as it supplies native near/far/FOV immediately around the original store.
+    # Keep Original's instruction and avoid any extra guest read when inactive.
+    original = _aspect_plain(gen, addr)
+    return ('{ extern _Bool xcde_aspect_active(void); '
+            'extern uint32_t xcde_aspect_render_ratio_bits(uint32_t, uint32_t); '
+            'if (xcde_aspect_active()) { '
+            'uint64_t aspect_camera_data = *(const uint64_t *)(uintptr_t)(c->x[0] + 0x78); '
+            'c->v[4] = xcde_aspect_render_ratio_bits((uint32_t)c->v[4], '
+            '*(const uint32_t *)(uintptr_t)(aspect_camera_data + 0x1f0)); } } ' + original)
 
 
 def _aspect_hud(register, horizontal):
@@ -870,11 +899,11 @@ ASPECT_CAMERA_PATCHES = {
     0x70005d93a0: (0xbd41f10a, _aspect_scalar(10, 'xcde_aspect_ratio_bits'), 'CPU frustum aspect'),
     0x70005d9958: (0xbd41ea60, _aspect_fov(0, 19), 'auxiliary frustum FOV degrees'),
     0x70005d9984: (0xbd41f262, _aspect_scalar(2, 'xcde_aspect_ratio_bits'), 'auxiliary frustum aspect'),
-    0x70006f7ea0: (0xbd04c264, _aspect_scalar(4, 'xcde_aspect_ratio_bits', before=True), 'render-camera aspect before native store'),
+    0x70006f7ea0: (0xbd04c264, _aspect_render_ratio, 'render-camera canonical logical aspect before native store'),
     0x70006f8224: (0xbd402be0, _aspect_fov(0, 19, renderer=True), 'render-camera FOV before radians conversion'),
     0x70005d8930: (0xbd41f142, _aspect_hud(2, True), 'world markers into centered HUD horizontal canvas'),
     0x70005d8948: (0xbd41f143, _aspect_hud(3, False), 'world markers into centered HUD vertical canvas'),
 }
 for _site, (_word, _emit, _note) in ASPECT_CAMERA_PATCHES.items():
     assert _site not in PATCHES, f'Conflicting native aspect patch at {_site:#x}'
-    PATCHES[_site] = Patch(_word, _emit, 'LINUX-089', _note)
+    PATCHES[_site] = Patch(_word, _emit, 'LINUX-093' if _site in (0x70006f7ea0, 0x70006f8224) else 'LINUX-089', _note)

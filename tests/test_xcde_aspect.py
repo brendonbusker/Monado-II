@@ -30,13 +30,21 @@ class CameraPatchContracts(unittest.TestCase):
         for site in patches.ASPECT_CAMERA_PATCHES:
             with self.subTest(site=hex(site)):
                 patch=patches.PATCHES[site]
-                self.assertEqual(patch.req,'LINUX-089')
+                self.assertEqual(patch.req,'LINUX-093' if site in (0x70006f7ea0,0x70006f8224) else 'LINUX-089')
                 result=patch.apply(gen,site)
                 self.assertEqual(result.count('AUTHORED_ORIGINAL;'),1)
                 self.assertIn('xcde_aspect_',result)
                 if site==0x70006f7ea0:
                     self.assertTrue(result.endswith('AUTHORED_ORIGINAL;'))
+                    self.assertIn('xcde_aspect_render_ratio_bits',result)
+                    self.assertIn('c->x[0] + 0x78',result)
+                    self.assertIn('aspect_camera_data + 0x1f0',result)
+                    self.assertLess(result.index('if (xcde_aspect_active())'),result.index('aspect_camera_data ='))
                 else:self.assertTrue(result.startswith('AUTHORED_ORIGINAL;'))
+                if site==0x70006f8224:
+                    self.assertIn('xcde_aspect_render_fov_degrees_bits',result)
+                    self.assertIn('c->x[0] + 0x78',result)
+                    self.assertIn('aspect_camera_data + 0x1f0',result)
 
     def test_changed_build_or_module_is_refused(self):
         for name,build in [('sdk',patches.ASPECT_BUILD_ID),('main','00'*16),('main',patches.ASPECT_BUILD_ID+'00')]:
@@ -89,6 +97,7 @@ class NativeAspect(unittest.TestCase):
     def test_world_markers_align_with_uniform_centered_hud_canvas(self):self.scenario('hud')
     def test_invalid_camera_and_repeated_resize_never_accumulate(self):self.scenario('invalid')
     def test_renderer_publishing_cannot_tear_factor_bits(self):self.scenario('concurrent')
+    def test_renderer_uses_same_logical_camera_across_rounded_render_sizes(self):self.scenario('render-context')
 
 
 if __name__=='__main__':unittest.main()

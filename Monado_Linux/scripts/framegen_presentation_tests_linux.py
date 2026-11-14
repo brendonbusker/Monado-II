@@ -78,6 +78,7 @@ HARNESS = r'''
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#include <stdlib.h>
 #include <vulkan/vulkan.h>
 typedef struct {VkBuffer buf;uint64_t off;void *ptr;} VkSpan;
 static struct {VkQueue queue;VkPhysicalDevice phys;VkSwapchainKHR swapchain;VkFormat sc_format;VkExtent2D sc_extent;VkImage sc_images[8];} g_vk;
@@ -89,6 +90,11 @@ static uint64_t fg_submitted_generated,fg_submitted_real;
 static uint64_t fg_second_deadline;
 static __thread uint64_t g_blocked_ns;
 static unsigned colors[8],present_colors[8];
+static VkImageLayout image_layouts[8]; // [XCDE] LINUX-094: validate late-overlay layout transitions.
+// [XCDE] LINUX-094: host FPS is applied after generation, never to its retained
+// input. This marker models overlay composition, not game image pixels.
+static bool overlay_enabled;
+static unsigned overlay_draws;
 static uint64_t sequence=1;
 static uint64_t virtual_ns,acquire_ns,copy_ns,gpu_wait_ns,oversleep_ns,slept_ns,present_ns[8];
 static uint64_t expected_half_ns;
@@ -117,7 +123,7 @@ static uint64_t vk_pending_seq(void){return sequence;}
 static void vk_wait_seq(uint64_t seq){assert(seq>0&&seq<sequence);waits++;virtual_ns+=gpu_wait_ns;event('W');}
 static void vk_full_barrier(VkCommandBuffer cb){assert(cb==vk_cmd()&&!rendering);}
 static unsigned image_index(VkImage image){for(unsigned i=0;i<8;i++)if(g_vk.sc_images[i]==image)return i;assert(!"unknown image");return 0;}
-static void image_barrier(VkCommandBuffer cb,VkImage im,VkImageLayout from,VkImageLayout to){(void)from;(void)to;assert(cb==vk_cmd()&&!rendering);image_index(im);}
+static void image_barrier(VkCommandBuffer cb,VkImage im,VkImageLayout from,VkImageLayout to){assert(cb==vk_cmd()&&!rendering);unsigned i=image_index(im);assert(image_layouts[i]==from);image_layouts[i]=to;}
 static bool diag_hash_wanted(void){return hash_flag;}
 bool diag_flicker_wanted(void){return flicker_flag;}
 static uint64_t diag_frame(void){return 4;}
@@ -125,14 +131,18 @@ static void diag_frame_hash(uint64_t frame,const uint8_t *p,uint32_t w,uint32_t 
 void vk_save_png(const char *path,const uint8_t *p,uint32_t w,uint32_t h){assert(path&&p&&w&&h);shots++;}
 void diag_flicker_check(uint64_t frame,const uint8_t *p,uint32_t w,uint32_t h,void(*save)(const char*,const uint8_t*,uint32_t,uint32_t)){
  assert(frame==5&&p&&w&&h&&save==vk_save_png);}
-static void save_window_image(VkCommandBuffer cb,VkSpan *shot){static uint8_t data[4096];assert(cb==vk_cmd()&&!rendering);shot->ptr=data;}
+static void save_window_image(VkCommandBuffer cb,VkSpan *shot){static uint8_t data[4096];assert(cb==vk_cmd()&&!rendering&&image_layouts[cur_frame.image]==VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);if(overlay_enabled)assert(colors[cur_frame.image]&8);shot->ptr=data;}
 static VkSemaphore binary_semaphore(void){static uintptr_t id=0x90;return (VkSemaphore)id++;}
-VKAPI_ATTR void VKAPI_CALL vkCmdEndRendering(VkCommandBuffer cb){assert(cb==vk_cmd()&&rendering);rendering=false;event('E');}
+VKAPI_ATTR void VKAPI_CALL vkCmdEndRendering(VkCommandBuffer cb){assert(cb==vk_cmd()&&rendering&&image_layouts[cur_frame.image]==VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);rendering=false;event('E');}
 VKAPI_ATTR void VKAPI_CALL vkCmdCopyImage(VkCommandBuffer cb,VkImage src,VkImageLayout sl,VkImage dst,VkImageLayout dl,uint32_t count,const VkImageCopy *copy){
  assert(cb==vk_cmd()&&!rendering&&src==(VkImage)(uintptr_t)0x200&&sl==VK_IMAGE_LAYOUT_GENERAL&&dl==VK_IMAGE_LAYOUT_GENERAL&&count==1);
- assert(copy->extent.width<=g_vk.sc_extent.width&&copy->extent.height<=g_vk.sc_extent.height);
+ assert(copy->extent.width<=g_vk.sc_extent.width&&copy->extent.height<=g_vk.sc_extent.height&&image_layouts[image_index(dst)]==VK_IMAGE_LAYOUT_GENERAL);
  colors[image_index(dst)]=2;copies++;virtual_ns+=copy_ns;event('C');}
-static void vk_frame_resume(void){assert(!rendering);rendering=true;resumes++;event('R');}
+static void vk_frame_resume(void){assert(!rendering&&image_layouts[cur_frame.image]==VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);rendering=true;resumes++;event('R');}
+static bool fps_overlay_visible(void){return overlay_enabled;}
+static void fps_overlay_render(void *cb,uint32_t w,uint32_t h){
+ assert(cb==(void*)vk_cmd()&&rendering&&w==g_vk.sc_extent.width&&h==g_vk.sc_extent.height);
+ assert(!(colors[cur_frame.image]&8));colors[cur_frame.image]|=8;overlay_draws++;event('O');}
 void tmp_fg_invalidate(void){invalidations++;}
 void vk_present_redraw(VkCommandBuffer cb){assert(cb==vk_cmd()&&rendering);colors[cur_frame.image]=2;redraws++;event('B');}
 VKAPI_ATTR void VKAPI_CALL vkGetPhysicalDeviceFormatProperties(VkPhysicalDevice physical,VkFormat format,VkFormatProperties *properties){
@@ -140,17 +150,19 @@ VKAPI_ATTR void VKAPI_CALL vkGetPhysicalDeviceFormatProperties(VkPhysicalDevice 
  if(scenario!=10)properties->optimalTilingFeatures=VK_FORMAT_FEATURE_BLIT_SRC_BIT|VK_FORMAT_FEATURE_BLIT_DST_BIT;}
 VKAPI_ATTR void VKAPI_CALL vkCmdBlitImage(VkCommandBuffer cb,VkImage src,VkImageLayout sl,VkImage dst,VkImageLayout dl,uint32_t count,const VkImageBlit *region,VkFilter filter){
  assert(cb==vk_cmd()&&!rendering&&src==(VkImage)(uintptr_t)0x200&&sl==VK_IMAGE_LAYOUT_GENERAL&&dl==VK_IMAGE_LAYOUT_GENERAL&&count==1&&filter==VK_FILTER_NEAREST);
+ assert(image_layouts[image_index(dst)]==VK_IMAGE_LAYOUT_GENERAL);
  assert(region->srcOffsets[1].x==4&&region->srcOffsets[1].y==4);
  assert(region->dstOffsets[1].x==(int32_t)g_vk.sc_extent.width&&region->dstOffsets[1].y==(int32_t)g_vk.sc_extent.height);
  colors[image_index(dst)]=2;blits++;event('L');}
 bool tmp_fg_record_present(VkCommandBuffer cb,VkImage scene,VkImage *base,float *ms){
- assert(cb==vk_cmd()&&!rendering);records++;event('F');if(!make_pair)return false;
+ assert(cb==vk_cmd()&&!rendering&&!(colors[image_index(scene)]&8));records++;event('F');if(!make_pair)return false;
  colors[image_index(scene)]=1;*base=(VkImage)(uintptr_t)0x200;*ms=measured_frame_ms;return true;}
 static void vk_submit_extra(VkSemaphore wait,VkSemaphore signal,VkCommandBuffer extra){
- assert(!rendering&&wait==cur_frame.acquired&&signal==done_sem[cur_frame.image]&&!extra);submits++;sequence++;event('S');}
+ assert(!rendering&&wait==cur_frame.acquired&&signal==done_sem[cur_frame.image]&&!extra&&image_layouts[cur_frame.image]==VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);submits++;sequence++;event('S');}
 static VkResult present_mock(VkQueue queue,const VkPresentInfoKHR *p){
  assert(queue==g_vk.queue&&p->waitSemaphoreCount==1&&p->swapchainCount==1&&*p->pSwapchains==g_vk.swapchain);
  assert(*p->pWaitSemaphores==done_sem[*p->pImageIndices]);assert(submits==presents+1);
+ assert(image_layouts[*p->pImageIndices]==VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
  present_colors[presents]=colors[*p->pImageIndices];present_ns[presents]=virtual_ns;presents++;event('P');
  if(presents==1&&scenario==2)return VK_ERROR_OUT_OF_DATE_KHR;
  if(presents==1&&scenario==8)return VK_SUBOPTIMAL_KHR;
@@ -162,6 +174,7 @@ static bool vk_frame_begin(const float clear[4]){
  virtual_ns+=acquire_ns;
  if(scenario==3)return false;
  cur_frame.image=scenario==9?0:1;cur_frame.acquired=(VkSemaphore)(uintptr_t)(0x71+acquires);cur_frame.ok=true;rendering=true;colors[cur_frame.image]=0;
+ image_layouts[cur_frame.image]=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
  if(scenario==4){g_vk.sc_extent=(VkExtent2D){6,6};g_vk.swapchain=(VkSwapchainKHR)(uintptr_t)0x36;}
  if(scenario==5||scenario==10){g_vk.sc_format=VK_FORMAT_R8G8B8A8_UNORM;g_vk.swapchain=(VkSwapchainKHR)(uintptr_t)0x37;}
  return true;}
@@ -171,7 +184,9 @@ static void reset(unsigned mode){
  g_vk.queue=(VkQueue)(uintptr_t)0x20;g_vk.phys=(VkPhysicalDevice)(uintptr_t)0x21;g_vk.swapchain=(VkSwapchainKHR)(uintptr_t)0x30;g_vk.sc_format=VK_FORMAT_B8G8R8A8_UNORM;g_vk.sc_extent=(VkExtent2D){4,4};
  for(unsigned i=0;i<8;i++)g_vk.sc_images[i]=(VkImage)(uintptr_t)(0x100+i);
  cur_frame.image=0;cur_frame.acquired=(VkSemaphore)(uintptr_t)0x70;cur_frame.ok=true;rendering=true;colors[0]=2;
+ memset(image_layouts,0,sizeof image_layouts);image_layouts[0]=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
  scenario=mode;fg_present_second=false;hash_flag=false;flicker_flag=false;make_pair=true;sequence=1;
+ overlay_enabled=false;overlay_draws=0;
  fg_second_deadline=g_blocked_ns=0;virtual_ns=4000000000ull;acquire_ns=copy_ns=gpu_wait_ns=oversleep_ns=slept_ns=0;
  measured_frame_ms=16.f;target_fps=60;expected_half_ns=8000000ull;
  memset(present_ns,0,sizeof present_ns);
@@ -195,17 +210,27 @@ int main(int argc,char **argv){
 #ifdef FRAMEGEN_PACING_BASELINE
  baseline=argc==2;
 #endif
- if(argc==3)assert(!strcmp(argv[2],"--expect-fixed"));
+ if(argc==3){overlay_enabled=!strcmp(argv[2],"--overlay");assert(overlay_enabled||!strcmp(argv[2],"--expect-fixed"));}
  if(mode==1)make_pair=false;if(mode==7)hash_flag=true;
  vk_frame_end(mode==6?"authored.png":NULL);
  assert(!cur_frame.ok&&!rendering&&!fg_present_second&&!fg_second_deadline);
+ if(overlay_enabled){
+   printf("OVERLAY draws=%u presents=%u records=%u events=%s\n",overlay_draws,presents,records,events);fflush(stdout);
+   assert(overlay_draws==presents);
+   if(records)assert(strchr(events,'F')<strchr(events,'O'));
+ }else assert(!overlay_draws);
+#ifndef XCDE_LINUX_FRAMEGEN
+ assert(presents==1&&submits==1&&!records&&!copies&&!acquires);
+ assert(present_colors[0]==2+(overlay_enabled?8u:0u));
+ printf("actual ordinary vk_frame_end overlay=%d passed\n",overlay_enabled);return 0;
+#endif
  if(mode==0||mode==9||mode>=11){assert(presents==2&&submits==2&&records==1&&copies==1&&acquires==1&&pace_waits==1&&waits==1);
-   assert(present_colors[0]==1&&present_colors[1]==2);assert(strchr(events,'W')<strchr(events,'P'));}
- else if(mode==1){assert(presents==1&&records==1&&!copies&&!waits&&!pace_waits&&!acquires);assert(present_colors[0]==2);}
+   assert(present_colors[0]==1+(overlay_enabled?8u:0u)&&present_colors[1]==2+(overlay_enabled?8u:0u));assert(strchr(events,'W')<strchr(events,'P'));}
+ else if(mode==1){assert(presents==1&&records==1&&!copies&&!waits&&!pace_waits&&!acquires);assert(present_colors[0]==2+(overlay_enabled?8u:0u));}
  else if(mode==2||mode==8){assert(presents==1&&recreates==1&&!acquires&&!pace_waits);}
  else if(mode==3){assert(presents==1&&acquires==1&&!copies&&pace_waits==(baseline?1:0));}
- else if(mode==4||mode==5){assert(presents==2&&blits==1&&!copies&&!redraws&&present_colors[1]==2);}
- else if(mode==10){assert(presents==2&&!blits&&!copies&&redraws==1&&present_colors[1]==2);}
+ else if(mode==4||mode==5){assert(presents==2&&blits==1&&!copies&&!redraws&&present_colors[1]==2+(overlay_enabled?8u:0u));}
+ else if(mode==10){assert(presents==2&&!blits&&!copies&&redraws==1&&present_colors[1]==2+(overlay_enabled?8u:0u));}
  else if(mode==6){assert(presents==1&&!records&&shots==1&&!copies&&!acquires);}
  else if(mode==7){assert(presents==1&&!records&&hashes==1&&!copies&&!acquires);}
  else assert(!"unknown case");
@@ -299,6 +324,8 @@ def main():
             run('compile-presentation', [cc, *flags, '-DXCDE_LINUX_FRAMEGEN', out / 'presentation.c', '-lm', '-o', out / 'presentation'], timeout=30)
             for mode in range(22):
                 print(run('presentation-' + str(mode), [out / 'presentation', str(mode)]), end='')
+            for mode in range(22):
+                print(run('presentation-overlay-' + str(mode), [out / 'presentation', str(mode), '--overlay']), end='')
             if args.baseline_source:
                 baseline=args.baseline_source.read_text()
                 start=baseline.index('void vk_frame_end(const char *shot_path) {')

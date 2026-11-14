@@ -1,5 +1,37 @@
 # Release artifacts and publication boundaries
 
+## Current release: Linux 0.1.20
+
+Release 0.1.20 adds **Show FPS on screen** in **Graphics → Quality**, off by
+default, with a matching F1 setting. It remains visible in fullscreen and counts
+rendered game frames, excluding generated frames and repeated presentations.
+The existing title-bar FPS preference stays independent. Keep the overlay outside
+frame-generation history.
+
+The shared aspect correction applies to Match the display and the experimental
+16:10, 21:9 and 32:9 modes. It handles reduced-resolution scene composites with
+multiple inputs and aligns the renderer's checked aspect/FOV with its logical
+camera. Original 16:9 remains the default; menus/HUD stay proportional. The
+maintainer accepted desktop/NVIDIA gameplay and the counter. The reported
+ultrawide framing issue still needs reporter testing; do not present it as a
+confirmed all-hardware fix or full-game qualification.
+
+The release requires a **full local game rebuild**. Preserve the existing saves,
+settings, hidden Quick Step metadata and shared input without conversion. Users
+need temporary space for the old and new builds. First-time cleanup of accumulated
+update history can delay opening; the isolated long-history rehearsal took about
+75 seconds for maintenance and checks. Unknown, modified or busy trees remain
+protected/deferred. Keep this caveat in release notes.
+
+Publish a regular release with the reviewed standalone builder, Linux setup kit
+and byte-identical legacy source alias, original Windows kit, licensed builder
+runtime source companion and combined SHA256SUMS. The Windows filename remains
+version-free and the implementation remains original. Keep the inherited RADV
+`nodcc` workaround and credit **patrickksmdev** for isolating and testing it.
+Quick Step, cheats, the new FPS overlay and experimental frame generation stay
+off by default. The following sections preserve earlier release history and
+continuing packaging boundaries.
+
 Linux 0.1.17 adds the graphical setup AppImage
 **`monado-ii-0.1.17-linux-builder-x86_64.AppImage`**. It contains the authored
 setup frontend, Python runtime, selected reviewed startup dependencies and source

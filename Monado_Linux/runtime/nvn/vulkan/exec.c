@@ -16,6 +16,7 @@
 #include "shaders.h"
 #include "vk.h"
 #include "../aspect_canvas.h" // [XCDE] LINUX-089: do not stretch native UI.
+#include "../aspect_composite.h" // [XCDE] LINUX-093: reduced scene inputs are not HUD.
 #include "../program_binding.h"
 #include "host_import.h"  // [XCDE] LINUX-005: shared checked host-memory import
 #ifdef __linux__
@@ -5631,15 +5632,54 @@ static void draw_(CmdRec *r, bool indexed) {
     if (prof) prof_tex += SDL_GetTicksNS() - prof_tx_;
     if (fabsf(pass_sx - pass_sy) > 0.01f * pass_sy && st.rt.ncolor && renderer_texture_presented(st.rt.color[0])) {
         // Draws into the swapchain image (see renderer.m): composites fill the window, UI goes in a centred 16:9 box.
-        bool reads_scene = false;
-        for (int i = 0; i < pr->fi->ntex && i < 64; i++)
-            if ((tex_sc[1][i][0] != 1 || tex_sc[1][i][1] != 1) && tex_wh[1][i][0] == st.rt.color[0]->width &&
-                tex_wh[1][i][1] == st.rt.color[0]->height)
-                reads_scene = true;
+        // [XCDE] LINUX-093: the final scene may read several inputs, and its
+        // dynamic-resolution source need not equal the window's native size.
+        // Only GPU scene allocations with the target's nonuniform scale extend
+        // the existing rule; portraits, atlases, square maps and partial UI do not.
+        size_t ninputs = pr->fi->ntex <= 0 ? 0 : pr->fi->ntex < 64 ? (size_t)pr->fi->ntex : 64;
+        AspectCompositeInput inputs[64];
+        TexBackend *target = st.rt.color[0]->backend;
+        for (size_t i = 0; i < ninputs; ++i) {
+            NvnTexture *texture = shader_texture_object(1, &pr->fi->tex[i]);
+            TexBackend *source = texture ? texture->backend : NULL;
+            inputs[i] = (AspectCompositeInput){
+                .width=tex_wh[1][i][0], .height=tex_wh[1][i][1],
+                .sx=tex_sc[1][i][0], .sy=tex_sc[1][i][1],
+                .scene_target=source && source->scalable == 1,
+                .gpu_written=source && source->gpu_owned,
+                .color_image=source && (source->aspect & VK_IMAGE_ASPECT_COLOR_BIT) && !pr->fi->tex[i].is_image,
+                .separate_image=source && target && source->image && source->image != target->image};
+        }
+        uint32_t instances = (uint32_t)r->x[indexed ? 6 : 4];
+        AspectCompositeDraw scene_draw = {
+            .width=st.rt.color[0]->width, .height=st.rt.color[0]->height,
+            .count=(uint32_t)r->x[2], .instances=instances ? instances : 1, .mode=(uint32_t)r->x[0],
+            .sx=pass_sx, .sy=pass_sy, .viewport={vp[0],vp[1],vp[2],vp[3]}};
+        AspectCompositeRole scene_role = aspect_composite_role(&scene_draw, inputs, ninputs);
+        bool reads_scene = scene_role != ASPECT_COMPOSITE_HUD;
         bool fullscreen_quad = r->x[2] <= 6 && st.viewport[0][0] == 0 && st.viewport[0][1] == 0 &&
                                st.viewport[0][2] >= st.rt.color[0]->width && st.viewport[0][3] >= st.rt.color[0]->height;
         bool fullscreen_fill = pr->fi->ntex == 0 && fullscreen_quad;
-        if (fullscreen_quad && !reads_scene && pr->fi->ntex == 1 && (tex_sc[1][0][0] != 1 || tex_sc[1][0][1] != 1)) reads_scene = true;
+        // Bounded ordinary-log evidence is available without environment flags
+        // (the launcher deliberately sanitizes unrecognized environment input).
+        // This records decisions, not a claim about a reporter's failing draw.
+        if (scene_role == ASPECT_COMPOSITE_SCENE_SOURCE) {
+            static uint64_t seen[12]; static unsigned nseen;
+            uint64_t hash = st.program->stages[1].code_hash;
+            size_t source_index = 0;
+            while (source_index < ninputs && !aspect_composite_scene_source(&scene_draw, &inputs[source_index])) source_index++;
+            const AspectCompositeInput *input = source_index < ninputs ? &inputs[source_index] : NULL;
+            uint64_t key = input ? hash ^ ((uint64_t)input->width << 32) ^ input->height : 0;
+            bool known = false;
+            for (unsigned i = 0; i < nseen; ++i) known |= seen[i] == key;
+            if (input && !known && nseen < 12) {
+                seen[nseen++] = key;
+                LOG("[aspect] full scene composite frame %llu draw %llu fs %016llx mode %d inputs %zu target %ux%u scale %.4f %.4f source %zu %ux%u scale %.4f %.4f\n",
+                    (unsigned long long)renderer_present_count(), (unsigned long long)g_draws_total,
+                    (unsigned long long)hash, g_settings.aspect, ninputs, scene_draw.width, scene_draw.height, pass_sx, pass_sy,
+                    source_index, input->width, input->height, input->sx, input->sy);
+            }
+        }
         static uint64_t wide_frame = ~0ull;
         if (reads_scene) wide_frame = renderer_present_count();
         bool fade_fill = false;

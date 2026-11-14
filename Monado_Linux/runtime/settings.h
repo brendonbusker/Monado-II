@@ -82,6 +82,7 @@ typedef struct {
     int cheat_damage_dealt_percent, cheat_damage_received_percent;
     int cheat_exp_percent, cheat_ap_percent, cheat_sp_percent, cheat_gold_percent;
     bool cheat_no_fall_damage;
+    bool show_fps_overlay; // [XCDE] LINUX-094: opt-in rendered-game FPS on screen, including fullscreen
 } Settings;
 
 enum { N_TUNIC_COLOURS = 13, N_HEART_COLOURS = 9 };

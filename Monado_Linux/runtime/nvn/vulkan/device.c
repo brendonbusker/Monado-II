@@ -30,6 +30,24 @@ static SDL_Window *window;
 static atomic_bool ui_ready;
 static VkDebugUtilsMessengerEXT messenger;
 
+// [XCDE] LINUX-093: retain enough normal-log evidence to distinguish output
+// placement from camera/composite decisions. Bounded and render-thread-only;
+// ordinary 16:9 users do not take this diagnostic path.
+static void aspect_output_note(const OutScale *o) {
+    static unsigned notes;
+    static int mode = -1;
+    static uint32_t width, height;
+    static double shape, sx, sy;
+    if (!xcde_aspect_enabled() || notes >= 32) return;
+    if (mode == g_settings.aspect && width == g_vk.sc_extent.width && height == g_vk.sc_extent.height &&
+        fabs(shape - o->shape) < 0.00001 && fabs(sx - o->sx) < 0.00001 && fabs(sy - o->sy) < 0.00001) return;
+    mode = g_settings.aspect; width = g_vk.sc_extent.width; height = g_vk.sc_extent.height;
+    shape = o->shape; sx = o->sx; sy = o->sy;
+    LOG("[aspect] mode %d drawable %ux%u factor %.6f scale %.6f %.6f viewport %.1f %.1f %.1f %.1f\n",
+        mode, width, height, shape, sx, sy, o->vx, o->vy, o->vw, o->vh);
+    if (++notes == 32) LOG("[aspect] further output transition diagnostics suppressed\n");
+}
+
 // ================================================================== instance / device
 static VKAPI_ATTR VkBool32 VKAPI_CALL debug_cb(VkDebugUtilsMessageSeverityFlagBitsEXT sev, VkDebugUtilsMessageTypeFlagsEXT type,
                                                const VkDebugUtilsMessengerCallbackDataEXT *d, void *user) {
@@ -779,7 +797,6 @@ void vk_frame_end(const char *shot_path) {
     VkSpan shot = {0};
     extern bool diag_flicker_wanted(void);
     bool hash_it = diag_hash_wanted() || diag_flicker_wanted();  // [XCDE] T029: per-frame hash of the window image (+ T173 flicker check)
-    if (shot_path || hash_it) save_window_image(cb, &shot);
     VkImageLayout final_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 #if defined(__linux__) && defined(XCDE_LINUX_FRAMEGEN)
     VkImage retained_real = VK_NULL_HANDLE;
@@ -796,6 +813,17 @@ void vk_frame_end(const char *shot_path) {
         pair = tmp_fg_record_present(cb, g_vk.sc_images[cur_frame.image], &retained_real, &frame_ms);
     }
 #endif
+    // [XCDE] LINUX-094: FPS is a host overlay, never part of the retained real
+    // image or interpolation input. Draw after FG on both output images, and
+    // include it in explicitly requested window captures when enabled.
+    if (fps_overlay_visible()) {
+        image_barrier(cb, g_vk.sc_images[cur_frame.image], final_layout, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        final_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        vk_frame_resume();
+        fps_overlay_render((void *)cb, g_vk.sc_extent.width, g_vk.sc_extent.height);
+        vkCmdEndRendering(cb);
+    }
+    if (shot_path || hash_it) save_window_image(cb, &shot);
     image_barrier(cb, g_vk.sc_images[cur_frame.image], final_layout, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
     uint32_t img = cur_frame.image;
     if (!done_sem[img]) done_sem[img] = binary_semaphore();
@@ -1245,6 +1273,10 @@ void backend_present(NvnTexture *t) {
     extern bool diag_flicker_wanted(void);
     bool want_window = !headless || shot || xshot || diag_hash_wanted() || diag_flicker_wanted();
     bool have = want_window && vk_frame_begin(black);
+    // One sample per successfully rendered game frame, before repeats/FG.
+    // Hidden/minimized frames and disabled counters discard stale measurements.
+    if (have && g_settings.show_fps_overlay) fps_overlay_frame(SDL_GetTicksNS());
+    else fps_overlay_reset();
     uint64_t nd = SDL_GetTicksNS() - t0;
     if (nd > 30000000) {
         static int warned;
@@ -1262,6 +1294,7 @@ void backend_present(NvnTexture *t) {
         // no GPU timer here (-1): dynamic resolution goes by the frame time
         OutScale os;
         output_scale(dw, dh, widescreen_allowed(), SDL_GetTicksNS() / 1e9, -1, &os);
+        aspect_output_note(&os);
         double sx = os.sx, sy = os.sy, shape = os.shape;
         vx = os.vx, vy = os.vy, vw = os.vw, vh = os.vh;
         // interiors / dungeons: their 16:9 centre, or the part inside a room wider than one screen
@@ -1513,11 +1546,13 @@ void backend_init(void) {
 
 // ---- in-place reboot (runtime/main.c teardown; main thread, guest threads stopped)
 void backend_reset(void) {
-    if (!g_vk.dev) return;
+    if (!g_vk.dev) { fps_overlay_reset(); return; }
     // [XCDE] LINUX-017: stopped guests can still have queued renderer jobs.
     extern void backend_drain(void);
     backend_drain();
     sc_wait_idle(g_vk.dev);
+    // [XCDE] LINUX-094: queued render work must finish before its meter resets.
+    fps_overlay_reset();
     extern void vk_textures_reset(void);
     extern void vk_exec_reset(void);
     // [XCDE] LINUX-017: invalidate borrowed texture pointers before freeing textures.
@@ -1527,6 +1562,7 @@ void backend_reset(void) {
 }
 void backend_guest_memory_reset(void) {}  // (exec.c re-imports the heap on first use)
 void backend_clear_window(void) {
+    fps_overlay_reset(); // [XCDE] LINUX-094: clear/exit frames are not game FPS.
     static const float black[4] = {0, 0, 0, 1};
     if (g_vk.dev && vk_frame_begin(black)) vk_frame_end(NULL);
 }

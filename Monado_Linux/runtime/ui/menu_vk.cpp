@@ -12,6 +12,8 @@
 
 #include "imgui.h"
 #include "imgui_impl_vulkan.h"
+#include "fps_meter.h" // [XCDE] LINUX-094: sample real game frames, not UI presents.
+#include "fps_overlay_draw.h"
 
 extern "C" {
 #include "../nvn/vulkan/vk.h"
@@ -19,6 +21,7 @@ extern "C" {
 #include "graphics_options.h"  // [XCDE] LINUX-006: available modes, retaining settings' C linkage
 #include "menu.h"
 bool vk_imgui_backend_init(void);
+void vk_imgui_backend_shutdown(void);
 void input_reset(void);
 void vk_request_swapchain_recreate(void);
 bool dlss_available(void);
@@ -30,6 +33,70 @@ static SDL_Event q[256];
 static int q_n;
 static volatile bool open_, want_window;
 static bool fs_applied = false, fs_init;
+
+// [XCDE] LINUX-094: the FPS display owns a separate, noninteractive context.
+// Device presentation calls it after interpolation, so it never enters FG history.
+static FpsMeter fps_meter;
+static bool fps_has_frame, fps_backend_failed;
+static ImGuiContext *fps_context;
+static uint64_t fps_last_ui_time;
+
+extern "C" void fps_overlay_reset(void) {
+    fps_meter_reset(&fps_meter);
+    fps_has_frame = false;
+    fps_backend_failed = false;
+    fps_last_ui_time = 0;
+}
+
+extern "C" void fps_overlay_frame(uint64_t now) {
+    if (!g_settings.show_fps_overlay) {
+        if (fps_has_frame) fps_overlay_reset();
+        return;
+    }
+    fps_meter_frame(&fps_meter, now);
+    fps_has_frame = true;
+}
+
+extern "C" bool fps_overlay_visible(void) {
+    return g_settings.show_fps_overlay && fps_has_frame && !fps_backend_failed;
+}
+
+extern "C" void fps_overlay_render(void *cmd, uint32_t w, uint32_t h) {
+    if (!fps_overlay_visible() || !w || !h) return;
+    ImGuiContext *previous = ImGui::GetCurrentContext();
+    if (!fps_context) {
+        fps_context = ImGui::CreateContext();
+        ImGui::SetCurrentContext(fps_context);
+        ImGuiIO &io = ImGui::GetIO();
+        io.IniFilename = nullptr; io.LogFilename = nullptr;
+        io.ConfigFlags = ImGuiConfigFlags_NoMouse | ImGuiConfigFlags_NoKeyboard | ImGuiConfigFlags_NoMouseCursorChange;
+        io.MouseDrawCursor = false;
+        ImFontConfig config{}; config.SizePixels = 48.0f;
+        io.Fonts->AddFontDefault(&config);
+        if (!vk_imgui_backend_init()) {
+            ImGui::DestroyContext(fps_context); fps_context = nullptr; fps_backend_failed = true;
+            ImGui::SetCurrentContext(previous); return;
+        }
+        if (!ImGui_ImplVulkan_CreateFontsTexture()) {
+            vk_imgui_backend_shutdown();
+            ImGui::DestroyContext(fps_context); fps_context = nullptr; fps_backend_failed = true;
+            ImGui::SetCurrentContext(previous); return;
+        }
+    }
+    ImGui::SetCurrentContext(fps_context);
+    ImGuiIO &io = ImGui::GetIO();
+    io.DisplaySize = ImVec2((float)w, (float)h);
+    uint64_t now = SDL_GetTicksNS();
+    io.DeltaTime = fps_last_ui_time && now > fps_last_ui_time ? (float)((now - fps_last_ui_time) / 1e9) : 1.0f / 60;
+    fps_last_ui_time = now;
+    ImGui_ImplVulkan_NewFrame(); ImGui::NewFrame();
+    double value = 0;
+    bool ready = fps_meter_value(&fps_meter, &value);
+    fps_overlay_detail::draw(true, ready, value, (float)w, (float)h);
+    ImGui::Render();
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), (VkCommandBuffer)cmd);
+    ImGui::SetCurrentContext(previous);
+}
 
 static bool is_input(Uint32 t) {
     switch (t) {
@@ -166,7 +233,8 @@ static const char *const k_en[][2] = {
     {"Calidad", "Quality"}, {"Antialiasing SMAA", "SMAA anti-aliasing"}, {"(no se usa con FSR 3.1 / DLSS)", "(not used with FSR 3.1 / DLSS)"},
     {"Profundidad de campo", "Depth of field"},
     {"Antialiasing y desenfoque de movimiento del juego (al reiniciar)", "The game's anti-aliasing and motion blur (after a restart)"},
-    {"Mostrar FPS en la barra de título", "Show FPS in the title bar"}, {"Velocidad", "Speed"}, {"30 (como en Switch)", "30 (like Switch)"},
+    {"Mostrar FPS en la barra de título", "Show FPS in the title bar"}, {"Mostrar FPS en pantalla", "Show FPS on screen"},
+    {"Velocidad", "Speed"}, {"30 (como en Switch)", "30 (like Switch)"},
     {"Sin límite", "Unlimited"}, {"FPS (al reiniciar)", "FPS (after a restart)"}, {"V-Sync (con 30 / 60 FPS)", "V-Sync (at 30 / 60 FPS)"},
     {"Volumen", "Volume"}, {"Audio de los vídeos (al reiniciar)", "Video sound (after a restart)"}, {"Controles", "Controls"},
     {"La asignación de teclas y botones se cambia en el launcher (Play Monado.bat), pestaña Controles.",
@@ -252,6 +320,7 @@ static void ui(void) {
             if (ImGui::Checkbox(T("Profundidad de campo"), &dof)) g_settings.dof_off = !dof;
             ImGui::Checkbox(T("Antialiasing y desenfoque de movimiento del juego (al reiniciar)"), &g_settings.game_blur);
             ImGui::Checkbox(T("Mostrar FPS en la barra de título"), &g_settings.show_fps);
+            ImGui::Checkbox(T("Mostrar FPS en pantalla"), &g_settings.show_fps_overlay);
             ImGui::SeparatorText(T("Velocidad"));
             static const int fpsv[] = {30, 60, 120, 144, 165, 0};
             static const char *fpsu[] = {"30 (como en Switch)", "60", "120", "144", "165", "Sin límite"};

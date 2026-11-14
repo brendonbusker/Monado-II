@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.1.20 — November 14, 2026
+
+- Add **Show FPS on screen** in Graphics, off by default, with a matching F1
+  setting. The input-transparent counter stays visible in fullscreen and reports
+  real game/render FPS, excluding generated and repeated presentations. Preserve
+  the separate title-bar FPS preference and keep text outside frame generation.
+- Keep reduced-resolution scene composites at the selected aspect ratio when
+  they sample multiple inputs. Preserve the centered proportional HUD and
+  portrait rendering, with bounded aspect diagnostics for further reports.
+- Derive the checked renderer camera's aspect from its logical camera rather
+  than independently rounded render dimensions. Original 16:9 stays the default.
+  These are candidate corrections for reported ultrawide framing changes;
+  reporter hardware gameplay validation remains pending.
+- The maintainer accepted desktop/NVIDIA gameplay and the on-screen counter.
+  Physical ultrawide validation is still requested; these checks are not full-game
+  or all-hardware qualification.
+- Updating requires a full local game rebuild and retains existing saves, settings
+  and game input. Original 16:9 remains the default; Quick Step, cheats, the new
+  FPS counter and experimental frame generation remain off by default. Windows
+  stays the original implementation with a version-free download name.
+
 ## 0.1.19 — November 13, 2026
 
 - Recover missed controller connection/removal events and retry failed opens on

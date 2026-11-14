@@ -1,4 +1,11 @@
-# Native display aspect ratios (Linux 0.1.19, experimental)
+# Native display aspect ratios (Linux 0.1.20, experimental)
+
+Release 0.1.20 addresses a report of scene width changing
+during gameplay and Alt-Tab. It handles reduced-resolution scene composites with
+multiple inputs and keeps the renderer camera aligned with its logical camera.
+Bounded `[aspect]` diagnostics help distinguish output placement from composite
+decisions. The reporter's ultrawide gameplay still needs validation; return to
+Original if an experimental mode misbehaves.
 
 In Graphics, **Aspect ratio** offers these choices on every monitor:
 
@@ -30,7 +37,7 @@ original framing; tiny differences within 0.5% of 16:9 also retain that framing.
 Fixed-frame video and artwork cannot reveal additional picture. They may remain
 16:9, with bars or the existing scene behind them. Real-time cutscene framing,
 special effects, offscreen UI composites, live resizing and temporal upscaling
-still need manual coverage. The preview must not be described as fully tested
+still need manual coverage. These modes must not be described as fully tested
 ultrawide support based on projection/component tests alone.
 
 Return to Original if a scene or menu misbehaves. Please include the selected

@@ -78,6 +78,19 @@ uint32_t xcde_aspect_ratio_bits(uint32_t original_bits) {
     return bits(xcde_aspect_ratio(scalar(original_bits)));
 }
 
+// [XCDE] LINUX-093: the checked render-camera update derives its native ratio
+// from integer render dimensions, which can be independently rounded/aligned.
+// Eligibility and projection must instead agree with that same camera's logical
+// perspective parameters, already used by the CPU frustum and marker helpers.
+// Do not broaden reference_camera() for unrelated cameras or guess pixel bounds.
+uint32_t xcde_aspect_render_ratio_bits(uint32_t original_bits, uint32_t logical_aspect_bits) {
+    float factor = factor_now();
+    float original = scalar(original_bits), logical = scalar(logical_aspect_bits);
+    if (factor == 1.0f || !reference_camera(logical) || !isfinite(original) || original <= 0.0f)
+        return original_bits;
+    return bits(logical * factor);
+}
+
 static uint32_t degrees_bits(uint32_t original_bits, float original_aspect, float factor) {
     float degrees = scalar(original_bits);
     if (factor >= 1.0f || !reference_camera(original_aspect) || !isfinite(degrees) || degrees <= 0.001f || degrees >= 179.9f)
@@ -91,12 +104,11 @@ uint32_t xcde_aspect_fov_degrees_bits(uint32_t original_bits, uint32_t original_
     return degrees_bits(original_bits, scalar(original_aspect_bits), factor_now());
 }
 
-uint32_t xcde_aspect_render_fov_degrees_bits(uint32_t original_bits, uint32_t rendered_aspect_bits) {
-    float factor = factor_now();
-    if (factor >= 1.0f) return original_bits;
-    // The preceding checked renderer-camera store already contains the target
-    // aspect. Recover its reference only for this camera's FOV qualification.
-    return degrees_bits(original_bits, scalar(rendered_aspect_bits) / factor, factor);
+uint32_t xcde_aspect_render_fov_degrees_bits(uint32_t original_bits, uint32_t logical_aspect_bits) {
+    // [XCDE] LINUX-093: use the same logical camera as render_ratio above.
+    // Inferring eligibility by dividing a render ratio can misidentify an
+    // unrelated camera whose allocation happens to match the selected ratio.
+    return degrees_bits(original_bits, scalar(logical_aspect_bits), factor_now());
 }
 
 uint32_t xcde_aspect_hud_ratio_bits(uint32_t original_bits, bool horizontal) {

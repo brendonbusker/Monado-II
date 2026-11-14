@@ -106,6 +106,7 @@ struct Cfg {
     int cheat_percent[6] = {100, 100, 100, 100, 100, 100};
     bool cheat_no_fall_damage = false;
     bool show_fps = false;
+    bool show_fps_overlay = false; // [XCDE] LINUX-094: separate from the legacy title-bar preference
     int fps = 0;  // index into k_fps_ini
     int menu_navigation_speed = 0;  // 0 normal (30 FPS style), 1 fast (60 FPS style)
     int volume = 100;
@@ -318,6 +319,9 @@ static const char *const k_en[][2] = {
      "Switch's 720p: at 1080p or more they soften the whole image.\n"
      "Off: a sharp image (combine it with SMAA for the edges)."},
     {"Mostrar FPS en la barra de título", "Show FPS in the title bar"}, {"Velocidad", "Speed"},
+    {"Mostrar FPS en pantalla", "Show FPS on screen"},
+    {"Muestra los FPS reales del juego, también en pantalla completa.\nNo incluye imágenes generadas ni presentaciones repetidas.",
+     "Shows rendered game FPS, including in fullscreen.\nExcludes generated frames and repeated presentations."},
     {"30 (como en Switch)", "30 (like Switch)"}, {"Sin límite", "Unlimited"},
     {"Ranura exclusiva de Paso rápido", "Dedicated Quick Step gem slot"},
     {"Equipa una gema de Paso rápido en una ranura propia del personaje, incluso sin botas.", "Equip a Quick Step gem in a character-owned slot, including without boots."},
@@ -481,6 +485,7 @@ static void load() {
     g.aspect = ASPECT_ORIGINAL; // [XCDE] LINUX-089: missing/invalid preference preserves vanilla framing.
     g.menu_navigation_speed = 0;
     g.quickstep_slot = false; // [XCDE] LINUX-039: missing/invalid key resets OFF
+    g.show_fps_overlay = false; // [XCDE] LINUX-094: independent opt-in on every load
     cheats_reset(); // [XCDE] LINUX-072: old/missing configurations always opt out.
     for (int i = 0; i < NPAD; i++) g.pad[i] = k_def_pad[i];
     for (int i = 0; i < NACT; i++) g.key[i] = k_def_key[i], g.key2[i] = k_def_key2[i];
@@ -521,6 +526,7 @@ static void load() {
         else if (!strcmp(k, "cutscenes")) { g.cutscenes = !strcmp(v, "30") || !strcmp(v, "30fg") ? 1 : 0; g.cut_fg = !strcmp(v, "30fg"); }
         else if (!strcmp(k, "party_switch")) g.party_switch = atoi(v) != 0;
         else if (!strcmp(k, "show_fps")) g.show_fps = atoi(v) != 0;
+        else if (!strcmp(k, "show_fps_overlay")) g.show_fps_overlay = !strcmp(v, "1") || !strcmp(v, "true");
         else if (!strcmp(k, "fps")) { g.fps = 0; for (int j = 0; j < 6; j++) if (!strcmp(v, k_fps_ini[j])) g.fps = j; }
         else if (!strcmp(k, "menu_navigation_speed")) g.menu_navigation_speed = !strcmp(v, "fast") ? 1 : 0;
         else if (!strcmp(k, "quickstep_slot")) g.quickstep_slot = !strcmp(v, "1");
@@ -567,7 +573,7 @@ static void load() {
             if (find(extra, 5, v) >= 0) g_custom[k] = v;
         }
         const char *known[] = {"aspect_ratio","fullscreen","window","resolution","upscaler","upscale_quality","frame_gen","antialias","depth_of_field",
-            "game_blur","vsync","cutscenes","party_switch","show_fps","fps","menu_navigation_speed","quickstep_slot","volume","movie_audio","language","bind_layout",
+            "game_blur","vsync","cutscenes","party_switch","show_fps","show_fps_overlay","fps","menu_navigation_speed","quickstep_slot","volume","movie_audio","language","bind_layout",
             "mouse_look","mouse_sens","stick_deadzone","launcher_lang","mouse_invert","button_icons"};
         if (is_cheat_key(k)) g_extra.erase(k); // [XCDE] LINUX-072: never serialize stale duplicate cheat keys.
         else if (find(known, sizeof known / sizeof *known, k) < 0 && strncmp(k, "mod_", 4) && strncmp(k, "bind_", 5)) g_extra[k] = v;
@@ -591,6 +597,7 @@ static bool save() {
     fprintf(f, "# Monado settings (written by the launcher)\n");
     fprintf(f, "fullscreen = %d\nwindow = %s\nresolution = %s\nupscaler = %s\nantialias = %s\nshow_fps = %d\n", g.fullscreen,
             cfg_value("window", k_wins[g.win]), cfg_value("resolution", k_res_ini[g.res]), k_ups_ini[g.upscaler], g.smaa ? "smaa" : "off", g.show_fps);
+    fprintf(f, "show_fps_overlay = %d\n", g.show_fps_overlay); // [XCDE] LINUX-094
     fprintf(f, "upscale_quality = %s\nframe_gen = %d\n", k_uq_ini[g.uquality], g.frame_gen);
     fprintf(f, "depth_of_field = %d\n", g.dof);
     fprintf(f, "game_blur = %d\n", g.game_blur);
@@ -985,6 +992,8 @@ static void tab_graphics() {
                           "aplica para los 720p de la Switch: a 1080p o más suavizan toda la imagen.\n"
                           "Desactivado: imagen nítida (combínalo con SMAA para los bordes)."));
     launcher_theme::checkbox(T("Mostrar FPS en la barra de título"), &g.show_fps);
+    launcher_theme::checkbox(T("Mostrar FPS en pantalla"), &g.show_fps_overlay);
+    ImGui::SetItemTooltip("%s", T("Muestra los FPS reales del juego, también en pantalla completa.\nNo incluye imágenes generadas ni presentaciones repetidas."));
     launcher_theme::section(T("Velocidad"));
     static const char *fps_ui[] = {"30 (como en Switch)", "60", "120", "144", "165", "Sin límite"};
 #ifdef __linux__
