@@ -5973,8 +5973,8 @@
       "sha256": "3d4299315d49d9606b0a1bbd352048737994892d06845bc61c9e100bc87ab474"
     },
     "tests/test_publication_guard.py": {
-      "bytes": 29925,
-      "sha256": "4c267b81669e816dc593eb302eaf539fdd5dd8ab6e296f51ca9d1ca6b84d618a"
+      "bytes": 31366,
+      "sha256": "f4eed14488fadbeec3fe32360b72d8b124eb219157069ff658cb7c3c7c1ce4ee"
     },
     "tests/test_quickstep_background_hook.py": {
       "bytes": 4210,

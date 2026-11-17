@@ -3,6 +3,7 @@ from pathlib import Path
 import contextlib
 import hashlib
 import importlib
+import importlib.util
 import json
 import os
 import shutil
@@ -397,10 +398,27 @@ class PublicationGuardTests(unittest.TestCase):
     def test_artwork_survives_guarded_archive_and_mutated_copy_is_refused(self):
         # Exercise the actual source/stage/readback policy path with authored
         # fixture pixels, not just the content helper in isolation.
-        release = importlib.import_module('package_source_release')
         data, identity = self.artwork_fixture()
-        with self.authored_artwork_policy(data):
+        # The packager now selects its own adjacent policy, independently of
+        # generic cached modules. Give this synthetic-pixel fixture an adjacent
+        # real scanner with only its artwork pin changed, rather than patching
+        # a process-global policy that production must correctly ignore.
+        helpers = self.base / 'fixture-tools'
+        helpers.mkdir()
+        shutil.copyfile(ROOT / 'tools/package_source_release.py', helpers / 'package_source_release.py')
+        policy_source = (ROOT / 'tools/publication_guard.py').read_text()
+        policy_source = policy_source.replace(
+            f"ARTWORK_SHA256 = '{guard.ARTWORK_SHA256}'", f"ARTWORK_SHA256 = '{identity}'").replace(
+            f'ARTWORK_BYTES = {guard.ARTWORK_BYTES}', f'ARTWORK_BYTES = {len(data)}').replace(
+            f'ARTWORK_WIDTH, ARTWORK_HEIGHT = {guard.ARTWORK_WIDTH}, {guard.ARTWORK_HEIGHT}',
+            'ARTWORK_WIDTH, ARTWORK_HEIGHT = 1, 1')
+        (helpers / 'publication_guard.py').write_text(policy_source)
+        spec = importlib.util.spec_from_file_location('_authored_art_release', helpers / 'package_source_release.py')
+        release = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(release)
+        with mock.patch.object(release, '_source_guard', wraps=release._source_guard) as checks:
             result = release.package(self.root, 'linux', 'authored-art-test', self.base / 'release')
+            self.assertEqual(checks.call_count, 4)  # source, staging, readback, final source
             archive = self.base / 'release' / result['archive']
             with tarfile.open(archive) as packed:
                 name = next(name for name in packed.getnames() if name.endswith('/' + guard.ARTWORK_PATH))
@@ -411,6 +429,8 @@ class PublicationGuardTests(unittest.TestCase):
             with self.assertRaises(release.ReleaseError):
                 release.package(self.root, 'linux', 'rejected-art-test', rejected)
             self.assertFalse(rejected.exists())
+            self.assertEqual(checks.call_count, 5)
+        self.assertIs(sys.modules['publication_guard'], guard)
 
     def test_policy_schema_bool_is_rejected(self):
         self.policy['schema'] = True
