@@ -84,6 +84,36 @@ class BuilderPaths(unittest.TestCase):
         self.assertEqual(broker.status['output'], str(self.home / 'Games/Monado-II'))
         self.assertFalse((self.home / 'Games').exists())
 
+    def test_play_script_explains_reopen_routes_and_checks_the_adjacent_image(self):
+        owner = self.home / 'Monado II'
+        owner.mkdir()
+        wrapper = owner / 'Play_Monado_II.sh'
+        wrapper.write_bytes((ROOT / wrapper.name).read_bytes())
+        image = owner / 'Monado-II-x86_64.AppImage'
+        alias = self.alias / self.home.name / owner.name / wrapper.name
+        invocation = ['bash', str(alias), '--dry-run']
+        fixture = self.root / 'authored_launcher'
+        fixture.write_text("#!/bin/sh\nprintf '%s\\n' \"$@\"\n")
+        fixture.chmod(0o700)
+        for state in ('missing', 'nonexecutable', 'symlink'):
+            with self.subTest(state=state):
+                if state == 'nonexecutable':
+                    image.write_bytes(fixture.read_bytes())
+                elif state == 'symlink':
+                    image.unlink()
+                    image.symlink_to(fixture)
+                result = subprocess.run(invocation, capture_output=True, text=True, timeout=10)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn('same standalone AppImage', result.stderr)
+                self.assertIn('--data-dir', result.stderr)
+                self.assertIn('./Build_Monado_II.sh', result.stderr)
+        image.unlink()
+        image.write_bytes(fixture.read_bytes())
+        image.chmod(0o700)
+        result = subprocess.run(invocation, capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(), ['--appimage-extract-and-run', '--dry-run'])
+
 
 @unittest.skipUnless(sys.platform == 'linux', 'native Linux launcher validation')
 class NativeLaunchContext(unittest.TestCase):
@@ -135,7 +165,9 @@ int main(int argc, char **argv) {
             result = run([])
             self.assertEqual(result.returncode, 2)
             self.assertIn('--project-root', result.stderr)
-            self.assertIn('AppImage', result.stderr)
+            self.assertIn('same standalone builder AppImage', result.stderr)
+            self.assertIn('--data-dir', result.stderr)
+            self.assertIn('adjacent Monado-II-x86_64.AppImage', result.stderr)
             self.assertIn('Play_Monado_II.sh', result.stderr)
             self.assertIn('optional', result.stderr)
             result = run(values)

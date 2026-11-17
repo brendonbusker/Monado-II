@@ -109,7 +109,10 @@ struct Wizard {
             if (!valid) throw std::runtime_error("Unknown builder status");
             status = std::move(parsed); status_json = data;
             std::string response = json::text(status, "request_id");
-            if (initial && next == "installed") page = 4;
+            if (initial && next == "failed" && json::boolean(status, "can_open")) {
+                page = 4;
+                auto owner = json::text(status, "output"); if (!owner.empty()) set(output, owner);
+            }
             initial = false;
             if (pending && response != request_id) return;
             phase = next;
@@ -236,9 +239,10 @@ struct Wizard {
             std::string where = json::text(status,"output",output);
             ImGui::TextWrapped("Installed in %s",where.c_str());
             ImGui::Spacing(); muted("Open the settings launcher to configure graphics, controls, mods and cheats, then choose Play when you are ready.");
+            ImGui::Spacing(); muted("Reopen the same standalone AppImage later. If you used --data-dir, reuse that path.");
             ImGui::Spacing();
             ImGui::BeginDisabled(busy() || !json::boolean(status,"can_open"));
-            if (primary("Open launcher", ImVec2(200*scale,44*scale))) request("open");
+            if (primary(phase == "failed" ? "Retry opening launcher" : "Open launcher", ImVec2(200*scale,44*scale))) request("open");
             ImGui::EndDisabled(); ImGui::Spacing();
             ImGui::BeginDisabled(busy());
             if (ImGui::Button("Set up another installation")) { page = 1; inspection_ok = false; set(input,""); error.clear(); }

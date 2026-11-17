@@ -1,4 +1,5 @@
 """[XCDE] LINUX-081: authored GUI broker fixtures; no game or real build."""
+from contextlib import redirect_stderr
 import hashlib
 import importlib.util
 import json
@@ -414,6 +415,65 @@ class BrokerFixture(unittest.TestCase):
             code = backend.main(['--open-registered', '--source', str(self.source), '--session', str(self.session), '--state', str(self.state)])
         self.assertEqual(code, 0)
         opened.assert_called_once_with({})
+
+    def test_failed_automatic_open_keeps_diagnostic_and_checks_again_on_manual_retry(self):
+        registry = self.state / backend.REGISTRY
+        registry.write_bytes(encode({'schema': 1, 'workspace': str(self.source)}))
+        before = registry.read_bytes()
+        selected = dict(owner=self.source, port=self.source, version='test-fixture', input_location={'missing': False})
+        script = self.base / 'authored_launcher.py'
+        marker = 'authored rejection from the launcher dry run'
+        script.write_text('import sys\nassert sys.argv[1:] == ["--dry-run"]\n'
+                          f'print({marker!r})\nsys.exit(19)\n')
+        args = ['--source', str(self.source), '--session', str(self.session), '--state', str(self.state)]
+        log = self.session / 'backend-console.txt'
+        with (log.open('w') as stream, redirect_stderr(stream),
+              mock.patch.object(backend.Broker, 'installation', return_value=selected),
+              mock.patch.object(backend.Broker, 'launcher_command', return_value=[sys.executable, '-B', script]),
+              mock.patch.object(backend.Broker, '_open_selected') as handoff):
+            self.assertEqual(backend.main(['--open-registered', *args]), 3)
+            initial = backend.document(self.session / 'status.json')
+            self.assertEqual(initial['phase'], 'failed')
+            self.assertIn('Stage failed (exit 19).', initial['detail'])
+            self.assertIn(marker, initial['detail'])
+            handoff.assert_not_called()
+
+            server = backend.Broker(self.source, self.session, self.state, resume_open_failure=True)
+            self.addCleanup(server.close)
+            self.assertEqual(backend.document(self.session / 'status.json'), initial)
+            self.assertTrue(server.status['can_open'])
+            self.assertEqual(server.status['log'], str(log))
+
+            # Retrying exercises the same dry-run worker before any handoff.
+            script.write_text('import sys\nassert sys.argv[1:] == ["--dry-run"]\n')
+            server.dispatch(self.request(action='open'))
+            server.thread.join(5)
+            self.assertFalse(server.thread.is_alive())
+            handoff.assert_called_once_with(selected)
+        self.assertIn(marker, log.read_text())
+        self.assertEqual(registry.read_bytes(), before)
+
+    def test_resuming_failed_open_rechecks_current_selection(self):
+        registry = self.state / backend.REGISTRY
+        registry.write_bytes(encode({'schema': 1, 'workspace': str(self.source)}))
+        previous = dict(self.broker.status, phase='failed', can_open=True, output=str(self.source),
+                        version='test-fixture', detail='previous dry-run failure')
+        moved = self.missing_selection()
+        updated = dict(moved, version='updated-fixture', input_location={'missing': False})
+        for selected, phase in ((moved, 'input_missing'), (updated, 'installed')):
+            with self.subTest(phase=phase), mock.patch.object(backend.Broker, 'installation', return_value=selected):
+                backend.atomic(self.session / 'status.json', previous)
+                current = backend.Broker(self.source, self.session, self.state, resume_open_failure=True)
+                self.addCleanup(current.close)
+                self.assertEqual(current.status['phase'], phase)
+                self.assertEqual(current.status['can_open'], phase == 'installed')
+                self.assertNotEqual(current.status['detail'], previous['detail'])
+        with mock.patch.object(backend.Broker, 'installation', return_value=updated):
+            (self.session / 'status.json').write_text('{incomplete')
+            current = backend.Broker(self.source, self.session, self.state, resume_open_failure=True)
+            self.addCleanup(current.close)
+            self.assertEqual(current.status['phase'], 'installed')
+            self.assertTrue(current.status['can_open'])
 
     def missing_selection(self):
         return dict(owner=self.source, workspace=self.source, port=self.source / 'Monado_Linux',

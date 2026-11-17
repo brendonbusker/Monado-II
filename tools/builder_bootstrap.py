@@ -415,6 +415,7 @@ def run(appdir, args):
         # A valid inherited installation can have missing game input. Adopt
         # retains its owner and recovery status; show the same Locate wizard
         # used by registered standalone installs instead of exiting silently.
+    resume_open_failure = False
     if not args.setup and args.headless_frames is None and migration_workspace is None:
         attempt = subprocess.run([python / 'bin/python3.14', '-I', '-B', source / 'tools/builder_backend.py',
             '--open-registered', '--session', session, '--source', source, '--state', state],
@@ -422,8 +423,10 @@ def run(appdir, args):
         if attempt.returncode == 0:
             backendlog.close()
             return 0
+        resume_open_failure = attempt.returncode == 3
     backend = subprocess.Popen([python / 'bin/python3.14', '-I', '-B', source / 'tools/builder_backend.py',
         '--serve', '--session', session, '--source', source, '--state', state,
+        *(['--resume-open-failure'] if resume_open_failure else []),
         *(['--runtime-manifest', runtime_manifest] if runtime_manifest else [])],
         env=environment, stdout=backendlog, stderr=subprocess.STDOUT)
     gui = None

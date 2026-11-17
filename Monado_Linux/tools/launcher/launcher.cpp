@@ -1617,7 +1617,9 @@ static void linux_update_popup() {
 #ifdef __linux__
 // [XCDE] LINUX-122: begin launch-context validation.
 static void linux_launch_guidance() {
-    fprintf(stderr, "Open Monado-II-x86_64.AppImage or Play_Monado_II.sh in your installation to supply the verified launch context. Capture options are optional.\n");
+    fprintf(stderr, "For a graphical build, reopen the same standalone builder AppImage and reuse your --data-dir path if set.\n"
+                    "For a terminal build, open the adjacent Monado-II-x86_64.AppImage or Play_Monado_II.sh.\n"
+                    "Use one of these entry points to supply the verified launch context. Capture options are optional.\n");
 }
 static bool linux_launch_path(const char *flag, const char *value, std::string &out, bool directory) {
     if (launcher_linux::canonical(value, out, directory)) return true;

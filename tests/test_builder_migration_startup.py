@@ -182,6 +182,36 @@ class MigrationStartup(unittest.TestCase):
         self.assertEqual(spawn.call_count, 1)
         self.assertEqual(spawn.call_args.args[0], ['/authored/native-wrapper'])
 
+    def test_registered_open_fallback_passes_same_session_only_for_attention(self):
+        manifest = dict(files={bootstrap.ARCHIVE: {}})
+        app = self.root / 'AppDir'
+        source = self.root / 'source'
+        exited = SimpleNamespace(poll=lambda: 0, returncode=0)
+        for code in (0, 1, 2, 3):
+            args = SimpleNamespace(data_dir=self.root / f'builder data {code}', dry_run=False,
+                                   state_root=None, setup=False, self_check=False, headless_frames=None,
+                                   screenshot=None)
+            with (self.subTest(code=code),
+                  mock.patch.object(bootstrap, 'validate_image', return_value=manifest),
+                  mock.patch.object(bootstrap, 'copy_runtime', return_value=(self.root / 'Python', 'authored')),
+                  mock.patch.object(bootstrap, 'unpack_source', return_value=source),
+                  mock.patch.object(bootstrap.subprocess, 'run', return_value=SimpleNamespace(returncode=code)) as attempt,
+                  mock.patch.object(bootstrap.subprocess, 'Popen', return_value=exited) as spawn,
+                  mock.patch.object(bootstrap, 'stop')):
+                self.assertEqual(bootstrap.run(app, args), 0)
+                command = attempt.call_args.args[0]
+                self.assertIn('--open-registered', command)
+                self.assertEqual(command[command.index('--state') + 1], args.data_dir)
+                if code == 0:
+                    spawn.assert_not_called()
+                else:
+                    worker, frontend = [call.args[0] for call in spawn.call_args_list]
+                    self.assertIn('--serve', worker)
+                    self.assertEqual('--resume-open-failure' in worker, code == 3)
+                    session = command[command.index('--session') + 1]
+                    self.assertEqual(worker[worker.index('--session') + 1], session)
+                    self.assertEqual(frontend, [app / 'usr/bin/monado-builder', '--session', session])
+
 
 if __name__ == '__main__':
     unittest.main()

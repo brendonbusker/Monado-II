@@ -41,8 +41,12 @@ retried there.
 
 ## Subsequent opens and existing installations
 
-The same standalone AppImage remembers a successfully checked installation and
-opens its current settings launcher directly. `--setup` returns to setup. The
+Reopen the same standalone AppImage you used to build the game. It remembers
+the checked installation and opens its current settings launcher directly.
+If you started it with `--data-dir PATH`, pass the same path each time. If you
+used extraction mode, keep `--appimage-extract-and-run` in the command.
+If the installed launcher fails its checks, setup shows the error and log path
+and lets you retry with **Retry opening launcher**. `--setup` returns to setup. The
 **Use an existing installation** action adopts a checked source-build installation
 in place, including its original input, settings, saves and active update.
 It does not import or convert save contents. Missing or modified installations
@@ -75,12 +79,12 @@ resolve the operating system's home-directory alias (for example `/home` to
 `/var/home`) before using managed folders. Explicit `--data-dir` paths and managed
 subdirectories still require ordinary canonical paths without symbolic links.
 
-Open the AppImage or `Play_Monado_II.sh` to use an installed game. The native
-`build/.../monado-launcher` executable is an internal component: it needs the
-verified project, input, game and private-state arguments supplied by that entrypoint.
-Starting it directly without those arguments does not select an installation.
-Its path errors name the missing or rejected argument; screenshot/capture options
-are optional and are not required for normal play.
+For a terminal build, `Play_Monado_II.sh` opens the adjacent executable
+`Monado-II-x86_64.AppImage` created by `Build_Monado_II.sh`. Graphical setup
+keeps its entry point in the standalone AppImage you downloaded. Open the
+appropriate AppImage or script to supply the verified launch context and private
+runtime libraries. The internal `monado-launcher` and `xcde-linux` executables
+require that context.
 
 Existing source scripts, launcher-only images and source updater archive formats
 are retained. Existing host-Python source installations keep their checked

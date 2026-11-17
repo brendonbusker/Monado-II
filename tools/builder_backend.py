@@ -254,7 +254,7 @@ def stage_source(source, output, input_path):
 
 
 class Broker:
-    def __init__(self, source, session, state, *, popen=subprocess.Popen, runtime_manifest=None):
+    def __init__(self, source, session, state, *, popen=subprocess.Popen, runtime_manifest=None, resume_open_failure=False):
         self.source = canonical(source, directory=True)
         self.session = canonical(session, directory=True)
         self.state = canonical(state, directory=True)
@@ -282,9 +282,25 @@ class Broker:
                 if not self.missing_input(selected):
                     self.status.update(phase='installed', message='Monado II is ready', output=str(self.registered),
                                        version=selected['version'], detail='Open your existing settings launcher.', can_open=True)
+                    if resume_open_failure:
+                        self.restore_open_failure()
             except (OSError, ValueError, RuntimeError) as error:
                 self.status.update(phase='failed', message='Registered installation needs attention', detail=str(error), can_open=False)
         self.update()
+
+    def restore_open_failure(self):
+        # Carry the failed automatic open into the setup UI for this session.
+        # The current installation lookup owns the open action and recovery state.
+        try:
+            previous = document(self.session / 'status.json')
+        except (OSError, ValueError):
+            return
+        if (previous.get('schema') == 1 and previous.get('phase') == 'failed' and
+                previous.get('can_open') is True and previous.get('output') == self.status['output'] and
+                previous.get('version') == self.status['version'] and
+                isinstance(previous.get('message'), str) and isinstance(previous.get('detail'), str)):
+            self.status.update(phase='failed', message=previous['message'], detail=previous['detail'],
+                               log=str(self.session / 'backend-console.txt'))
 
     @staticmethod
     def version(source):
@@ -609,6 +625,13 @@ class Broker:
         self.verify_launch(selected)
         return self._open_selected(selected)
 
+    def report_open_failure(self, error):
+        message = 'Could not open the settings launcher'
+        detail = str(error)
+        print(message + ': ' + detail, file=sys.stderr, flush=True)
+        self.update(phase='failed', message=message, detail=detail[-16000:],
+                    log=str(self.session / 'backend-console.txt'))
+
     def _open_selected(self, selected):
         # Existing launcher supervisor owns its session and profile lease. It may
         # legitimately outlive this setup window; never kill a running game when
@@ -651,14 +674,20 @@ class Broker:
         if action not in actions:
             raise BuilderError('Unsupported setup action')
         self.cancelled.clear()
-        self.update(request_id=identity)
+        if action == 'open':
+            self.update(request_id=identity, phase='checking', message='Checking the installed launcher')
+        else:
+            self.update(request_id=identity)
         def work():
             try:
                 actions[action](request)
             except InterruptedError as error:
                 self.update(phase='cancelled', message='Operation cancelled', detail=str(error))
             except (OSError, ValueError, RuntimeError, KeyError, subprocess.SubprocessError) as error:
-                self.update(phase='failed', message='Setup needs attention', detail=str(error))
+                if action == 'open':
+                    self.report_open_failure(error)
+                else:
+                    self.update(phase='failed', message='Setup needs attention', detail=str(error))
         self.thread = threading.Thread(target=work, daemon=False)
         self.thread.start()
 
@@ -735,6 +764,7 @@ def main(argv=None):
     mode.add_argument('--serve', action='store_true')
     mode.add_argument('--command-worker', action='store_true', help=argparse.SUPPRESS)
     mode.add_argument('--open-registered', action='store_true', help='open a registered checked settings launcher, or return 2 for first-run setup')
+    parser.add_argument('--resume-open-failure', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--session', type=Path)
     parser.add_argument('--source', type=Path)
     parser.add_argument('--state', type=Path)
@@ -747,6 +777,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if sys.platform != 'linux' or fcntl is None:
         parser.error('The native GUI build broker currently supports Linux only')
+    if args.resume_open_failure and not args.serve:
+        parser.error('--resume-open-failure requires --serve')
     if args.command_worker:
         if args.worker_cwd is None or args.worker_log is None or not args.command:
             parser.error('Command worker requires cwd, fresh log and command')
@@ -775,7 +807,8 @@ def main(argv=None):
             fcntl.flock(lease_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             raise BuilderError('Another Monado II setup window is using this registry; close it first') from None
-        broker = Broker(args.source, args.session, args.state, runtime_manifest=args.runtime_manifest)
+        broker = Broker(args.source, args.session, args.state, runtime_manifest=args.runtime_manifest,
+                        resume_open_failure=args.resume_open_failure)
         broker.lease_fd = lease_fd
         if args.open_registered:
             if broker.registered is None:
@@ -785,7 +818,7 @@ def main(argv=None):
             try:
                 return 3 if broker.open({}) is False else 0
             except (OSError, ValueError, RuntimeError, InterruptedError, subprocess.SubprocessError) as error:
-                broker.update(phase='failed', message='Registered installation needs attention', detail=str(error), can_open=False)
+                broker.report_open_failure(error)
                 return 3
         while not stop.wait(.1):
             request_path = args.session / 'request.json'
