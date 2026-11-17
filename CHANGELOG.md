@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.29 - November 17, 2026
+
+- When reopening a registered installation fails, the graphical builder
+  preserves the error and log path and offers **Retry opening launcher**.
+  The reopen guide explains which AppImage to use and how to keep the same
+  data directory and extraction mode. The reported Bazzite failure still
+  needs a retest on the original hardware. ([#20](https://github.com/brendonbusker/Monado-II/issues/20))
+- Apply the guest dynamic-resolution policy to the graphics INI at its virtual
+  RomFS path even when a mod uses different capitalization. Add adapted-aspect
+  logs for the sampled image, viewport and crop. The reported ultrawide squeeze
+  under load still needs testing on the original hardware. ([#12](https://github.com/brendonbusker/Monado-II/issues/12))
+- Windows remains Experimental 0.1.0.
+
 ## 0.1.28 - November 17, 2026
 
 - Keep the source-verification helper available when older launchers package an

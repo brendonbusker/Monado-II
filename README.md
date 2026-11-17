@@ -1,8 +1,8 @@
 # Monado II
 
-> **Linux 0.1.28 and Windows Experimental 0.1.0 are available.**
-> Linux 0.1.28 adds live F1 cheats, movement and enemy-health multipliers,
-> four FPS counter styles, launcher responsiveness and setup improvements.
+> **Linux 0.1.29 and Windows Experimental 0.1.0 are available.**
+> Linux 0.1.29 improves launcher reopen diagnostics and retry, fixes a graphics
+> mod overlay bypass and adds diagnostics for adapted aspect ratios.
 > Existing Linux installations can update normally; saves and settings are preserved.
 > Windows now includes the modern launcher and gameplay options, with known
 > temporal/DLSS flickering and incomplete hardware/gameplay qualification.
@@ -85,8 +85,8 @@ one graphical builder AppImage. **The game is still built locally from your own 
 
 | Platform | Recommended download | Full instructions |
 |---|---|---|
-| Linux x86-64 | [Graphical builder AppImage](https://github.com/brendonbusker/Monado-II/releases/download/v0.1.28/monado-ii-0.1.28-linux-builder-x86_64.AppImage) | [Linux setup and build guide](docs/BUILD_LINUX.md) |
-| Windows x86-64 | [Windows Experimental 0.1.0 setup EXE](https://github.com/brendonbusker/Monado-II/releases/download/v0.1.28/MonadoII-Windows-Setup.exe) | [Windows build guide](docs/BUILD_WINDOWS.md) |
+| Linux x86-64 | [Graphical builder AppImage](https://github.com/brendonbusker/Monado-II/releases/download/v0.1.29/monado-ii-0.1.29-linux-builder-x86_64.AppImage) | [Linux setup and build guide](docs/BUILD_LINUX.md) |
+| Windows x86-64 | [Windows Experimental 0.1.0 setup EXE](https://github.com/brendonbusker/Monado-II/releases/download/v0.1.29/MonadoII-Windows-Setup.exe) | [Windows build guide](docs/BUILD_WINDOWS.md) |
 
 > **Windows is experimental and independently versioned.** Download and run
 > **MonadoII-Windows-Setup.exe**. It builds locally from your own extracted game
@@ -110,7 +110,7 @@ game. Keep the installed build folder and its input available. If you already
 have Monado II installed, **Use an existing installation** adopts it in place,
 including its settings, saves and current update. See the [graphical setup guide](docs/GRAPHICAL_BUILDER.md).
 
-The [Linux source/setup kit](https://github.com/brendonbusker/Monado-II/releases/download/v0.1.28/monado-ii-0.1.28-linux-setup.tar.gz)
+The [Linux source/setup kit](https://github.com/brendonbusker/Monado-II/releases/download/v0.1.29/monado-ii-0.1.29-linux-setup.tar.gz)
 remains available for terminal builds and existing updaters. After extracting it
 and arranging its `game_files/exefs` and `game_files/romfs` input, the established
 commands are still:
@@ -178,7 +178,7 @@ launcher. It never presses Play.
   rebuild the game locally.
 - Saves, settings and shared game input stay in the original installation.
   Failed or cancelled preparation keeps the previous version selected.
-- **Updating Linux to 0.1.28 requires a full local game rebuild.** The updater
+- **Updating Linux to 0.1.29 requires a full local game rebuild.** The updater
   keeps your existing saves, settings and game input in place; no save conversion
   is needed.
   Missing prerequisites leave the working version selected and show instructions
@@ -213,7 +213,7 @@ in releases solely for installed-updater compatibility. Both contain source, not
 precompiled playable games. No compiled game binary, private vendor SDK binary,
 game-derived cache or user data is distributed. The graphical AppImage contains
 setup software and reviewed startup dependencies; game/runtime compilation stays local.
-**0.1.28 is a regular Linux release**; optional frame generation and non-original
+**0.1.29 is a regular Linux release.** Optional frame generation and non-original
 aspect modes remain experimental. Original 16:9 remains the default. The Windows
 experimental setup has its own versioned update metadata and retains its profile
 through checked updates; a Linux-only version does not advance Windows.

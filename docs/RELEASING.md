@@ -6,7 +6,7 @@ labelled experimental in its identity, download instructions and release notes.
 Do not mark the whole release prerelease merely to label Windows experimental,
 since both current update clients check the ordinary latest release.
 
-## Linux0.1.28
+## Linux 0.1.29
 
 Publish the reviewed standalone builder AppImage, Linux source/setup tarball,
 byte-identical legacy `-source.tar.gz` alias, AppImage runtime source/relink
@@ -14,7 +14,7 @@ companion and combinedSHA256SUMS. The internal legacy source-root name is retain
 for existing Linux updater compatibility. Source archives contain no binaries,
 input, generated code, game shaders/caches, saves, keys or vendor SDKs.
 
-The public0.1.28 standalone AppImage contains setup software and its reviewed
+The public 0.1.29 standalone AppImage contains setup software and its reviewed
 private startup runtime. Game/runtime compilation remains local. Local migration
 images may also contain a verified authored runtime; that local transport is not
 a public binary redistribution approval. The
@@ -32,11 +32,12 @@ Retain private receipts, dependency identities and compiler commands separately.
 Check standalone self-test/hidden startup and actual old-client source discovery,
 checksum, extraction and rebuild classification before activation/publication.
 A migration AppImage must also fit the installed updater's64MiB bound.
-For 0.1.28, retain the earlier build-path regression fixtures and qualify an
+For 0.1.29, retain the earlier build-path regression fixtures and qualify an
 isolated existing-installation update, including full native game and launcher
 preparation and activation. Do not modify the immutable old updater or relabel a
-newer binary to make the test pass. Keep the accepted development source and
-manual 2x/20x Prison Island result separate from release packaging evidence.
+newer binary to make the test pass. Check launcher reopen and retry with the
+packaged builder. Track the Bazzite reopen and ultrawide squeeze retests on the
+reporters' hardware separately.
 Historical 0.1.24-to-0.1.26 split-game regeneration evidence remains recorded;
 a source-discovery pass alone does not establish a successful update. Exercise
 the actual standalone packager through the old updater's isolated Python worker,
