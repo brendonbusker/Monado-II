@@ -37,8 +37,8 @@
       "sha256": "fc908ddd148e06cb024ce9ea9f98307c32af7147bcba2504b8b6a726526197cc"
     },
     "CHANGELOG.md": {
-      "bytes": 52843,
-      "sha256": "7c6c8cd5e9f2a72fb6324a6d1123c915dd6862e616ebdb8fb01df7202974d175"
+      "bytes": 53049,
+      "sha256": "6ba90c07dcf723b395f052bd7415b4fae79b5d085176f5410acaef884d066898"
     },
     "CONTRIBUTING.md": {
       "bytes": 1798,
@@ -5325,8 +5325,8 @@
       "sha256": "ce4c8d6a5ffb65a08a25abb6450235929887d2079cb63321c327261b123b1eec"
     },
     "docs/RELEASING.md": {
-      "bytes": 5098,
-      "sha256": "1009d3999d800f28686c765bf70bba0e7f7bc78d291aef4ae153cb8636999e17"
+      "bytes": 5320,
+      "sha256": "b7c6b8e1466cda4236dfdaf50e43fa3fd31dbd4a270ebcd31025c91ab3cb33e0"
     },
     "docs/WINDOWS_PARITY_INVENTORY.json": {
       "bytes": 233647,
@@ -6085,8 +6085,8 @@
       "sha256": "1942d80c611fe73ce4e227f067febff94755d3f36424350fd264fa884c5f07ba"
     },
     "tests/test_source_releases.py": {
-      "bytes": 18563,
-      "sha256": "5c10ca7e842efe1034a07f8c9d7e6170693dc2abd5d829286bd60a47bfad3d3c"
+      "bytes": 27549,
+      "sha256": "31544c8ce4887c6168e4aea688c0de673f0c24262d508cc34b2010d5b58c419b"
     },
     "tests/test_standalone_appimage_adapter.py": {
       "bytes": 14601,
@@ -6365,8 +6365,8 @@
       "sha256": "afc0a6c76c637a31a0f278c0a8f8bc65f3257dcb5ba5bed49d50576252c12e9d"
     },
     "tools/package_source_release.py": {
-      "bytes": 21010,
-      "sha256": "2f4bc9d272816e4dcc9bdf2826faefd0041129d2b06fd699e1353709e32cdb57"
+      "bytes": 23564,
+      "sha256": "b973eabda1c1880b8a1235882efc40dccfea8e7d478b6728327a8902421ca76f"
     },
     "tools/portable_runtime.py": {
       "bytes": 14131,

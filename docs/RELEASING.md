@@ -38,7 +38,10 @@ preparation and activation. Do not modify the immutable old updater or relabel a
 newer binary to make the test pass. Keep the accepted development source and
 manual 2x/20x Prison Island result separate from release packaging evidence.
 Historical 0.1.24-to-0.1.26 split-game regeneration evidence remains recorded;
-a source-discovery pass alone does not establish a successful update.
+a source-discovery pass alone does not establish a successful update. Exercise
+the actual standalone packager through the old updater's isolated Python worker,
+including deferred source guards after dynamic module loading, with no foreign
+helper aliases or temporary import-path assumptions.
 
 ## WindowsExperimental0.1.0
 

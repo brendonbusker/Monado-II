@@ -2,6 +2,10 @@
 
 ## 0.1.28 - November 17, 2026
 
+- Keep the source-verification helper available when older launchers package an
+  updated standalone AppImage. Verify it from the packager's own reviewed source
+  without relying on global Python imports.
+
 - Fix loading-screen crashes with Enemy health enabled by waiting for native HP
   initialization before scaling. Preliminary enemy refreshes retain native behavior.
 

@@ -20,6 +20,7 @@ import sys
 import tarfile
 import tempfile
 from typing import BinaryIO
+import types
 import zipfile
 import zlib
 
@@ -51,9 +52,55 @@ def encoded(document: dict) -> bytes:
     return (json.dumps(document, indent=2, sort_keys=True) + '\n').encode('utf-8')
 
 
+def _source_guard():
+    """[XCDE] LINUX-131: bind policy to this packager, including isolated loads.
+
+    Standalone packaging restores its caller's import path before calling us.
+    Read adjacent checked bytes directly; neither a generic cached module nor a
+    process-wide import-path/alias change may select another workspace's policy.
+    """
+    path = Path(__file__).absolute().parent / 'publication_guard.py'
+    if path.resolve() != path:
+        raise ReleaseError('publication helper path contains a link')
+    before = path.lstat()
+    limit = 8 * 1024 * 1024
+    if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or not 0 < before.st_size <= limit:
+        raise ReleaseError('publication helper must be an ordinary bounded single-link file')
+    def snapshot(info):
+        return (info.st_dev, info.st_ino, info.st_mode, info.st_nlink,
+                info.st_size, info.st_mtime_ns, info.st_ctime_ns,
+                getattr(info, 'st_birthtime_ns', None))
+    def same_object(left, right):
+        # Windows pathname/fd permission bits and ctime meanings can differ.
+        # Preserve full snapshots within each API and common identity across it.
+        def identity(info):
+            return (info.st_dev, info.st_ino, stat.S_IFMT(info.st_mode),
+                    info.st_nlink, info.st_size, info.st_mtime_ns)
+        births = (getattr(left, 'st_birthtime_ns', None), getattr(right, 'st_birthtime_ns', None))
+        return identity(left) == identity(right) and (None in births or births[0] == births[1])
+    flags = (os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_NONBLOCK', 0)
+             | getattr(os, 'O_BINARY', 0))
+    fd = os.open(path, flags)
+    with os.fdopen(fd, 'rb') as stream:
+        opened = os.fstat(stream.fileno())
+        if not same_object(before, opened):
+            raise ReleaseError('publication helper identity changed before reading')
+        data = stream.read(limit + 1)
+        after = os.fstat(stream.fileno())
+    final = path.lstat()
+    if (snapshot(before) != snapshot(final) or snapshot(opened) != snapshot(after)
+            or not same_object(after, final) or len(data) != before.st_size
+            or len(data) > limit or path.resolve() != path):
+        raise ReleaseError('publication helper changed while reading')
+    name = '_monado_source_release_guard_' + hashlib.sha256(os.fsencode(path)).hexdigest()
+    module = types.ModuleType(name)
+    module.__file__, module.__package__ = str(path), ''
+    exec(compile(data, str(path), 'exec'), module.__dict__)
+    return module
+
+
 def _guard(root: Path) -> None:
-    from publication_guard import verify_tree
-    violations = verify_tree(root)
+    violations = _source_guard().verify_tree(root)
     if violations:
         raise ReleaseError('publication guard rejected candidate: ' + '; '.join(violations))
 
