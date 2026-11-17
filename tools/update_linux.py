@@ -23,18 +23,67 @@ import subprocess
 import sys
 import threading
 import time
+import types
 import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
-# Isolated AppImage/worker Python deliberately omits the script directory.
-_import_path = list(sys.path)
-sys.path.insert(0, str(ROOT / 'tools'))
-try:
-    import update_release
-    import installation_version as installed_version
-    from publication_guard import content_problem, path_problem, read_regular
-finally:
-    sys.path[:] = _import_path
+
+
+def _workspace_helper(stem):
+    """Load this workspace's helper without sharing process-wide import aliases.
+
+    One builder process can inspect an older registered install and then a newer
+    adjacent install. Their publication policies and release helpers must remain
+    paired with their own sources, regardless of import order or concurrent use.
+    """
+    path = ROOT / 'tools' / (stem + '.py')
+    if path.resolve() != path:
+        raise ValueError('update helper path contains a link')
+    before = path.lstat()
+    limit = 8 * 1024 * 1024
+    if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or before.st_size > limit:
+        raise ValueError('update helper must be an ordinary bounded single-link file')
+    def snapshot(info):
+        return (info.st_dev, info.st_ino, info.st_mode, info.st_nlink,
+                info.st_size, info.st_mtime_ns, info.st_ctime_ns,
+                getattr(info, 'st_birthtime_ns', None))
+    def same_object(left, right):
+        # Windows lstat/fstat can disagree on executable bits and ctime. Keep
+        # full snapshots within each API and compare common identity across it.
+        def identity(info):
+            return (info.st_dev, info.st_ino, stat.S_IFMT(info.st_mode),
+                    info.st_nlink, info.st_size, info.st_mtime_ns)
+        births = (getattr(left, 'st_birthtime_ns', None), getattr(right, 'st_birthtime_ns', None))
+        return identity(left) == identity(right) and (None in births or births[0] == births[1])
+    fd = os.open(path, os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0) |
+                 getattr(os, 'O_NONBLOCK', 0) | getattr(os, 'O_BINARY', 0))
+    with os.fdopen(fd, 'rb') as stream:
+        opened = os.fstat(stream.fileno())
+        if not same_object(opened, before):
+            raise ValueError('update helper identity changed before reading')
+        data = stream.read(limit + 1)
+        after = os.fstat(stream.fileno())
+    final = path.lstat()
+    if (snapshot(after) != snapshot(opened) or snapshot(final) != snapshot(before)
+            or not same_object(final, after)
+            or len(data) != before.st_size or len(data) > limit or path.resolve() != path):
+        raise ValueError('update helper changed while reading')
+    name = '_monado_workspace_' + hashlib.sha256(os.fsencode(path)).hexdigest() + '_' + stem
+    module = types.ModuleType(name)
+    module.__file__ = str(path)
+    module.__package__ = ''
+    # Compile the checked bytes directly: no stale pyc lookup or shared-module
+    # registration, and no sys.path mutation while another workspace is loading.
+    exec(compile(data, str(path), 'exec'), module.__dict__)
+    return module
+
+
+update_release = _workspace_helper('update_release')
+installed_version = _workspace_helper('installation_version')
+_publication_guard = _workspace_helper('publication_guard')
+content_problem = _publication_guard.content_problem
+path_problem = _publication_guard.path_problem
+read_regular = _publication_guard.read_regular
 IMAGE = 'Monado-II-x86_64.AppImage'
 IDENTITY = re.compile(r'[a-zA-Z0-9][a-zA-Z0-9._-]{0,95}\Z')
 HASH = re.compile(r'[0-9a-f]{64}\Z')
@@ -473,6 +522,11 @@ def cleanup_current(owner, workspace, state, *, profile_lock_fd=None):
     """
     fd = None
     try:
+        # Refuse promptly while a new/other launcher is using this installation.
+        # Recovery/bridge audits and obsolete tree walks are unnecessary until
+        # exclusive maintenance admission succeeds.
+        lease = _support_module('install_lease')
+        fd = lease.acquire_maintenance(owner / 'Monado_Linux')
         selected = _current_selection(owner)
         if selected is None:
             if workspace != owner:
@@ -481,8 +535,6 @@ def cleanup_current(owner, workspace, state, *, profile_lock_fd=None):
             _retire_unactivated_history(owner)
         else:
             _retire_rollback(owner, workspace)
-        lease = _support_module('install_lease')
-        fd = lease.acquire_maintenance(owner / 'Monado_Linux')
         if _current_selection(owner) != selected or (selected is not None and active_record(owner, selected) != workspace):
             raise ValueError('active version changed before cleanup')
         module = layout_module(ROOT)
@@ -517,11 +569,13 @@ def cleanup_current(owner, workspace, state, *, profile_lock_fd=None):
             os.close(fd)
 
 
-def sync_installation_version(workspace, state, profile_lock_fd):
+def sync_installation_version(workspace, state, profile_lock_fd, *, cleanup=True):
     """Normal-start repair under the already held profile lease and install lease.
 
     No active managed version means an ordinary fresh/development launch has no
     version-marker migration to perform. Dry runs never call this function.
+    The launcher defers optional retention until its complete session has ended;
+    mandatory marker/source validation remains part of startup admission.
     """
     import fcntl
     workspace, state = ordinary(workspace), ordinary(state)
@@ -535,14 +589,17 @@ def sync_installation_version(workspace, state, profile_lock_fd):
             or (expected.st_dev, expected.st_ino) != (held.st_dev, held.st_ino)):
         raise ValueError('version synchronization profile lease mismatch')
     fcntl.flock(profile_lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    selected = _current_selection(owner)
+    # Nothing read before install.lock is trusted for admission. Read only the
+    # small selection record here; the full active image/source validation below
+    # occurs under the lease. Previously it ran twice here and then a third time
+    # under the lease, even though the first two results could not be reused.
+    selected_path = owner / 'Monado_Linux/updates/active.json'
+    selected = json_read(selected_path, 8192) if selected_path.exists() or selected_path.is_symlink() else None
     if selected is None:
         directory = owner / 'Monado_Linux/updates'
         if workspace != owner or not directory.exists() or not any(
                 path.name.startswith(('update-', 'payload-')) for path in directory.iterdir()):
             return False
-    elif active_record(owner, selected) != workspace:
-        return False
     session = object.__new__(Session)
     session.owner, session.lock_fd = owner, None
     try:
@@ -552,16 +609,52 @@ def sync_installation_version(workspace, state, profile_lock_fd):
         with source_verification_context():
             if _current_selection(owner) != selected:
                 raise ValueError('active selection changed during version synchronization')
+            if selected is not None and owner / selected['workspace'] != workspace:
+                return False  # The fully validated selection names another build.
             if selected is None:
-                cleanup_current(owner, workspace, state, profile_lock_fd=profile_lock_fd)
+                if cleanup:
+                    cleanup_current(owner, workspace, state, profile_lock_fd=profile_lock_fd)
                 return False
             original, current = _prepare_version_state(owner, workspace)
             target = _selected_metadata(owner, original, selected)
             changed = current != target
             if changed:
                 _replace_metadata(owner / 'update-version.json', target)
-            cleanup_current(owner, workspace, state, profile_lock_fd=profile_lock_fd)
+            if cleanup:
+                cleanup_current(owner, workspace, state, profile_lock_fd=profile_lock_fd)
             return changed
+    finally:
+        session.close()
+
+
+def finish_installation_maintenance(workspace):
+    """Best-effort retention after all native-session descriptors are closed.
+
+    Re-resolve the original owner and current selection under a fresh install
+    lease. No selection/source verdict survives the session lifetime. A changed
+    selection or a concurrent runtime leaves obsolete files alone; activation
+    still performs its existing immediate cleanup independently.
+    """
+    workspace = ordinary(workspace)
+    owner = layout_module(ROOT).installation_root(workspace / 'Monado_Linux')
+    directory = owner / 'Monado_Linux/updates'
+    if not directory.exists():
+        return False
+    ordinary(directory)
+    session = object.__new__(Session)
+    session.owner, session.lock_fd = owner, None
+    try:
+        session._lock()
+        with source_verification_context():
+            selected = _current_selection(owner)
+            if selected is None:
+                if workspace != owner or not any(path.name.startswith(('update-', 'payload-'))
+                        for path in directory.iterdir()):
+                    return False
+                installed_sources(owner)
+            elif active_record(owner, selected) != workspace:
+                return False
+            return cleanup_current(owner, workspace, None)
     finally:
         session.close()
 

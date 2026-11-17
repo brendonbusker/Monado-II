@@ -26,7 +26,7 @@ class CheatsRewardsTests(unittest.TestCase):
                 output = Path(directory) / ('rewards-ubsan' if flags else 'rewards')
                 command = [compiler, '-std=gnu11', '-O1', '-Wall', '-Wextra', '-Werror',
                            '-fno-fast-math', '-ffp-contract=off', *flags,
-                           str(fixture), str(source), '-o', str(output)]
+                           str(fixture), str(source), str(PORT / 'runtime/hle/cheats_options.c'), '-pthread', '-o', str(output)]
                 built = subprocess.run(command, text=True, capture_output=True, timeout=90)
                 self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
                 ran = subprocess.run([str(output)], text=True, capture_output=True, timeout=30)

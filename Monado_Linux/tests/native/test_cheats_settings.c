@@ -1,3 +1,4 @@
+// [XCDE] LINUX-129: Enemy health controls, positive bounds and live diagnostics.
 // [XCDE] LINUX-072: actual settings load/save and fixed-point math, authored data only.
 #define _POSIX_C_SOURCE 200809L
 #include <assert.h>
@@ -14,7 +15,7 @@
 extern bool g_party_switch;
 bool bind_settings_load(const char *k, const char *v) { (void)k; (void)v; return false; }
 void bind_settings_save(FILE *f) { fputs("bind_key_a = Return\n", f); }
-#define CHEATS(X) X(damage_dealt) X(damage_received) X(exp) X(ap) X(sp) X(gold)
+#define CHEATS(X) X(damage_dealt) X(damage_received) X(exp) X(ap) X(sp) X(gold) X(movement_speed) X(enemy_health)
 #define NAME(x) #x,
 static const char *names[] = { CHEATS(NAME) };
 #undef NAME
@@ -29,13 +30,13 @@ static int *percent(unsigned n) { return (int *)((char *)&g_settings + percents[
 static const char *ini;
 static void write_all(const char *on, const char *amount) {
     FILE *f = fopen(ini, "w"); assert(f);
-    for (unsigned i = 0; i < 6; ++i)
+    for (unsigned i = 0; i < 8; ++i)
         fprintf(f, "cheat_%s = %s\ncheat_%s_percent = %s\n", names[i], on, names[i], amount);
     fprintf(f, "cheat_no_fall_damage = %s\nparty_switch = 1\nquickstep_slot = 1\n", on);
     assert(!fclose(f));
 }
 static void expect(bool on, int amount) {
-    for (unsigned i = 0; i < 6; ++i) { assert(*enabled(i) == on); assert(*percent(i) == amount); }
+    for (unsigned i = 0; i < 8; ++i) { assert(*enabled(i) == on); assert(*percent(i) == (i == 7 && amount < 10 ? 100 : amount)); }
     assert(g_settings.cheat_no_fall_damage == on);
 }
 int main(int argc, char **argv) {
@@ -53,7 +54,7 @@ int main(int argc, char **argv) {
         char text[32]; snprintf(text, sizeof text, "%d", n);
         write_all("1", text); settings_load(); expect(true, n);
         settings_save();
-        for (unsigned i = 0; i < 6; ++i) { *enabled(i) = false; *percent(i) = 100; }
+        for (unsigned i = 0; i < 8; ++i) { *enabled(i) = false; *percent(i) = 100; }
         g_settings.cheat_no_fall_damage = false;
         settings_load(); expect(true, n);
         assert(g_party_switch && g_settings.quickstep_slot);
@@ -62,9 +63,14 @@ int main(int argc, char **argv) {
     write_all("0", "150"); settings_load();
     g_settings.cheat_exp = true; g_settings.cheat_exp_percent = 201;
     settings_save(); settings_load();
-    for (unsigned i = 0; i < 6; ++i) {
+    for (unsigned i = 0; i < 8; ++i) {
         assert(*enabled(i) == (i == 2)); assert(*percent(i) == (i == 2 ? 201 : 150));
     }
+    // Corrupt in-memory preferences cannot write an invalid Enemy health minimum.
+    g_settings.cheat_enemy_health = true; g_settings.cheat_enemy_health_percent = 0;
+    settings_save(); settings_load(); assert(g_settings.cheat_enemy_health && g_settings.cheat_enemy_health_percent == 100);
+    g_settings.cheat_enemy_health_percent = 10; settings_save(); settings_load();
+    assert(g_settings.cheat_enemy_health_percent == 10);
     remove(ini); settings_load(); expect(false, 100);
     // Oracle uses wider arithmetic only in this fixture, including extreme bounds.
     const uint64_t values[] = {0, 1, 2, 99, 100, 101, 999999, UINT32_MAX, UINT64_MAX - 1, UINT64_MAX};

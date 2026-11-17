@@ -222,7 +222,9 @@ def validate_reused_game(port, binary, state, *, dlss, framegen=None, fsr3=False
     # changes. This builder also refuses changed or newly added native inputs.
     required = {'scripts/build_linux.py', 'scripts/linux_runtime_check.py',
                 'scripts/linux_runtime_graph.py', 'graphics-deps-linux.lock.json', 'requirements-linux.lock',
-                'tools/gen_smaa_inc.py', 'tools/gen_all.py', 'dlss-linux.lock.json', 'scripts/setup_linux_dlss.py',
+                'tools/gen_smaa_inc.py', 'tools/gen_all.py', 'tools/gen_fps_fonts.py',
+                'tools/launcher/assets/fonts/DejaVuSans.ttf', 'tools/launcher/assets/fonts/DejaVuSerif-Bold.ttf',
+                'tools/launcher/assets/fonts/LICENSE-DejaVu.txt', 'dlss-linux.lock.json', 'scripts/setup_linux_dlss.py',
                 'fsr-linux.lock.json', 'scripts/setup_linux_fsr.py', 'scripts/setup_linux_fsr3.py', 'scripts/setup_linux_fsr4.py', 'fsr4-linux.lock.json', 'scripts/gamecode_identity.py',
                 'scripts/setup_present_observer_linux.py', 'scripts/present_observer_manifest.py',
                 'scripts/setup_linux_graphics.py', 'portable-baseline-linux.lock.json',

@@ -36,7 +36,7 @@ RUNTIME = '''loader dispatch kernel ipc fnprof platform/linux platform/linux_sta
 services/am services/acc services/time services/hid_set services/kbicons services/misc services/audio services/hwopus
 hle/heaps hle/pl hle/vi hle/nvn_boot hle/fibers hle/fiber_context_linux hle/input hle/party hle/bindings hle/movie
 hle/framepace hle/graphics hle/foliage_distance hle/title_exit hle/desktop_exit_caption hle/system_exit hle/expanded_saves hle/expanded_save_scan
-hle/quickstep_slot hle/quickstep_save hle/quickstep_native hle/quickstep_picker hle/quickstep_stats hle/quickstep_stats_ui hle/quickstep_ui_memory hle/cheats_rewards hle/cheats_combat host/stubs host/settings_ini host/stubs_gfx host/xcde_aspect host/gamelib_static host/main_boot
+hle/quickstep_slot hle/quickstep_save hle/quickstep_native hle/quickstep_picker hle/quickstep_stats hle/quickstep_stats_ui hle/quickstep_ui_memory hle/cheats_options hle/cheats_rewards hle/cheats_combat hle/cheats_movement hle/cheats_enemy_health host/stubs host/settings_ini host/stubs_gfx host/xcde_aspect host/gamelib_static host/main_boot
 diag/diag diag/sampler diag/watchdog diag/crashdump paths'''.split()
 NVN = '''astc cmdbuf formats maxwell/translate objects output_scale smaa_data tegra texpatch
 vulkan/device vulkan/exec vulkan/host_import vulkan/driver_heap vulkan/radv_dcc_compat vulkan/precompile vulkan/shaders vulkan/textures vulkan/temporal'''.split()
@@ -44,6 +44,21 @@ CPP = ['third_party/imgui/' + n + '.cpp' for n in ('imgui', 'imgui_draw', 'imgui
 CPP += ['third_party/imgui/backends/imgui_impl_vulkan.cpp', 'runtime/nvn/vulkan/imgui_glue.cpp',
         'runtime/ui/menu_vk.cpp', 'runtime/nvn/vulkan/dlss.cpp', 'runtime/nvn/vulkan/vma.cpp']
 PACKAGES = ['sdl3', 'vulkan', 'shaderc', 'libavcodec', 'libavformat', 'libavutil', 'libswscale', 'libswresample', 'opus']
+# [XCDE] LINUX-126: optimize only the authored Vulkan execution/texture units.
+# The guest compiler/ABI, CPU baseline, assertions and floating-point rules stay
+# unchanged. Monado-Reborn's targeted runtime-O2 recipe was a design reference;
+# this explicit per-object policy and its receipts/tests are authored here.
+# The pinned Zig 0.14.1 driver lowers O1 and O2 to identical Clang O2 options;
+# explicit intent here is not a claim of extra optimization or measured FPS.
+RENDERER_O2_SOURCES = frozenset(('runtime/nvn/vulkan/exec.c', 'runtime/nvn/vulkan/textures.c'))
+
+
+def source_policy_flags(relative):
+    if relative in RENDERER_O2_SOURCES:
+        # Appended after shared/dependency flags: Zig implies NDEBUG at -O2
+        # unless it is explicitly undone *after* the optimization switch.
+        return ['-O2', '-UNDEBUG', '-ffp-contract=off', '-fno-strict-aliasing']
+    return []
 
 
 def digest(path):
@@ -138,6 +153,10 @@ def source_snapshot():
     names = [ROOT / 'scripts/build_linux.py', ROOT / 'scripts/linux_runtime_check.py',
              ROOT / 'scripts/linux_runtime_graph.py', ROOT / 'graphics-deps-linux.lock.json',
              ROOT / 'requirements-linux.lock', ROOT / 'tools/gen_smaa_inc.py', ROOT / 'tools/gen_all.py',
+             ROOT / 'tools/gen_fps_fonts.py',
+             ROOT / 'tools/launcher/assets/fonts/DejaVuSans.ttf',
+             ROOT / 'tools/launcher/assets/fonts/DejaVuSerif-Bold.ttf',
+             ROOT / 'tools/launcher/assets/fonts/LICENSE-DejaVu.txt',
              ROOT / 'dlss-linux.lock.json', ROOT / 'scripts/setup_linux_dlss.py',
              ROOT / 'fsr-linux.lock.json', ROOT / 'scripts/setup_linux_fsr.py', ROOT / 'scripts/setup_linux_fsr3.py', ROOT / 'scripts/setup_linux_fsr4.py', ROOT / 'fsr4-linux.lock.json',
              ROOT / 'scripts/setup_present_observer_linux.py',
@@ -292,17 +311,32 @@ class Builder:
         observer = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(observer)
         observer.build(self)
-        for name, compiler, language in (('cc-predefines', self.cc, 'c'), ('cxx-predefines', self.cxx, 'c++')):
-            record, macros = self.run(name, [compiler, *self.flags, '-dM', '-E', '-x', language, '/dev/null'])
+        for name, compiler, language, policy in (
+                ('cc-predefines', self.cc, 'c', []), ('cxx-predefines', self.cxx, 'c++', []),
+                ('renderer-o2-predefines', self.cc, 'c', source_policy_flags('runtime/nvn/vulkan/exec.c'))):
+            record, macros = self.run(name, [compiler, *self.flags, *policy, '-dM', '-E', '-x', language, '/dev/null'])
             if record['exit']:
                 raise RuntimeError(f'{name} failed')
             check_correctness_macros(macros)
         self.receipt['assertions_enabled'] = True
+        self.receipt['source_compile_policy'] = {name: source_policy_flags(name) for name in sorted(RENDERER_O2_SOURCES)}
+        self.receipt['source_compile_policy_kind'] = 'requested driver options; not a measurement of backend optimization or performance'
         record, _ = self.run('smaa-include', [sys.executable, '-B', ROOT / 'tools/gen_smaa_inc.py',
                                             ROOT / 'third_party/smaa/SMAA.hlsl', self.output / 'inc/smaa_hlsl.inc'])
         if record['exit']:
             raise RuntimeError('authored SMAA include generation failed')
         self.receipt['smaa_include_sha256'] = digest(self.output / 'inc/smaa_hlsl.inc')
+        assets = ROOT / 'tools/launcher/assets/fonts'
+        record, encoded = self.run('fps-fonts', [sys.executable, '-B', ROOT / 'tools/gen_fps_fonts.py',
+                                              '--assets', assets, '--output', self.output / 'inc/fps_fonts.h'])
+        if record['exit']:
+            raise RuntimeError('licensed FPS font embedding failed')
+        self.receipt['fps_font_resources'] = json.loads(encoded)
+        if self.receipt['fps_font_resources']['header']['sha256'] != digest(self.output / 'inc/fps_fonts.h'):
+            raise ValueError('generated FPS font header differs from its receipt')
+        licence = assets / 'LICENSE-DejaVu.txt'
+        self.copy_runtime_resource(licence, 'DejaVu-font-license.txt',
+            self.receipt['sources_before']['tools/launcher/assets/fonts/LICENSE-DejaVu.txt'])
         self.save()
 
     def copy_runtime_resource(self, source, filename, expected):
@@ -447,6 +481,13 @@ class Builder:
             dlss_enabled=old.get('dlss_enabled', False), fsr3_enabled=old.get('fsr3_enabled', False), fsr4_enabled=old.get('fsr4_enabled', False),
             framegen_enabled=old.get('framegen_enabled', False),
             precompile_protocol=old.get('precompile_protocol'), cuda_task_metadata_protocol=old.get('cuda_task_metadata_protocol'))
+        if 'fps_font_resources' in old:
+            self.receipt['fps_font_resources'] = old['fps_font_resources']
+        # [XCDE] LINUX-126: retain the informational requested-policy provenance
+        # through authored-runtime transport; native identity checks stay strict.
+        for name in ('source_compile_policy', 'source_compile_policy_kind'):
+            if name in old:
+                self.receipt[name] = old[name]
         record, flags = self.run('prebuilt-pkg-cflags', [ROOT / '.deps/bin/pkg-config-graphics', '--cflags', *PACKAGES])
         if record['exit']:
             raise RuntimeError('prebuilt local companion development flags unavailable')
@@ -631,6 +672,7 @@ class Builder:
             # [XCDE] LINUX-070: XCDE_GFX is entry-file-only. Keep the native
             # heap hook explicit without changing standalone kernel fixtures.
             extra += ['-DXCDE_LINUX_RADV_HEAP=1']
+        extra += source_policy_flags(relative)
         record, _ = self.run(name, [self.cxx if source.suffix == '.cpp' else self.cc,
                                     *self.flags, *extra, '-c', source, '-o', temporary])
         after = digest(source)
@@ -650,6 +692,18 @@ class Builder:
     def finish(self, error=None):
         after = source_snapshot()
         self.receipt['sources_after'] = after
+        fonts = self.receipt.get('fps_font_resources')
+        if fonts and not self.receipt.get('prebuilt_runtime'):
+            header = self.output / 'inc/fps_fonts.h'
+            try:
+                unchanged = (header.resolve() == header and not header.is_symlink()
+                             and header.is_file() and header.stat().st_nlink == 1
+                             and header.stat().st_size == fonts['header']['bytes']
+                             and digest(header) == fonts['header']['sha256'])
+            except (OSError, KeyError, TypeError):
+                unchanged = False
+            if not unchanged:
+                self.receipt['errors'].append('generated FPS font header changed during build')
         if self.receipt.get('split_game') and self.receipt.get('gamecode_abi'):
             spec = importlib.util.spec_from_file_location('_monado_final_game_abi', ROOT / 'scripts/gamecode_identity.py')
             identity_module = importlib.util.module_from_spec(spec); spec.loader.exec_module(identity_module)

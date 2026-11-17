@@ -125,6 +125,10 @@ typedef struct TexBackend {
     bool storage_failed;  // [XCDE] T192: vk_tex_add_storage could not give it (don't retry every draw)
 } TexBackend;
 
+// [XCDE] LINUX-126: an external write to this exact backend ends its feedback
+// interval. NULL/active depth-copy aliases conservatively invalidate all images.
+void vk_feedback_image_written(TexBackend *image);
+
 TexBackend *vk_tex(NvnTexture *t, bool for_render);  // backend image (uploads CPU contents unless for_render)
 bool vk_tex_add_storage(NvnTexture *t, VkCommandBuffer cb);  // [XCDE] T192 (textures.c)
 VkFormat vk_format(uint32_t nvn_format);

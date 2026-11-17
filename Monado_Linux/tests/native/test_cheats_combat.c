@@ -20,13 +20,20 @@
 #define LD64(a) (*(uint64_t *)(uintptr_t)(a))
 #define ST32(a,v) (*(uint32_t *)(uintptr_t)(a) = (uint32_t)(v))
 #define FATAL(...) do { fprintf(stderr,__VA_ARGS__); _Exit(86); } while(0)
-static struct {
-    bool cheat_damage_dealt, cheat_damage_received;
-    int cheat_damage_dealt_percent, cheat_damage_received_percent;
-    bool cheat_no_fall_damage;
-} g_settings;
+#include "../../runtime/cheats_options.h"
+Settings g_settings;
 #include "cheats_math.h"
+#define cheats_combat_hit production_cheats_combat_hit
+#define cheats_combat_linked_hit production_cheats_combat_linked_hit
+#define cheats_skip_fall_damage production_cheats_skip_fall_damage
 #include "combat_production.h"
+#undef cheats_combat_hit
+#undef cheats_combat_linked_hit
+#undef cheats_skip_fall_damage
+// Each fixture request models the UI's explicit publish before its next event.
+static void cheats_combat_hit(Cpu *c) { xcde_cheats_publish(&g_settings); production_cheats_combat_hit(c); }
+static void cheats_combat_linked_hit(Cpu *c) { xcde_cheats_publish(&g_settings); production_cheats_combat_linked_hit(c); }
+static bool cheats_skip_fall_damage(Cpu *c) { xcde_cheats_publish(&g_settings); return production_cheats_skip_fall_damage(c); }
 
 static unsigned cases;
 static unsigned linked, mode, flags;

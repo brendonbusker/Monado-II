@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.1.28 - November 17, 2026
+
+- Fix loading-screen crashes with Enemy health enabled by waiting for native HP
+  initialization before scaling. Preliminary enemy refreshes retain native behavior.
+
+- Add an independently disabled Enemy health multiplier in the launcher and live
+  F1 Cheats tab, from 0.10x to 20.00x in 0.01x steps. Preserve remaining health on
+  live changes, native phase/death protections and a small-health safety minimum.
+  Include lifecycle and arithmetic safeguards. Prison Island loading was manually
+  verified at 2x and 20x; broader scripted boss gameplay still needs testing.
+
+- Keep local compiler receipts separately bounded from runtime transport metadata,
+  allowing longer installation paths without enlarging accepted archive documents.
+
+- Reduce hidden/background launcher drawing while preserving controller and
+  game/update/precompile monitoring. Reuse feedback snapshots after unrelated
+  known texture writes, retaining conservative visibility and alias boundaries.
+- Limit optional pipeline refinement concurrency on small integrated-GPU Linux
+  systems without changing the required compile pool or desktop NVIDIA policy.
+  Handheld gameplay performance still needs testing. The targeted renderer `-O2`
+  policy retains strict correctness flags; the pinned compiler already emitted
+  equivalent code, so no additional speedup is claimed from that flag change.
+
+- Replace the on-screen FPS checkbox with Off, Number only, Compact HUD and
+  Detailed panel modes in the launcher and live F1 menu. Add smoother licensed
+  typography and game-inspired panels, with existing enabled counters migrating
+  to Compact HUD. Frame-rate measurements remain unchanged.
+- Add live F1 Cheats controls with the launcher's individual toggles and exact
+  0.00x–20.00x multipliers. Publish coherent settings to game events; Save
+  remembers them for future launches. Existing damage and earned rewards are
+  not reversed when a cheat is disabled.
+- Add an optional movement-speed multiplier after native party movement bonuses.
+  It starts disabled and does not change the game clock or save format.
+- Move best-effort obsolete-update cleanup after the launcher session, retaining
+  essential startup validation and immediate cleanup during update activation.
+  Avoid repeated source checks that occurred before installation admission.
+- Fix opening a new installation when an older registered installation has a
+  different source policy. Each installation now loads its own updater helpers.
+- Accept Bazzite's system-provided home-directory alias for default builder
+  locations while retaining checks inside managed storage. Report the exact
+  rejected launch argument or path and retain validated launch context in logs.
+- Windows Experimental 0.1.0 remains unchanged.
+
 ## 0.1.27 - November 16, 2026
 
 - Fix Fedora build failures caused by the packaged Python runtime exposing its

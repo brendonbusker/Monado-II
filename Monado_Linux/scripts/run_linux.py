@@ -120,7 +120,7 @@ def frame_generation_profile(state):
             if not line or line[0] in '#;[' or '=' not in line:
                 continue
             key, value = (part.strip() for part in line.split('=', 1))
-            if key in ('frame_gen', 'frame_gen_smooth_motion', 'cutscenes', 'show_fps_overlay'):
+            if key in ('frame_gen', 'frame_gen_smooth_motion', 'cutscenes', 'show_fps_overlay', 'fps_overlay_mode'):
                 values[key] = value
         return values
     except (OSError, UnicodeError, ValueError, TypeError):

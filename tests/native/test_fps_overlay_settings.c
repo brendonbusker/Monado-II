@@ -23,6 +23,8 @@ static void check_serialized(bool overlay, bool title) {
     snprintf(line,sizeof line,"%s%d\n",key,overlay);
     const char *at=strstr(text,line); assert(at && !strstr(at+strlen(line),key));
     snprintf(line,sizeof line,"show_fps = %d\n",title); assert(strstr(text,line));
+    snprintf(line,sizeof line,"fps_overlay_mode = %s\n",xcde_fps_overlay_mode_name(g_settings.fps_overlay_mode));
+    at=strstr(text,line); assert(at && !strstr(at+strlen(line),"fps_overlay_mode = "));
 }
 int main(int argc,char **argv) {
     assert(argc==2); ini=argv[1]; assert(!setenv("XCDE_INI",ini,1));
@@ -35,6 +37,7 @@ int main(int argc,char **argv) {
             write_config(text); g_settings.show_fps_overlay=true; settings_load();
             bool expected=i==1 || i==2;
             assert(g_settings.show_fps_overlay==expected && g_settings.show_fps==title);
+            assert(g_settings.fps_overlay_mode==(expected?FPS_OVERLAY_COMPACT:FPS_OVERLAY_OFF));
             assert(g_settings.fps==144 && g_settings.volume>0.369f && g_settings.volume<0.371f);
             settings_save(); check_serialized(expected,title);
             g_settings.show_fps_overlay=!expected; g_settings.show_fps=!title;
@@ -47,6 +50,29 @@ int main(int argc,char **argv) {
     write_config("show_fps_overlay = 1\nshow_fps_overlay = invalid\n"); settings_load(); assert(!g_settings.show_fps_overlay);
     write_config("show_fps_overlay = 1\n"); settings_load(); assert(g_settings.show_fps_overlay);
     remove(ini); settings_load(); assert(!g_settings.show_fps_overlay);
+    // Typed mode overrides legacy visibility in either order, including explicit Off.
+    const char *modes[]={"off","number","compact","detailed","","COMPACT","true","-1","numberjunk"};
+    for (unsigned mode=0;mode<sizeof modes/sizeof *modes;++mode)
+        for (int order=0;order<2;++order) for (int legacy=0;legacy<2;++legacy) {
+            char text[256];
+            if (order) snprintf(text,sizeof text,"show_fps_overlay = %d\nfps_overlay_mode = %s\nshow_fps = 1\n",legacy,modes[mode]);
+            else snprintf(text,sizeof text,"fps_overlay_mode = %s\nshow_fps_overlay = %d\nshow_fps = 1\n",modes[mode],legacy);
+            write_config(text); settings_load();
+            int expected=mode<FPS_OVERLAY_COUNT?(int)mode:FPS_OVERLAY_OFF;
+            assert(g_settings.fps_overlay_mode==expected);
+            assert(g_settings.show_fps_overlay==(expected!=FPS_OVERLAY_OFF) && g_settings.show_fps);
+            settings_save(); check_serialized(expected!=FPS_OVERLAY_OFF,true);
+            g_settings.fps_overlay_mode=FPS_OVERLAY_DETAILED; settings_load();
+            assert(g_settings.fps_overlay_mode==expected && g_settings.show_fps_overlay==(expected!=FPS_OVERLAY_OFF));
+        }
+    write_config("fps_overlay_mode = number\nfps_overlay_mode = detailed\nshow_fps_overlay = 0\n");
+    settings_load(); assert(g_settings.fps_overlay_mode==FPS_OVERLAY_DETAILED && g_settings.show_fps_overlay);
+    write_config("fps_overlay_mode = detailed\nfps_overlay_mode = invalid\nshow_fps_overlay = 1\n");
+    settings_load(); assert(g_settings.fps_overlay_mode==FPS_OVERLAY_OFF && !g_settings.show_fps_overlay);
+    g_settings.fps_overlay_mode=-1; g_settings.show_fps_overlay=true; settings_save(); settings_load();
+    assert(g_settings.fps_overlay_mode==FPS_OVERLAY_OFF && !g_settings.show_fps_overlay);
+    remove(ini); g_settings.fps_overlay_mode=FPS_OVERLAY_DETAILED; settings_load();
+    assert(g_settings.fps_overlay_mode==FPS_OVERLAY_OFF && !g_settings.show_fps_overlay);
     puts("FPS overlay runtime config: defaults, independent title option, strict values, reload and roundtrip PASS");
     return 0;
 }

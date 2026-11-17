@@ -26,7 +26,7 @@ class GraphicsQuality(unittest.TestCase):
  def test_gpu_selection_policy(self):self.fixture('gpu-policy',['tests/native/test_gpu_selection_policy.c'],args=False)
  def test_actual_gpu_probe(self):self.fixture('gpu-probe',['tests/native/test_gpu_probe_linux.cpp'],cxx=True,args=False)
  def test_actual_device_selection(self):self.fixture('device-selection',['tests/native/test_gpu_device_selection_linux.c'],args=False)
- def test_actual_runtime_settings(self):self.fixture('settings',['tests/native/test_graphics_quality_linux.c','Monado_Linux/runtime/host/settings_ini.c'])
+ def test_actual_runtime_settings(self):self.fixture('settings',['tests/native/test_graphics_quality_linux.c','Monado_Linux/runtime/host/settings_ini.c','Monado_Linux/runtime/hle/cheats_options.c'])
  def test_selective_prop_lod(self):self.fixture('prop',['tests/native/test_graphics_prop_lod.c'],args=False)
  def test_actual_overlay_and_pool_lifecycle(self):self.fixture('runtime',['tests/native/test_graphics_runtime_linux.c','Monado_Linux/runtime/hle/graphics.c','Monado_Linux/runtime/hle/foliage_distance.c'],args=False)
  def test_actual_quality_ui(self):self.fixture('ui',['tests/native/test_graphics_quality_ui.cpp']+['Monado_Linux/third_party/imgui/'+n for n in ['imgui.cpp','imgui_draw.cpp','imgui_tables.cpp','imgui_widgets.cpp']],cxx=True,args=False)

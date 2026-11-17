@@ -1,3 +1,4 @@
+# [XCDE] LINUX-129: Enemy health controls, positive bounds and live diagnostics.
 #!/usr/bin/env python3
 """[XCDE] LINUX-099: small private, bounded requested-settings run records.
 
@@ -38,6 +39,7 @@ ENUMS = {
     'upscaler': {'bilinear', 'fsr', 'fsr3', 'dlss'},
     'upscale_quality': {'native', 'quality', 'balanced', 'performance', 'ultra'},
     'antialias': {'smaa', 'off'},
+    'fps_overlay_mode': {'off', 'number', 'compact', 'detailed'},
     'cutscenes': {'same', '30', '30fg'},
     'fps': {'unlimited'},
     'menu_navigation_speed': {'normal', 'fast'},
@@ -50,7 +52,7 @@ BOOLS = {'fullscreen', 'frame_gen', 'frame_gen_smooth_motion', 'frame_gen_match_
          'depth_of_field', 'game_blur', 'vsync', 'party_switch', 'show_fps',
          'show_fps_overlay', 'quickstep_slot', 'movie_audio', 'cheat_no_fall_damage',
          'mod_icons_xbox', 'mod_icons_playstation', 'mod_icons_keyboard'}
-for _name in ('damage_dealt', 'damage_received', 'exp', 'ap', 'sp', 'gold'):
+for _name in ('damage_dealt', 'damage_received', 'exp', 'ap', 'sp', 'gold', 'movement_speed', 'enemy_health'):
     BOOLS.add('cheat_' + _name)
     NUMBERS.add('cheat_' + _name + '_percent')
 KNOWN = set(ENUMS) | NUMBERS | BOOLS | {'window'}

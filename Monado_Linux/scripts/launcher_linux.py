@@ -553,6 +553,7 @@ def main(argv=None):
     updates = None
     games = None
     restart = None
+    maintenance = None
     metadata_mirror = None
     result = 1
     try:
@@ -585,8 +586,9 @@ def main(argv=None):
             module = importlib.util.module_from_spec(spec)
             sys.modules[spec.name] = module
             spec.loader.exec_module(module)
-            startup_phase('synchronizing-installation-and-retention')
-            module.sync_installation_version(ROOT.parent, state, lock_fd)
+            startup_phase('synchronizing-installed-version')
+            module.sync_installation_version(ROOT.parent, state, lock_fd, cleanup=False)
+            maintenance = module
         # Startup maintenance runs before admitting this session. Recheck the
         # artifacts under a shared installation lease after that exclusive phase;
         # cleanup may have retired an obsolete selection while admission waited.
@@ -606,6 +608,11 @@ def main(argv=None):
         # including when the GUI has already closed before logs are inspected.
         selection = {'game_executable': launch['argv'][launch['argv'].index('--game-executable') + 1],
                      'game_sha256': launch['game_sha256']}
+        # [XCDE] LINUX-122: retain the validated native launch context so a
+        # rejected path can be diagnosed after a failed desktop/Atomic launch.
+        for flag in ('--project-root', '--game-project-root', '--input-root', '--state-root'):
+            if flag in launch['argv']:
+                selection[flag[2:].replace('-', '_')] = launch['argv'][launch['argv'].index(flag) + 1]
         with os.fdopen(os.dup(log_fd), 'a', encoding='utf-8') as log:
             log.write('[launcher-selection] ' + json.dumps(selection, sort_keys=True) + '\n')
         if 'namespace' in launch:
@@ -666,6 +673,22 @@ def main(argv=None):
             os.close(lock_fd)
     if restart is not None:
         os.execv(restart[0], restart)
+    elif maintenance is not None and result == 0:
+        # wait_session has reaped the GUI and every owned game/compiler child;
+        # finally closed profile/log/runtime descriptors. Retry optional GC now,
+        # rather than rescanning refused obsolete trees before showing the UI.
+        # The helper reacquires installation/runtime maintenance admission and
+        # validates the current selection anew. A new session safely defers it.
+        try:
+            started = time.monotonic()
+            report = maintenance.finish_installation_maintenance(ROOT.parent)
+            print('[maintenance] ' + json.dumps({'phase': 'session-finished-retention',
+                'elapsed_seconds': round(time.monotonic() - started, 6),
+                'status': report.get('status', 'complete') if isinstance(report, dict) else 'not-needed'},
+                sort_keys=True), file=sys.stderr, flush=True)
+        except (OSError, ValueError, RuntimeError) as error:
+            print('[maintenance] Cleanup deferred; the current build remains usable: ' + str(error),
+                  file=sys.stderr, flush=True)
     return result
 
 

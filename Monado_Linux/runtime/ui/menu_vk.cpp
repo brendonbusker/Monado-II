@@ -15,9 +15,14 @@
 #include "imgui_impl_vulkan.h"
 #ifdef __linux__
 #include "quality_controls_linux.h" // [XCDE] LINUX-103
+#include "cheats_controls_linux.h"
+#include "../cheats_options.h"
 #endif
 #include "fps_meter.h" // [XCDE] LINUX-094: sample real game frames, not UI presents.
 #include "fps_overlay_draw.h"
+#ifdef __linux__
+#include "fps_fonts.h" // [XCDE] LINUX-124: generated from the bundled licensed DejaVu fonts.
+#endif
 #ifdef __linux__
 #include "fps_output_diagnostics_linux.h"
 #endif
@@ -53,6 +58,7 @@ static FpsPresentMeter fps_present_meter; // [XCDE] LINUX-097: successful output
 static bool fps_generation_mode, fps_external_mode;
 static bool fps_has_frame, fps_backend_failed;
 static ImGuiContext *fps_context;
+static ImFont *fps_number_font, *fps_label_font;
 static uint64_t fps_last_ui_time;
 #ifdef __linux__
 static FpsOutputLogClock fps_output_log_clock;
@@ -150,7 +156,8 @@ extern "C" void fps_overlay_diagnostics(uint64_t now,unsigned method,bool fsr_in
 #endif
 
 extern "C" bool fps_overlay_visible(void) {
-    return g_settings.show_fps_overlay && fps_has_frame && !fps_backend_failed;
+    return g_settings.show_fps_overlay && g_settings.fps_overlay_mode > FPS_OVERLAY_OFF &&
+           g_settings.fps_overlay_mode < FPS_OVERLAY_COUNT && fps_has_frame && !fps_backend_failed;
 }
 
 extern "C" void fps_overlay_render(void *cmd, uint32_t w, uint32_t h) {
@@ -163,15 +170,31 @@ extern "C" void fps_overlay_render(void *cmd, uint32_t w, uint32_t h) {
         io.IniFilename = nullptr; io.LogFilename = nullptr;
         io.ConfigFlags = ImGuiConfigFlags_NoMouse | ImGuiConfigFlags_NoKeyboard | ImGuiConfigFlags_NoMouseCursorChange;
         io.MouseDrawCursor = false;
+#ifdef __linux__
+        ImFontConfig config{}; config.SizePixels = 32.0f; config.FontDataOwnedByAtlas = false;
+        // One small Latin atlas is sufficient for numeric values and the fixed
+        // English measurement labels. Embedded bytes outlive every FPS context.
+        static const ImWchar glyphs[] = {0x20, 0xff, 0};
+        fps_label_font = io.Fonts->AddFontFromMemoryTTF((void *)fps_font_sans, sizeof fps_font_sans, 32.0f, &config, glyphs);
+        fps_number_font = io.Fonts->AddFontFromMemoryTTF((void *)fps_font_serif, sizeof fps_font_serif, 72.0f, &config, glyphs);
+        if (!fps_label_font || !fps_number_font) {
+            ImGui::DestroyContext(fps_context); fps_context = nullptr; fps_backend_failed = true;
+            fps_label_font = fps_number_font = nullptr;
+            ImGui::SetCurrentContext(previous); return;
+        }
+#else
         ImFontConfig config{}; config.SizePixels = 48.0f;
-        io.Fonts->AddFontDefault(&config);
+        fps_label_font = fps_number_font = io.Fonts->AddFontDefault(&config);
+#endif
         if (!vk_imgui_backend_init()) {
             ImGui::DestroyContext(fps_context); fps_context = nullptr; fps_backend_failed = true;
+            fps_label_font = fps_number_font = nullptr;
             ImGui::SetCurrentContext(previous); return;
         }
         if (!ImGui_ImplVulkan_CreateFontsTexture()) {
             vk_imgui_backend_shutdown();
             ImGui::DestroyContext(fps_context); fps_context = nullptr; fps_backend_failed = true;
+            fps_label_font = fps_number_font = nullptr;
             ImGui::SetCurrentContext(previous); return;
         }
     }
@@ -201,7 +224,15 @@ extern "C" void fps_overlay_render(void *cmd, uint32_t w, uint32_t h) {
         rates.external_measured=vk_external_fps(&rates.output,&rates.output_ready);
 #endif
     }
+#ifdef __linux__
+    static_assert(int(FPS_OVERLAY_OFF) == int(fps_overlay_detail::Off) && int(FPS_OVERLAY_NUMBER) == int(fps_overlay_detail::Number) &&
+                  int(FPS_OVERLAY_COMPACT) == int(fps_overlay_detail::Compact) && int(FPS_OVERLAY_DETAILED) == int(fps_overlay_detail::Detailed),
+                  "FPS overlay setting and presentation modes must agree");
+    fps_overlay_detail::draw(g_settings.fps_overlay_mode, rates, (float)w, (float)h,
+                             fps_number_font, fps_label_font);
+#else
     fps_overlay_detail::draw(true, rates, (float)w, (float)h);
+#endif
     ImGui::Render();
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), (VkCommandBuffer)cmd);
     ImGui::SetCurrentContext(previous);
@@ -343,6 +374,7 @@ static const char *const k_en[][2] = {
     {"Profundidad de campo", "Depth of field"},
     {"Antialiasing y desenfoque de movimiento del juego (al reiniciar)", "The game's anti-aliasing and motion blur (after a restart)"},
     {"Mostrar FPS en la barra de título", "Show FPS in the title bar"}, {"Mostrar FPS en pantalla", "Show FPS on screen"},
+    {"Desactivado", "Off"}, {"Solo número", "Number only"}, {"HUD compacto", "Compact HUD"}, {"Panel detallado", "Detailed panel"},
     {"Velocidad", "Speed"}, {"30 (como en Switch)", "30 (like Switch)"},
     {"Sin límite", "Unlimited"}, {"FPS (al reiniciar)", "FPS (after a restart)"}, {"V-Sync (con 30 / 60 FPS)", "V-Sync (at 30 / 60 FPS)"},
     {"Volumen", "Volume"}, {"Audio de los vídeos (al reiniciar)", "Video sound (after a restart)"}, {"Controles", "Controls"},
@@ -450,7 +482,16 @@ static void ui(void) {
             if (ImGui::Checkbox(T("Profundidad de campo"), &dof)) g_settings.dof_off = !dof;
             ImGui::Checkbox(T("Antialiasing y desenfoque de movimiento del juego (al reiniciar)"), &g_settings.game_blur);
             ImGui::Checkbox(T("Mostrar FPS en la barra de título"), &g_settings.show_fps);
+#ifdef __linux__
+            static const char *fps_overlay_modes[] = {"Desactivado", "Solo número", "HUD compacto", "Panel detallado"};
+            int fps_overlay_mode = g_settings.fps_overlay_mode;
+            if (ImGui::Combo(T("Mostrar FPS en pantalla"), &fps_overlay_mode, TL(fps_overlay_modes, FPS_OVERLAY_COUNT).p, FPS_OVERLAY_COUNT)) {
+                g_settings.fps_overlay_mode = fps_overlay_mode;
+                g_settings.show_fps_overlay = fps_overlay_mode != FPS_OVERLAY_OFF;
+            }
+#else
             ImGui::Checkbox(T("Mostrar FPS en pantalla"), &g_settings.show_fps_overlay);
+#endif
             ImGui::SetItemTooltip("Game counts rendered frames. Output counts successful presentation requests, not physical scanout.\nMeasured FG readings are also logged when this display is off. NVIDIA generated-only FPS is unavailable.");
             ImGui::SeparatorText(T("Velocidad"));
             static const int fpsv[] = {30, 60, 120, 144, 165, 0};
@@ -476,6 +517,13 @@ static void ui(void) {
             ImGui::TextWrapped("%s", T("La asignación de teclas y botones se cambia en el launcher (Play Monado.bat), pestaña Controles."));
             ImGui::EndTabItem();
         }
+#ifdef __linux__
+        if (ImGui::BeginTabItem(g_settings.ui_lang ? "Cheats" : "Trucos")) {
+            if (monado_cheat_controls_linux(&g_settings, g_settings.ui_lang == 1))
+                xcde_cheats_publish(&g_settings);
+            ImGui::EndTabItem();
+        }
+#endif
         ImGui::EndTabBar();
     }
     ImGui::Separator();

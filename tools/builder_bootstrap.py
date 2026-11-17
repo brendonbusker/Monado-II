@@ -116,6 +116,26 @@ def ordinary_dir(path, *, create=False):
     return path
 
 
+def data_directory(requested=None):
+    """Resolve the OS-provided base, then keep managed descendants link-free.
+
+    Atomic desktops can expose HOME through /home -> /var/home. This alias is
+    not a link inside our managed data. Explicit --data-dir paths retain the
+    same strict contract, as do the app-owned directory and everything below it.
+    """
+    if requested is not None:
+        return ordinary_dir(requested, create=True)
+    xdg = os.environ.get('XDG_DATA_HOME')
+    if xdg:
+        base = Path(xdg).expanduser()
+        if not base.is_absolute() or '..' in base.parts:
+            raise ValueError('XDG_DATA_HOME must be an absolute path without parent traversal')
+        base = base.resolve()
+    else:
+        base = Path.home().resolve() / '.local/share'
+    return ordinary_dir(base / 'monado-ii-builder', create=True)
+
+
 def copy_runtime(appdir, state, identities):
     prefix = 'usr/python/'
     selected = {name[len(prefix):]: value for name, value in identities.items() if name.startswith(prefix)}
@@ -328,8 +348,7 @@ def run(appdir, args):
         raise ValueError('--state-root is supported only by an inherited installation image')
     if args.dry_run:
         return dry_run(appdir, manifest, args)
-    state = ordinary_dir(args.data_dir or Path(os.environ.get('XDG_DATA_HOME',
-        str(Path.home() / '.local/share'))) / 'monado-ii-builder', create=True)
+    state = data_directory(args.data_dir)
     lockpath = state / '.materialize.lock'
     flags = os.O_CREAT | os.O_RDWR | getattr(os, 'O_NOFOLLOW', 0)
     fd = os.open(lockpath, flags, 0o600)

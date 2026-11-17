@@ -3,6 +3,7 @@ from pathlib import Path
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -21,8 +22,11 @@ class FpsOverlayUi(unittest.TestCase):
         if not include or not (Path(include)/'SDL3/SDL.h').is_file():raise unittest.SkipTest('SDL3/Vulkan headers required')
         cls.temp=tempfile.TemporaryDirectory(prefix='monado-fps-ui-');cls.addClassCleanup(cls.temp.cleanup)
         cls.binary=Path(cls.temp.name)/'fps-ui';imgui=PORT/'third_party/imgui'
+        generated=subprocess.run([sys.executable,'-B',str(PORT/'tools/gen_fps_fonts.py'),
+            '--assets',str(PORT/'tools/launcher/assets/fonts'),'--output',str(Path(cls.temp.name)/'fps_fonts.h')],capture_output=True,text=True,timeout=30)
+        if generated.returncode:raise AssertionError(generated.stdout+generated.stderr)
         command=[compiler,'-std=c++17','-O1','-UNDEBUG','-ffp-contract=off','-fno-strict-aliasing',
-            '-ffunction-sections','-fdata-sections','-I'+str(imgui),'-I'+str(imgui/'backends'),'-I'+include,
+            '-ffunction-sections','-fdata-sections','-I'+cls.temp.name,'-I'+str(imgui),'-I'+str(imgui/'backends'),'-I'+include,
             str(ROOT/'tests/native/test_fps_overlay_ui.cpp'),str(PORT/'runtime/ui/menu_vk.cpp'),
             *[str(imgui/(name+'.cpp')) for name in ['imgui','imgui_draw','imgui_tables','imgui_widgets']],
             '-Wl,--gc-sections','-pthread','-lm','-o',str(cls.binary)]
@@ -36,6 +40,7 @@ class FpsOverlayUi(unittest.TestCase):
         self.assertIn('native FPS overlay UI: PASS',result.stdout)
     def test_all_ratios_sizes_and_warmup_have_bounded_legible_geometry(self):self.scenario('layout')
     def test_dual_and_external_readouts_are_honest_and_fit_all_sizes(self):self.scenario('dual-layout')
+    def test_three_visual_modes_have_stable_columns_and_number_only_has_no_panel(self):self.scenario('modes')
     def test_actual_generation_modes_and_present_callbacks_preserve_off_lifecycle(self):self.scenario('output-lifecycle')
     def test_default_off_does_not_initialize_or_draw_and_invalid_extent_is_empty(self):self.scenario('disabled')
     def test_actual_ui_context_isolated_input_transparent_and_toggle_reset_safe(self):self.scenario('runtime')

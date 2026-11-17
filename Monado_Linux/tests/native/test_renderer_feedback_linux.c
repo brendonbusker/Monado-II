@@ -8,6 +8,9 @@
 #include "nvn/vulkan/vk.h"
 #include "settings.h"
 #include "quality_policy.h"
+#ifdef FEEDBACK_GPU_BRIDGE
+#include "test_renderer_feedback_gpu_bridge.h"
+#endif
 VkG g_vk;Settings g_settings;
 static struct {
  uint64_t tex[3][32],img[3][8];NvnDescPool *tpool;
@@ -19,20 +22,42 @@ static bool in_pass;static unsigned ends,barriers,copies,images,retired;
 static uint64_t stat_feedback_copies,frame=10;
 static VkImageCreateInfo last_image;static VkImageCopy regions[64];static VkImageMemoryBarrier2 last_layout[8];static unsigned nlayout;
 void rt_fatal_trace(void){abort();}void vk_device_fault_report(void){abort();}
-VkCommandBuffer vk_cmd(void){return(VkCommandBuffer)(uintptr_t)1;}
+VkCommandBuffer vk_cmd(void){
+#ifdef FEEDBACK_GPU_BRIDGE
+ return feedback_gpu_command();
+#else
+ return(VkCommandBuffer)(uintptr_t)1;
+#endif
+}
 void vk_end_pass(void){if(in_pass){ends++;in_pass=false;}}
-void vk_full_barrier(VkCommandBuffer command){assert(command==vk_cmd());barriers++;}
+void vk_full_barrier(VkCommandBuffer command){assert(command==vk_cmd());barriers++;
+#ifdef FEEDBACK_GPU_BRIDGE
+ feedback_gpu_barrier();
+#endif
+}
 uint64_t renderer_present_count(void){return frame;}
 TexBackend *vk_tex(NvnTexture *texture,bool render){assert(render && texture && texture->backend);return texture->backend;}
 void vk_views_forget(TexBackend *image){assert(image);}
 void vk_defer_image(VkImage image,VmaAllocation allocation){(void)allocation;assert(image);retired++;}
-void vk_image_init_layout(VkCommandBuffer command,VkImage image,VkImageAspectFlags aspect){assert(command==vk_cmd()&&image&&aspect);}
+void vk_image_init_layout(VkCommandBuffer command,VkImage image,VkImageAspectFlags aspect){assert(command==vk_cmd()&&image&&aspect);
+#ifdef FEEDBACK_GPU_BRIDGE
+ feedback_gpu_init(image,aspect);
+#endif
+}
 VKAPI_ATTR VkResult VKAPI_CALL vmaCreateImage(VmaAllocator allocator,const VkImageCreateInfo *info,const VmaAllocationCreateInfo *memory,VkImage *image,VmaAllocation *allocation,VmaAllocationInfo *details){
- (void)allocator;(void)memory;(void)details;last_image=*info;*image=(VkImage)(uintptr_t)(++images+100);*allocation=(VmaAllocation)(uintptr_t)images;return VK_SUCCESS;
+ (void)allocator;(void)memory;(void)details;last_image=*info;*image=(VkImage)(uintptr_t)(++images+100);*allocation=(VmaAllocation)(uintptr_t)images;
+#ifdef FEEDBACK_GPU_BRIDGE
+ return feedback_gpu_create(info,image);
+#else
+ return VK_SUCCESS;
+#endif
 }
 VKAPI_ATTR void VKAPI_CALL vkCmdCopyImage(VkCommandBuffer command,VkImage source,VkImageLayout source_layout,VkImage destination,VkImageLayout destination_layout,uint32_t count,const VkImageCopy *copy){
  assert(command==vk_cmd() && source && destination && source!=destination && source_layout==VK_IMAGE_LAYOUT_GENERAL && destination_layout==VK_IMAGE_LAYOUT_GENERAL);
  assert(copies+count<=64);for(unsigned i=0;i<count;i++){assert(copy[i].srcSubresource.aspectMask && !(copy[i].srcSubresource.aspectMask&(copy[i].srcSubresource.aspectMask-1)));regions[copies++]=copy[i];}
+#ifdef FEEDBACK_GPU_BRIDGE
+ feedback_gpu_copy(source,destination,count,copy);
+#endif
 }
 VKAPI_ATTR void VKAPI_CALL vkCmdPipelineBarrier2(VkCommandBuffer command,const VkDependencyInfo *info){
  assert(command==vk_cmd());barriers++;nlayout=info->imageMemoryBarrierCount;assert(nlayout<=8);for(unsigned i=0;i<nlayout;i++)last_layout[i]=info->pImageMemoryBarriers[i];
@@ -59,6 +84,10 @@ static void reset(void){memset(&st,0,sizeof st);memset(&texture,0,sizeof texture
  texture.backend=&backend;texture.levels=backend.levels;texture.layout.layers=backend.layers;texture.depth=backend.depth;entries[1]=(NvnTexEntry){.tex=&texture};pool=(NvnDescPool){.count=2,.entries=entries};st.tpool=&pool;st.tex[1][0]=1;st.rt.color[0]=&texture;st.rt.ncolor=1;st.channel_mask=15;
  fragment.ntex=1;fragment.tex[0]=(ShaderTexture){.handle_offset=0x20,.type=TEXTYPE_2D};program=(Prog){.vi=&vertex,.fi=&fragment};draw_feedback_mask=0;pass_nfeedback=0;nfeedback=0;in_pass=false;copies=0;barriers=0;ends=0;vk_feedback_boundary();
 }
+// GENERATED_PERFORMANCE_TESTS
+#ifdef FEEDBACK_GPU_BRIDGE
+#include "test_renderer_feedback_gpu_cases_linux.h"
+#else
 int main(void){
  // Missing extension must copy, unlike the old GENERAL-only direct path.
  reset();g_vk.feedback_loop=false;resolve_feedback(&program);assert(copies==1 && nfeedback==1 && draw_feedback_mask==0);assert(last_image.extent.width==16);
@@ -99,5 +128,7 @@ int main(void){
  g_settings.upscale_sharpness=0;assert(fsr1_sharpen(vk_cmd(),(VkImageView)(uintptr_t)2000,320,180)==(VkImageView)(uintptr_t)2000 && !sharpen_images && !sharpen_passes);
  g_settings.upscale_sharpness=.9f;assert(fsr1_sharpen(vk_cmd(),(VkImageView)(uintptr_t)2000,320,180)==(VkImageView)(uintptr_t)1000 && sharpen_images==1 && sharpen_passes==1);assert(fabsf(sharp_parameter-exp2f(-.2f))<1e-6f);
  g_settings.upscale_sharpness=1.f;fsr1_sharpen(vk_cmd(),(VkImageView)(uintptr_t)2000,320,180);assert(sharp_parameter==1.f && sharpen_passes==2);
+ feedback_performance_tests();
  puts("PASS production feedback: feature/usage eligibility, read/write distinction, visibility/frame/image/lifetime invalidation, vertex/storage fallback, full mip/layer/aspect copies, native layouts/dependencies");return 0;
 }
+#endif

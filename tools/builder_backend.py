@@ -267,7 +267,7 @@ class Broker:
         self.seen = set()
         self.status = dict(schema=1, request_id='', phase='welcome', message='Build your copy of Monado II',
                            detail='Choose your own extracted DE 2.0.0 game folder. Nothing is uploaded.',
-                           progress=0.0, input='', output=str(Path.home() / 'Games/Monado-II'),
+                           progress=0.0, input='', output=str(Path.home().resolve() / 'Games/Monado-II'),
                            version=self.version(self.source), log='', can_open=False, input_previous='')
         self.registered = None
         registry = self.state / REGISTRY

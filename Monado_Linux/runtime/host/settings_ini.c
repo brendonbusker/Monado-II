@@ -8,6 +8,7 @@
 
 #include "../input_bind.h"
 #include "../settings.h"
+#include "../cheats_options.h"
 #include "../quality_policy.h"
 #include "../gpu_selection.h"
 #ifdef __linux__
@@ -21,7 +22,7 @@ Settings g_settings = {.aspect = ASPECT_ORIGINAL, .fps = 30, .volume = 1.0f, .mo
     // [XCDE] LINUX-072: slider positions are remembered independently of enable flags.
     .upscale_sharpness = -1.f, .quality_preset = QUALITY_CUSTOM, .grass_lod = GRASS_ORIGINAL,
     .cheat_damage_dealt_percent = 100, .cheat_damage_received_percent = 100,
-    .cheat_exp_percent = 100, .cheat_ap_percent = 100, .cheat_sp_percent = 100, .cheat_gold_percent = 100};
+    .cheat_exp_percent = 100, .cheat_ap_percent = 100, .cheat_sp_percent = 100, .cheat_gold_percent = 100, .cheat_movement_speed_percent = 100, .cheat_enemy_health_percent = 100};
 int g_window_w = 1280, g_window_h = 720;  // windowed size (settings.h)
 
 // [XCDE] Mods (runtime/services/romfs_virtual.c): xcde.ini `mod_<folder> = 0/1`; a folder not listed is on.
@@ -63,16 +64,20 @@ static int lang_index(const char *v) {
 static bool cheat_enabled(const char *value) {
     return !strcmp(value, "1") || !strcmp(value, "true");
 }
-static int cheat_percent(const char *value) {
+// [XCDE] LINUX-129: Enemy health has an independent0.1x minimum; other ranges stay unchanged.
+static int cheat_percent_bound(int value, int minimum) {
+    return value >= minimum && value <= 2000 ? value : 100;
+}
+static int cheat_percent(const char *value, int minimum) {
     if (!*value) return 100;
     for (const char *p = value; *p; ++p) if (*p < '0' || *p > '9') return 100;
     errno = 0;
     char *end;
     long n = strtol(value, &end, 10);
-    return errno || end == value || *end || n < 0 || n > 2000 ? 100 : (int)n;
+    return errno || end == value || *end || n < minimum || n > 2000 ? 100 : (int)n;
 }
 #define XCDE_CHEAT_MULTIPLIERS(X) \
-    X(damage_dealt) X(damage_received) X(exp) X(ap) X(sp) X(gold)
+    X(damage_dealt, 0) X(damage_received, 0) X(exp, 0) X(ap, 0) X(sp, 0) X(gold, 0) X(movement_speed, 0) X(enemy_health, 10)
 
 // [XCDE] LINUX-089: exact opt-ins, shared ordering with ASPECT_*; unknown values
 // preserve original framing, including after reloading a previously fixed ratio.
@@ -91,14 +96,15 @@ static void settings_load_values(void) {
     // load, including a reload after a previously selected Fast preference.
     g_settings.menu_navigation_speed = MENU_NAV_NORMAL;
     g_settings.quickstep_slot = false; // [XCDE] LINUX-039: absent/invalid always OFF
-    g_settings.show_fps_overlay = false; // [XCDE] LINUX-094: old/missing configs keep the new overlay OFF
+    g_settings.show_fps_overlay = false;
+    g_settings.fps_overlay_mode = FPS_OVERLAY_OFF; // [XCDE] LINUX-124: absent files remain opt-out.
     // [XCDE] LINUX-097: old, missing and reloaded files never opt into a new FG method.
     g_settings.frame_gen = false;
     g_settings.cutscene_mode = 0;
     g_settings.frame_gen_smooth_motion = false;
     g_settings.frame_gen_match_display = false;
     // [XCDE] LINUX-072: all cheats are opt-in, including absent-file/hidden runs.
-#define RESET_CHEAT(name) g_settings.cheat_##name = false; g_settings.cheat_##name##_percent = 100;
+#define RESET_CHEAT(name, minimum) g_settings.cheat_##name = false; g_settings.cheat_##name##_percent = 100;
     XCDE_CHEAT_MULTIPLIERS(RESET_CHEAT)
 #undef RESET_CHEAT
     g_settings.cheat_no_fall_damage = false;
@@ -106,6 +112,7 @@ static void settings_load_values(void) {
     if (!getenv("XCDE_INI") && (getenv("LARECOMP_HIDDEN") || getenv("XCDE_DETERMINISTIC") || getenv("XCDE_INPUT_REPLAY"))) return;
     FILE *f = fopen(ini_path(), "r");
     if (!f) return;
+    bool overlay_mode_present = false;
     char line[512];
     while (fgets(line, sizeof line, f)) {
         char *s = line;
@@ -147,14 +154,18 @@ static void settings_load_values(void) {
         else if (!strcmp(k, "movie_audio")) g_settings.movie_audio = atoi(v) != 0;
         else if (!strcmp(k, "show_fps")) g_settings.show_fps = atoi(v) != 0;
         else if (!strcmp(k, "show_fps_overlay")) g_settings.show_fps_overlay = !strcmp(v, "1") || !strcmp(v, "true");
+        else if (!strcmp(k, "fps_overlay_mode")) {
+            overlay_mode_present = true;
+            g_settings.fps_overlay_mode = xcde_fps_overlay_mode_parse(v);
+        }
         else if (!strcmp(k, "fps")) g_settings.fps = !strcmp(v, "unlimited") ? 0 : atoi(v);
         else if (!strcmp(k, "menu_navigation_speed"))
             g_settings.menu_navigation_speed = !strcmp(v, "fast") ? MENU_NAV_FAST : MENU_NAV_NORMAL;
         else if (!strcmp(k, "quickstep_slot")) g_settings.quickstep_slot = !strcmp(v, "1");
         // [XCDE] LINUX-072: config agrees with the launcher's exact 1/true opt-in.
-#define LOAD_CHEAT(name) \
+#define LOAD_CHEAT(name, minimum) \
         else if (!strcmp(k, "cheat_" #name)) g_settings.cheat_##name = cheat_enabled(v); \
-        else if (!strcmp(k, "cheat_" #name "_percent")) g_settings.cheat_##name##_percent = cheat_percent(v);
+        else if (!strcmp(k, "cheat_" #name "_percent")) g_settings.cheat_##name##_percent = cheat_percent(v, minimum);
         XCDE_CHEAT_MULTIPLIERS(LOAD_CHEAT)
 #undef LOAD_CHEAT
         else if (!strcmp(k, "cheat_no_fall_damage")) g_settings.cheat_no_fall_damage = cheat_enabled(v);
@@ -167,6 +178,9 @@ static void settings_load_values(void) {
         else if (!xcde_quality_load(&g_settings,k,v)) bind_settings_load(k, v);
     }
     fclose(f);
+    // Explicit mode wins in either key order; old enabled counters migrate to Compact.
+    if (!overlay_mode_present) g_settings.fps_overlay_mode = g_settings.show_fps_overlay ? FPS_OVERLAY_COMPACT : FPS_OVERLAY_OFF;
+    g_settings.show_fps_overlay = g_settings.fps_overlay_mode != FPS_OVERLAY_OFF;
     xcde_quality_bounds(&g_settings);
     // [XCDE] LINUX-097: malformed mixed-backend files retain the existing FSR
     // request and disable external FG. Cutscene-only FG also owns that choice.
@@ -215,6 +229,7 @@ static void settings_load_values(void) {
 
 void settings_load(void) {
     settings_load_values();
+    xcde_cheats_publish(&g_settings); // Publish before any guest event can consume these preferences.
 #ifdef __linux__
     // [XCDE] LINUX-099: report parsed/fallback defaults even when input is
     // missing or intentionally ignored. This never rewrites the settings file.
@@ -250,14 +265,16 @@ void settings_save(void) {
     fprintf(f, "party_switch = %d\n", g_party_switch);
     fprintf(f, "quickstep_slot = %d\n", g_settings.quickstep_slot); // [XCDE] LINUX-039
     // [XCDE] LINUX-072: preserve all cheat preferences when the game saves F1 settings.
-#define SAVE_CHEAT(name) fprintf(f, "cheat_" #name " = %d\ncheat_" #name "_percent = %d\n", \
-        g_settings.cheat_##name, g_settings.cheat_##name##_percent);
+#define SAVE_CHEAT(name, minimum) fprintf(f, "cheat_" #name " = %d\ncheat_" #name "_percent = %d\n", \
+        g_settings.cheat_##name, cheat_percent_bound(g_settings.cheat_##name##_percent, minimum));
     XCDE_CHEAT_MULTIPLIERS(SAVE_CHEAT)
 #undef SAVE_CHEAT
     fprintf(f, "cheat_no_fall_damage = %d\n", g_settings.cheat_no_fall_damage);
     fprintf(f, "volume = %d\nmovie_audio = %d\nshow_fps = %d\n", (int)(g_settings.volume * 100 + 0.5f), g_settings.movie_audio,
             g_settings.show_fps);
-    fprintf(f, "show_fps_overlay = %d\n", g_settings.show_fps_overlay); // [XCDE] LINUX-094
+    int overlay_mode = g_settings.fps_overlay_mode >= FPS_OVERLAY_OFF && g_settings.fps_overlay_mode < FPS_OVERLAY_COUNT ? g_settings.fps_overlay_mode : FPS_OVERLAY_OFF;
+    fprintf(f, "show_fps_overlay = %d\nfps_overlay_mode = %s\n", overlay_mode != FPS_OVERLAY_OFF,
+            xcde_fps_overlay_mode_name(overlay_mode)); // legacy readers retain visibility.
     if (g_settings.fps) fprintf(f, "fps = %d\n", g_settings.fps); else fprintf(f, "fps = unlimited\n");
     // [XCDE] LINUX-014: retain the launcher-only preference when F1 saves settings.
     fprintf(f, "menu_navigation_speed = %s\n", g_settings.menu_navigation_speed == MENU_NAV_FAST ? "fast" : "normal");

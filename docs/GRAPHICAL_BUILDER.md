@@ -70,6 +70,18 @@ Removing this registry does not delete the installed game or its saves; choose
 an installation uses it: its virtual environment needs that persistent runtime.
 The AppImage's temporary mount is never used as a permanent virtualenv base.
 
+On Atomic desktops such as Bazzite, the default data and installation locations
+resolve the operating system's home-directory alias (for example `/home` to
+`/var/home`) before using managed folders. Explicit `--data-dir` paths and managed
+subdirectories still require ordinary canonical paths without symbolic links.
+
+Open the AppImage or `Play_Monado_II.sh` to use an installed game. The native
+`build/.../monado-launcher` executable is an internal component: it needs the
+verified project, input, game and private-state arguments supplied by that entrypoint.
+Starting it directly without those arguments does not select an installation.
+Its path errors name the missing or rejected argument; screenshot/capture options
+are optional and are not required for normal play.
+
 Existing source scripts, launcher-only images and source updater archive formats
 are retained. Existing host-Python source installations keep their checked
 workspace-bound image packaging path; they do not need Ubuntu-specific Python

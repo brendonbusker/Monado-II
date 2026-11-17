@@ -23,7 +23,7 @@ class FramegenSettings(unittest.TestCase):
                 selected=Path(marker.read_text().strip());lib=selected/'usr/lib/x86_64-linux-gnu'
                 cmd+=['-I'+str(selected/'usr/include'),'-I'+str(PORT/'third_party/imgui'),'-I'+str(PORT/'third_party/imgui/backends'),str(ROOT/'tests/native/test_framegen_launcher.cpp'),'-L'+str(lib),'-Wl,-rpath,'+str(lib),'-lSDL3']
             else:
-                cmd+=['-DXCDE_LINUX_DLSS','-DXCDE_LINUX_FRAMEGEN',str(ROOT/'tests/native/test_framegen_settings.c'),str(PORT/'runtime/host/settings_ini.c')]
+                cmd+=['-DXCDE_LINUX_DLSS','-DXCDE_LINUX_FRAMEGEN',str(ROOT/'tests/native/test_framegen_settings.c'),str(PORT/'runtime/host/settings_ini.c'), str(PORT / 'runtime/hle/cheats_options.c'), '-pthread']
             cmd+=['-Wl,--gc-sections','-lm','-o',str(binary)]
             if os.environ.get('MONADO_TEST_UBSAN')=='1':cmd[1:1]=['-fsanitize=undefined','-fno-sanitize-recover=all'];environment['UBSAN_OPTIONS']='halt_on_error=1'
             result=subprocess.run(cmd,cwd=out,env=environment,capture_output=True,text=True,timeout=180);self.assertEqual(result.returncode,0,result.stdout+result.stderr)

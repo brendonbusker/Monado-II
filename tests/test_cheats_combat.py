@@ -26,7 +26,7 @@ class CheatsCombatTests(unittest.TestCase):
             command = [compiler, '-std=gnu11', '-O1', '-UNDEBUG', '-ffp-contract=off',
                        '-fno-strict-aliasing', '-Wall', '-Wextra', '-Werror',
                        '-I', str(temporary), '-I', str(PORT / 'runtime/hle'),
-                       str(PORT / 'tests/native/test_cheats_combat.c'), '-o', str(binary)]
+                       str(PORT / 'tests/native/test_cheats_combat.c'), str(PORT / 'runtime/hle/cheats_options.c'), '-pthread', '-o', str(binary)]
             if os.environ.get('MONADO_TEST_UBSAN') == '1':
                 command[1:1] = ['-fsanitize=undefined', '-fno-sanitize-recover=all']
             result = subprocess.run(command, capture_output=True, text=True, timeout=120)

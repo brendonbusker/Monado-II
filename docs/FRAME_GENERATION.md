@@ -59,8 +59,19 @@ and does not use display matching.
 
 ## Reading the FPS counter
 
-Enable **Show FPS on screen** under **Graphics → Quality**. It remains off by
-default and is separate from the window title counter.
+Choose **Show FPS on screen** under **Graphics → Quality**, in the launcher or
+in-game **F1** menu. Changes in F1 apply immediately; **Save** remembers the mode.
+It remains off by default and is separate from the window title counter.
+
+- **Off** hides the overlay.
+- **Number only** shows rendered Game FPS as a number with no label or panel.
+- **Compact HUD** emphasizes Game FPS with smaller frame-generation readings.
+- **Detailed panel** shows Game, Output and Generated readings in separate rows.
+
+Existing enabled counters migrate to Compact HUD. The appearance choices use the
+same measurement logic and preserve unavailable readings. The two panel styles
+use bundled, licensed fonts; no extra font installation or game UI assets are
+required.
 
 - **Game** counts successfully acquired rendered game frames, excluding
   generated images and repeated presentations.

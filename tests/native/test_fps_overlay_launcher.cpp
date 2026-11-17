@@ -23,6 +23,8 @@ static void check_serialized(bool overlay,bool title) {
     const std::string text=contents(), key="show_fps_overlay = ", line=key+(overlay?"1\n":"0\n");
     size_t at=text.find(line); CHECK(at!=std::string::npos && text.find(key,at+line.size())==std::string::npos);
     CHECK(text.find(std::string("show_fps = ")+(title?"1\n":"0\n"))!=std::string::npos);
+    const std::string mode=std::string("fps_overlay_mode = ")+xcde_fps_overlay_mode_name(g.fps_overlay_mode)+"\n";
+    at=text.find(mode); CHECK(at!=std::string::npos && text.find("fps_overlay_mode = ",at+mode.size())==std::string::npos);
 }
 int main(int argc,char **argv) {
     CHECK(argc==2 && mkdir(argv[1],0700)==0); g_root=argv[1];
@@ -34,6 +36,7 @@ int main(int argc,char **argv) {
         std::string text=std::string("show_fps = ")+(title?"1\n":"0\n")+"show_fps_overlay = "+values[i]+"\nfps = 75\ncustom_key = kept\n";
         write_config(text); load(); bool expected=i==1 || i==2;
         CHECK(g.show_fps_overlay==expected && g.show_fps==title);
+        CHECK(g.fps_overlay_mode==(expected?FPS_OVERLAY_COMPACT:FPS_OVERLAY_OFF));
         CHECK(!g_extra.count("show_fps_overlay") && !g_custom.count("show_fps_overlay"));
         CHECK(contents()==text && g_custom.at("fps")=="75"); CHECK(save()); check_serialized(expected,title);
         reset(); load(); CHECK(g.show_fps_overlay==expected && g.show_fps==title);
@@ -47,6 +50,30 @@ int main(int argc,char **argv) {
     CHECK(remove(path("xcde.ini").c_str())==0); g.show_fps_overlay=true; load(); CHECK(!g.show_fps_overlay);
     g.ui_lang=1; CHECK(!strcmp(T("Mostrar FPS en pantalla"),"Show FPS on screen"));
     g.ui_lang=0; CHECK(!strcmp(T("Mostrar FPS en pantalla"),"Mostrar FPS en pantalla"));
+    const char *modes[]={"off","number","compact","detailed","","COMPACT","true","-1","numberjunk"};
+    for (unsigned mode=0;mode<sizeof modes/sizeof *modes;++mode)
+        for (int order=0;order<2;++order) for (int legacy=0;legacy<2;++legacy) {
+            reset();
+            std::string explicit_line=std::string("fps_overlay_mode = ")+modes[mode]+"\n";
+            std::string legacy_line=std::string("show_fps_overlay = ")+(legacy?"1\n":"0\n");
+            write_config((order?legacy_line+explicit_line:explicit_line+legacy_line)+"show_fps = 1\ncustom_key = kept\n");
+            load(); int expected=mode<FPS_OVERLAY_COUNT?(int)mode:FPS_OVERLAY_OFF;
+            CHECK(g.fps_overlay_mode==expected && g.show_fps_overlay==(expected!=FPS_OVERLAY_OFF) && g.show_fps);
+            CHECK(!g_extra.count("fps_overlay_mode") && !g_custom.count("fps_overlay_mode"));
+            CHECK(save()); check_serialized(expected!=FPS_OVERLAY_OFF,true);
+            reset(); load(); CHECK(g.fps_overlay_mode==expected && g_extra.at("custom_key")=="kept");
+        }
+    write_config("fps_overlay_mode = number\nfps_overlay_mode = detailed\nshow_fps_overlay = 0\n");
+    reload_after_game(); CHECK(g.fps_overlay_mode==FPS_OVERLAY_DETAILED && g.show_fps_overlay);
+    write_config("fps_overlay_mode = detailed\nfps_overlay_mode = invalid\nshow_fps_overlay = 1\n");
+    load(); CHECK(g.fps_overlay_mode==FPS_OVERLAY_OFF && !g.show_fps_overlay);
+    g.fps_overlay_mode=-1; g.show_fps_overlay=true; CHECK(save()); load();
+    CHECK(g.fps_overlay_mode==FPS_OVERLAY_OFF && !g.show_fps_overlay);
+    CHECK(remove(path("xcde.ini").c_str())==0);g.fps_overlay_mode=FPS_OVERLAY_DETAILED;load();
+    CHECK(g.fps_overlay_mode==FPS_OVERLAY_OFF && !g.show_fps_overlay);
+    g.ui_lang=1;CHECK(!strcmp(T("Desactivado"),"Off"));CHECK(!strcmp(T("Solo número"),"Number only"));
+    CHECK(!strcmp(T("HUD compacto"),"Compact HUD"));CHECK(!strcmp(T("Panel detallado"),"Detailed panel"));
+    g.ui_lang=0;CHECK(!strcmp(T("Solo número"),"Solo número"));
     CHECK(!SDL_WasInit(0) && !SDL_GetCurrentVideoDriver());
     puts("FPS overlay launcher config: defaults, title independence, roundtrip, extras/custom preservation, reload and translations PASS");
 }

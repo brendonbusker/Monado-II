@@ -1,5 +1,6 @@
 // [XCDE] LINUX-094: actual FPS UI with authored clocks/backend seams, no window/game.
 #include "imgui.h"
+#include "fps_fonts.h"
 #include "imgui_impl_vulkan.h"
 #include "../../Monado_Linux/runtime/ui/fps_overlay_draw.h"
 #include "../../Monado_Linux/runtime/settings.h"
@@ -19,6 +20,10 @@ static unsigned backend_stops;
 static int rendered_vertices;
 static float target_w, target_h;
 static bool driver_available, driver_ready;
+static void show(bool enabled, int mode = FPS_OVERLAY_COMPACT) {
+    g_settings.show_fps_overlay = enabled;
+    g_settings.fps_overlay_mode = enabled ? mode : FPS_OVERLAY_OFF;
+}
 static double driver_rate;
 static unsigned driver_reads;
 
@@ -68,7 +73,13 @@ static void prepare(ImGuiContext *ctx,float w,float h) {
     ImGui::SetCurrentContext(ctx);ImGuiIO &io=ImGui::GetIO();
     io.DisplaySize={w,h};io.DeltaTime=1.f/60;io.IniFilename=nullptr;io.LogFilename=nullptr;
     io.ConfigFlags=ImGuiConfigFlags_NoMouse|ImGuiConfigFlags_NoKeyboard|ImGuiConfigFlags_NoMouseCursorChange;
-    if (!io.Fonts->IsBuilt()) { ImFontConfig cfg{};cfg.SizePixels=48;io.Fonts->AddFontDefault(&cfg);unsigned char *p;int x,y;io.Fonts->GetTexDataAsRGBA32(&p,&x,&y);io.Fonts->SetTexID(1); }
+    if (!io.Fonts->IsBuilt()) {
+        ImFontConfig cfg{};cfg.SizePixels=72;cfg.FontDataOwnedByAtlas=false;
+        static const ImWchar glyphs[]={0x20,0xff,0};
+        io.Fonts->AddFontFromMemoryTTF((void *)fps_font_sans,sizeof fps_font_sans,32,&cfg,glyphs);
+        io.Fonts->AddFontFromMemoryTTF((void *)fps_font_serif,sizeof fps_font_serif,72,&cfg,glyphs);
+        unsigned char *p;int x,y;io.Fonts->GetTexDataAsRGBA32(&p,&x,&y);io.Fonts->SetTexID(1);
+    }
 }
 static void layout() {
     ImGuiContext *ctx=ImGui::CreateContext();
@@ -106,8 +117,43 @@ static void dual_layout() {
     }
     ImGui::DestroyContext(ctx);
 }
+
+static void modes() {
+    ImGuiContext *ctx=ImGui::CreateContext();
+    const unsigned sizes[][2]={{1280,720},{1280,800},{1920,1080},{2560,1440},{3440,1440},{5120,1440},{3840,2160},{64,32}};
+    for (const auto &extent:sizes) for (int mode=0;mode<=3;mode++) for (int external=0;external<=2;external++) {
+        prepare(ctx,extent[0],extent[1]);ImGui::NewFrame();
+        fps_overlay_detail::Rates r;r.game_ready=true;r.game=120;r.generation=true;
+        r.output_ready=true;r.output=180;r.generated_ready=true;r.generated=60;
+        r.external=external!=0;r.external_measured=external==2;
+        auto p=fps_overlay_detail::draw(mode,r,extent[0],extent[1],
+                                       ImGui::GetIO().Fonts->Fonts[1],ImGui::GetIO().Fonts->Fonts[0]);
+        ImGui::Render();auto *draw=ImGui::GetDrawData();
+        if(mode==0){assert(!p.visible && draw->TotalVtxCount==0);continue;}
+        assert(p.visible && p.maximum.x<=extent[0] && p.maximum.y<=extent[1]);
+        if(mode==1) {assert(!strcmp(p.text,"120"));assert(draw->TotalVtxCount==3*4*2);}
+        for(int i=0;i<draw->CmdListsCount;i++)for(const auto &v:draw->CmdLists[i]->VtxBuffer)
+            assert(v.pos.x>=0&&v.pos.y>=0&&v.pos.x<=extent[0]&&v.pos.y<=extent[1]);
+    }
+    // Ordinary three/four digit changes never shift a panel's column boundaries.
+    for(int mode=2;mode<=3;mode++) {
+        float width=0;
+        for(double value:{30.,99.,120.,999.}) {
+            prepare(ctx,1920,1080);ImGui::NewFrame();
+            fps_overlay_detail::Rates r;r.game_ready=true;r.game=value;
+            auto p=fps_overlay_detail::draw(mode,r,1920,1080,
+                ImGui::GetIO().Fonts->Fonts[1],ImGui::GetIO().Fonts->Fonts[0]);
+            if(width)assert(fabsf(width-(p.maximum.x-p.minimum.x))<0.01f);
+            width=p.maximum.x-p.minimum.x;ImGui::Render();
+        }
+    }
+    prepare(ctx,1920,1080);ImGui::NewFrame();fps_overlay_detail::Rates r;
+    assert(!fps_overlay_detail::draw(99,r,1920,1080).visible);
+    ImGui::Render();ImGui::DestroyContext(ctx);
+}
+
 static void output_lifecycle() {
-    g_settings.show_fps_overlay=true;fps_overlay_reset();fps_overlay_generation(true,false);
+    show(true);fps_overlay_reset();fps_overlay_generation(true,false);
     fps_overlay_frame(1);target_w=1280;target_h=720;
     for(unsigned i=0;i<=180;i++) {
         if(i%2==0)fps_overlay_frame(1+uint64_t(i)*1000000000ull/180);
@@ -129,15 +175,15 @@ static void output_lifecycle() {
     fps_overlay_generation(true,false); // integrated re-enable starts fresh output window
     fps_overlay_present(clock_ns+1,true,true); // invalid classification ignored safely
     fps_overlay_present(clock_ns+2,false,true);fps_overlay_render(nullptr,1280,720);assert(render_calls==5);
-    g_settings.show_fps_overlay=false;fps_overlay_frame(clock_ns+3);fps_overlay_present(clock_ns+4,true,false);
+    show(false);fps_overlay_frame(clock_ns+3);fps_overlay_present(clock_ns+4,true,false);
     fps_overlay_render(nullptr,1280,720);assert(!fps_overlay_visible()&&render_calls==5);
-    g_settings.show_fps_overlay=true;fps_overlay_generation(true,false);fps_overlay_frame(clock_ns+5);
+    show(true);fps_overlay_generation(true,false);fps_overlay_frame(clock_ns+5);
     fps_overlay_render(nullptr,1280,720);assert(render_calls==6);
 }
 static void telemetry(bool precompile,bool fsr) {
     if(precompile)assert(setenv("XCDE_PRECOMPILING","1",1)==0);
     assert(setenv("MONADO_RUN_ID","0123456789abcdef0123456789abcdef",1)==0);
-    g_settings.show_fps_overlay=false;g_settings.frame_gen=fsr;g_settings.frame_gen_smooth_motion=!fsr;
+    show(false);g_settings.frame_gen=fsr;g_settings.frame_gen_smooth_motion=!fsr;
     fps_overlay_reset();fps_overlay_generation(true,!fsr);
     driver_available=true;driver_ready=false;driver_rate=0;
     const unsigned output_hz=fsr?180:60;
@@ -169,7 +215,7 @@ static void telemetry(bool precompile,bool fsr) {
     fps_overlay_diagnostics(clock_ns+9000000000ull,0,false);assert(driver_reads==reads);
 }
 static void disabled() {
-    assert(ImGui::GetCurrentContext()==nullptr);g_settings.show_fps_overlay=false;
+    assert(ImGui::GetCurrentContext()==nullptr);show(false);
     fps_overlay_reset();fps_overlay_frame(1);assert(!fps_overlay_visible());
     fps_overlay_render(nullptr,1280,720);assert(!backend_starts && !render_calls && !ImGui::GetCurrentContext());
     ImGuiContext *ctx=ImGui::CreateContext();prepare(ctx,1280,720);ImGui::NewFrame();
@@ -178,7 +224,7 @@ static void disabled() {
     ImGui::Render();assert(ImGui::GetDrawData()->TotalVtxCount==0);ImGui::DestroyContext(ctx);
 }
 static void runtime() {
-    ImGuiContext *previous=ImGui::CreateContext();g_settings.show_fps_overlay=true;fps_overlay_reset();
+    ImGuiContext *previous=ImGui::CreateContext();show(true);fps_overlay_reset();
     assert(!fps_overlay_visible());fps_overlay_render(nullptr,1280,720);assert(!backend_starts);
     fps_overlay_frame(1);assert(fps_overlay_visible());target_w=1280;target_h=720;
     fps_overlay_render(nullptr,1280,720);assert(backend_starts==1 && render_calls==1 && rendered_vertices>0);
@@ -186,16 +232,21 @@ static void runtime() {
     for (unsigned i=1;i<=60;i++)fps_overlay_frame(1+uint64_t(i)*1000000000ull/60);
     clock_ns+=1000000000;target_w=3440;target_h=1440;fps_overlay_render(nullptr,3440,1440);
     assert(render_calls==2 && backend_starts==1 && ImGui::GetCurrentContext()==previous);
-    g_settings.show_fps_overlay=false;fps_overlay_frame(clock_ns);assert(!fps_overlay_visible());
+    for (int mode : {FPS_OVERLAY_NUMBER,FPS_OVERLAY_DETAILED,FPS_OVERLAY_COMPACT}) {
+        show(true,mode);fps_overlay_render(nullptr,3440,1440);
+        assert(backend_starts==1 && ImGui::GetCurrentContext()==previous);
+    }
+    assert(render_calls==5);render_calls=2;
+    show(false);fps_overlay_frame(clock_ns);assert(!fps_overlay_visible());
     fps_overlay_render(nullptr,3440,1440);assert(render_calls==2 && ImGui::GetCurrentContext()==previous);
-    g_settings.show_fps_overlay=true;fps_overlay_reset();assert(!fps_overlay_visible());
+    show(true);fps_overlay_reset();assert(!fps_overlay_visible());
     fps_overlay_frame(clock_ns+1);assert(fps_overlay_visible());fps_overlay_render(nullptr,3440,1440);assert(render_calls==3);
     ImGui::DestroyContext(previous);ImGui::SetCurrentContext(nullptr);
     clock_ns+=1000000000;fps_overlay_render(nullptr,3440,1440);assert(render_calls==4 && ImGui::GetCurrentContext()==nullptr);
 }
 static void failure(bool fonts) {
     ImGuiContext *previous=ImGui::CreateContext();
-    fail_backend=!fonts;fail_fonts=fonts;g_settings.show_fps_overlay=true;
+    fail_backend=!fonts;fail_fonts=fonts;show(true);
     fps_overlay_frame(1);assert(fps_overlay_visible());
     fps_overlay_render(nullptr,1280,720);
     assert(backend_starts==1 && backend_stops==(fonts?1u:0u) && !render_calls && !fps_overlay_visible());
@@ -205,7 +256,7 @@ static void failure(bool fonts) {
 }
 int main(int argc,char **argv) {
     assert(argc==2);
-    if(!strcmp(argv[1],"layout"))layout();else if(!strcmp(argv[1],"dual-layout"))dual_layout();else if(!strcmp(argv[1],"output-lifecycle"))output_lifecycle();else if(!strcmp(argv[1],"disabled"))disabled();else if(!strcmp(argv[1],"runtime"))runtime();
+    if(!strcmp(argv[1],"modes"))modes();else if(!strcmp(argv[1],"layout"))layout();else if(!strcmp(argv[1],"dual-layout"))dual_layout();else if(!strcmp(argv[1],"output-lifecycle"))output_lifecycle();else if(!strcmp(argv[1],"disabled"))disabled();else if(!strcmp(argv[1],"runtime"))runtime();
     else if(!strcmp(argv[1],"init-failure"))failure(false);else if(!strcmp(argv[1],"font-failure"))failure(true);
     else if(!strcmp(argv[1],"telemetry-nvidia"))telemetry(false,false);
     else if(!strcmp(argv[1],"telemetry-fsr"))telemetry(false,true);

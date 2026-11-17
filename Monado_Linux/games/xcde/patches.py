@@ -798,6 +798,137 @@ PATCHES[0x7000446864] = Patch(0xb9400815, _cheats_fall, 'LINUX-072',
                             'optional ordinary PC fall immunity before nonlethal/lethal split; forced events remain native')
 
 
+# [XCDE] LINUX-120: the actor update refreshes its movement component from the
+# native live-stat multiplier, including ordinary/dedicated Quick Step and the
+# original environmental factor. Adapt that computed scalar before its sole
+# store, never persistent stats, delta time, animation or accumulated velocity.
+MOVEMENT_CHEAT_BUILD_ID = '7e1df8e08d60544bbdca1e333c153c97'
+MOVEMENT_CHEAT_CONTEXT = {
+    0x70004463b0: 0xfc1c0fe8,  # native movement-stat refresh entry
+    0x70004463d4: 0xd63f0100,  # obtain ordinary movement component
+    0x70004463dc: 0xaa0003f3,  # component retained in x19
+    0x7000446454: 0xaa0003f5,  # native status retained in x21
+    0x7000446468: 0x36000600,  # preserve native status type guard
+    0x700044650c: 0xf94002a8,
+    0x7000446510: 0xf9406508,  # native status stats virtual method
+    0x7000446514: 0xaa1503e0,
+    0x7000446518: 0xd63f0100,
+    0x700044651c: 0xbd411c00,  # live native movement multiplier
+    0x7000446520: 0x1e200900,  # retain native environment multiplier
+    0x700047f750: 0x321f03e0,  # PcStatus kind method: mov w0, #2
+    0x700047f754: 0xd65f03c0,
+    0x70003f9818: 0x940132e6,  # ordinary actor update refreshes each frame
+    0x7000410c34: 0x9400d5df,  # PC update also refreshes through same function
+}
+
+
+def _cheats_movement_speed(gen, addr):
+    if gen.name != 'main' or gen.nso.build_id != MOVEMENT_CHEAT_BUILD_ID:
+        raise ValueError('movement cheat requires checked DE 2.0.0 main')
+    for site, expected in MOVEMENT_CHEAT_CONTEXT.items():
+        if gen.word(site) != expected:
+            raise ValueError(f'{site:#x}: LINUX-120 native movement context changed')
+    original = _title_plain(gen, addr)
+    return ('{ extern void xcde_cheats_movement_speed(Cpu *c); '
+            'xcde_cheats_movement_speed(c); } ' + original)
+
+
+PATCHES[0x7000446524] = Patch(0xbd002e60, _cheats_movement_speed, 'LINUX-120',
+                            'optional party speed after native bonuses; retain original movement component store')
+
+
+# [XCDE] LINUX-129: true enemy HP uses the fresh derived maximum and native
+# actor lifetime/update paths. Preserve damage/protection/event machinery. Exact
+# module, build, layout methods and surrounding instructions fail closed.
+ENEMY_HEALTH_BUILD_ID = '7e1df8e08d60544bbdca1e333c153c97'
+ENEMY_HEALTH_CONTEXT = {
+    0x700047f780: 0x321e03e0,  # EnemyStatus kind4
+    0x700047f784: 0xd65f03c0,
+    0x700047f2b0: 0x52829388,  # stats at status+0x149c
+    0x700047f2b4: 0x8b080000,
+    0x700047f2b8: 0xd65f03c0,
+    0x700047dbe4: 0x91004108,  # constructor installs checked EnemyStatus vtable
+    0x700047dbe8: 0xf9000268,
+    0x700047eba8: 0x97f03bea,  # native base stats finish before initial derived HP
+    0x700047ebac: 0xf9482261,
+    0x700047ebb0: 0xb950b262,
+    0x700047ebb4: 0xaa1503e0,  # fresh stats argument
+    0x700047ebb8: 0xaa1303e3,  # owning EnemyStatus argument
+    0x700047ebbc: 0x97f03f3d,  # derived call; LR0x47ebc0 identifies initial completion
+    0x700047ebc0: 0xf9400268,
+    0x70004b9a44: 0xf942ad08,  # nondeleting status destructor rewrites vtable
+    0x70004b9a48: 0xaa0003f3,
+    0x70004b9a54: 0xf8010668,
+    0x70004b9938: 0xf942ad29,  # deleting component destructor has status at+0x60
+    0x70004b9948: 0x5282c708,
+    0x70004b9950: 0xf9003009,
+    0x700008e8b4: 0xa9056ffc,  # native recompute frame0xb0
+    0x700008ed30: 0x7100051f,  # original minimum1/max calculation remains
+    0x700008ed34: 0x1a9f8508,
+    0x700047fb90: 0xf9401d08,  # native per-actor update before dirty gate
+    0x700047fb94: 0xaa1303e0,
+    0x700047d388: 0xb9400808,  # current HP read before ordinary delta ADD
+    0x700047d38c: 0xaa1303e0,
+    0x700047d418: 0xb9400808,  # alternate protected delta branch
+    0x700047d41c: 0xaa1303e0,
+    0x700047d4f4: 0xb9400808,  # direct delta branch
+    0x700047d4f8: 0xaa1303e0,
+    0x700041f50c: 0xb940e808,  # effect0xc3 floor reads effective maximum
+    0x700041f510: 0x794087e9,
+    0x700041f514: 0x1b097d08,  # keep native W8 product; widen conversion only
+    0x700041f51c: 0x90002da8,
+    0x700041f520: 0xbd49f901,  # original0.01 scalar
+    0x700041f524: 0x1e210800,
+}
+
+
+def _enemy_health_hook(helper, mode='before'):
+    def emit(gen, addr):
+        if gen.name != 'main' or gen.nso.build_id != ENEMY_HEALTH_BUILD_ID:
+            raise ValueError('enemy health cheat requires checked DE 2.0.0 main')
+        for site, expected in ENEMY_HEALTH_CONTEXT.items():
+            if gen.word(site) != expected:
+                raise ValueError(f'{site:#x}: LINUX-129 native enemy health context changed')
+        original = _title_plain(gen, addr)
+        if mode == 'replace_if_owned':
+            return (f'{{ extern _Bool {helper}(Cpu *c); '
+                    f'if (!{helper}(c)) {{ {original} }} }}')
+        call = f'{{ extern void {helper}(Cpu *c); {helper}(c); }}'
+        return original + ' ' + call if mode == 'after' else call + ' ' + original
+    return emit
+
+
+ENEMY_HEALTH_PATCHES = {
+    0x700047dbb0: (0xa9be4ff4, _enemy_health_hook('xcde_cheats_enemy_health_construct'),
+                   'EnemyStatus construction begins a new host lifetime'),
+    0x700047eb70: (0xd101c3ff, _enemy_health_hook('xcde_cheats_enemy_health_initialize'),
+                   'native enemy initialization resets HP ownership before base stats'),
+    0x70004b9a30: (0xa9bd57f6, _enemy_health_hook('xcde_cheats_enemy_health_destroy'),
+                   'nondeleting status destructor invalidates HP lifetime'),
+    0x70004b9920: (0xa9be4ff4, _enemy_health_hook('xcde_cheats_enemy_health_destroy_component'),
+                   'deleting component destructor invalidates embedded status lifetime'),
+    0x700047fb8c: (0xf9400268, _enemy_health_hook('xcde_cheats_enemy_health_update'),
+                   'current actor requests native dirty refresh only on an option change'),
+    0x700008e8b0: (0xd102c3ff, _enemy_health_hook('xcde_cheats_enemy_health_recompute_begin'),
+                   'capture HP fraction before native recomputation overwrites derived stats'),
+    0x700008ed38: (0xb900ea68, _enemy_health_hook('xcde_cheats_enemy_health_max'),
+                   'scale freshly calculated enemy maximum exactly once'),
+    0x700047d390: (0x0b140114, _enemy_health_hook('xcde_cheats_enemy_health_add', 'replace_if_owned'),
+                   'owned enemy delta uses widened sum before original clamp and side effects'),
+    0x700047d420: (0x0b140114, _enemy_health_hook('xcde_cheats_enemy_health_add', 'replace_if_owned'),
+                   'owned protected enemy delta retains original protection branch'),
+    0x700047d4fc: (0x0b140114, _enemy_health_hook('xcde_cheats_enemy_health_add', 'replace_if_owned'),
+                   'owned direct enemy delta avoids signed overflow before native clamp'),
+    0x700041f518: (0x1e230100, _enemy_health_hook('xcde_cheats_enemy_health_floor_convert', 'replace_if_owned'),
+                   'owned enemy protection-floor conversion uses the full product and native FP'),
+    0x700041f528: (0x1e390016, _enemy_health_hook('xcde_cheats_enemy_health_floor_clamp', 'after'),
+                   'owned enemy protection floor cannot exceed its signed-safe maximum'),
+}
+for _site, (_word, _emit, _note) in ENEMY_HEALTH_PATCHES.items():
+    assert _site not in PATCHES, f'Conflicting enemy health patch at {_site:#x}'
+    PATCHES[_site] = Patch(_word, _emit, 'LINUX-129', _note)
+
+
 # [XCDE] LINUX-089: perspective-camera and CPU-frustum aspect adapters. These
 # checked scalar loads/stores preserve the native camera, projection construction,
 # frustum tests, scripted FOV and near/far planes. They never patch a shared float

@@ -671,7 +671,7 @@ static void upload_pending(TexBackend *b) {
     b->pending_rgba = NULL;
     pthread_mutex_unlock(&pending_lock);
     if (!px) return;
-    vk_feedback_boundary();
+    vk_feedback_image_written(b); // [XCDE] LINUX-126: unrelated uploads do not discard every feedback snapshot
     if (w > b->width) w = b->width;
     if (h > b->height) h = b->height;
     VkSpan s = vk_transient_copy(px, (uint64_t)stride * h, 16);
@@ -925,8 +925,8 @@ static void upload_texture_(NvnTexture *t, TexBackend *b) {
     if (b->tp > 0) b->tp_gen = texpatch_generation();
     b->data_hash = h;
     b->uploaded = true;
-    vk_feedback_boundary();
     if (b->format != mf.vf && !b->astc_bw) return;  // unsupported format: nothing sensible to copy
+    vk_feedback_image_written(b); // [XCDE] LINUX-126: only a real upload changes this image's visibility
     uint64_t cq = SDL_GetTicksNS();
     VkCommandBuffer cb = vk_upload_cmd();
     up_cmd_ns += SDL_GetTicksNS() - cq;

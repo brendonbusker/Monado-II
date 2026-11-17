@@ -810,11 +810,13 @@ static VkSpan guest_copy(uint64_t addr, uint64_t size) {
 // ================================================================== worker threads (shader / pipeline builds)
 // First-use compiles run off the render thread; draws needing them are skipped until ready (as on Metal).
 // LARECOMP_SYNC_SHADERS=1 builds on first use, blocking (deterministic tests).
+#include "shader_worker_policy.h"  // [XCDE] LINUX-126: queue policy is independently testable.
 typedef struct Job { void (*fn)(void *); void *arg; struct Job *next; } Job;
 static Job *jobs_head, *jobs_tail;
 static Job *ljobs_head, *ljobs_tail;  // [XCDE] T188: low-priority jobs (optimized pipelines replacing fast-linked ones)
 static pthread_mutex_t jobs_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t jobs_cond = PTHREAD_COND_INITIALIZER;
+static _Atomic bool jobs_separate_refinement, jobs_inline_fallback;  // creation-failure fallback is visible to workers
 
 // [XCDE] shader / pipeline build threads get a large stack: deep compiler recursion (a driver compile inside a pipeline build)
 // can overflow the default 1 MB Windows thread stack. (Idea from WindowSmash's notes: its workers use 64 MiB stacks.)
@@ -833,12 +835,20 @@ static int big_stack_thread(pthread_t *t, void *(*fn)(void *)) {
 
 // [XCDE] T240: build work not done yet (vk_prewarm_hold): normal jobs queued / running, translations queued / running
 static _Atomic int g_jobs_queued, g_jobs_busy, g_xlat_queued;
+static void normal_job_completed(void) {
+    if (jobs_separate_refinement) {
+        pthread_mutex_lock(&jobs_lock);
+        atomic_fetch_sub(&g_jobs_busy, 1);
+        if (!atomic_load(&g_jobs_busy)) pthread_cond_broadcast(&jobs_cond);
+        pthread_mutex_unlock(&jobs_lock);
+    } else atomic_fetch_sub(&g_jobs_busy, 1);
+}
 static void *worker(void *a) {
     (void)a;
     { extern void plat_thread_name(const char *), plat_thread_background(void); plat_thread_name("shader worker"); plat_thread_background(); }
     for (;;) {
         pthread_mutex_lock(&jobs_lock);
-        while (!jobs_head && !ljobs_head) pthread_cond_wait(&jobs_cond, &jobs_lock);
+        while (!jobs_head && (jobs_separate_refinement || !ljobs_head)) pthread_cond_wait(&jobs_cond, &jobs_lock);
         Job *j;
         bool normal = jobs_head != NULL;
         if (jobs_head) {
@@ -853,7 +863,32 @@ static void *worker(void *a) {
         if (normal) atomic_fetch_add(&g_jobs_busy, 1), atomic_fetch_sub(&g_jobs_queued, 1);
         pthread_mutex_unlock(&jobs_lock);
         j->fn(j->arg);
-        if (normal) atomic_fetch_sub(&g_jobs_busy, 1);
+        if (normal) normal_job_completed();
+        free(j);
+    }
+    return NULL;
+}
+
+// [XCDE] LINUX-126: permanently lower only this new thread's priority. Urgent
+// compiles stay on the original pool; nice cannot reliably be restored without
+// privilege, so a worker must never alternate priorities between job classes.
+static void *refinement_worker(void *a) {
+    (void)a;
+    extern void plat_thread_name(const char *);
+    plat_thread_name("shader refine");
+#ifdef __linux__
+    extern void plat_thread_shader_background(void);
+    plat_thread_shader_background();
+#endif
+    for (;;) {
+        pthread_mutex_lock(&jobs_lock);
+        while (!shader_refinement_may_start(ljobs_head != NULL, atomic_load(&g_jobs_queued), atomic_load(&g_jobs_busy)))
+            pthread_cond_wait(&jobs_cond, &jobs_lock);
+        Job *j = ljobs_head;
+        ljobs_head = j->next;
+        if (!ljobs_head) ljobs_tail = NULL;
+        pthread_mutex_unlock(&jobs_lock);
+        j->fn(j->arg);
         free(j);
     }
     return NULL;
@@ -923,35 +958,58 @@ static void run_job(void (*fn)(void *), void *arg) {
         started = true;
         // first entry into an area builds dozens of pipelines at once: use most of the CPU (draws wait for them)
         extern int plat_cpu_count(void);
-        int cpus = plat_cpu_count(), n = cpus - 4;  // (the process's own CPUs: the low-spec test mode narrows them)
-        if (n < 4) n = 4;
-        // [XCDE] R4 (docs/spec_lowend_gpu.md): on 6 logical CPUs or fewer (Ryzen 3 3200G: 4) leave two to the game and
-        // render threads (SpartanPort 4b843a7: workers starved the GPU thread of a 4-thread i5, 36 -> 59 fps)
-        if (cpus <= 6) n = cpus - 2 < 2 ? 2 : cpus - 2;
-        static int logged;
-        if (!logged++) LOG("[vk] %d shader workers (%d logical CPUs)\n", n, cpus);
-        if (n > 16) n = 16;
-        for (int i = 0; i < n; i++) { pthread_t t; big_stack_thread(&t, worker); }
+        int cpus = plat_cpu_count();  // respects the process's CPU affinity
+#ifdef __linux__
+        ShaderWorkerPolicy policy = shader_worker_policy(cpus, g_vk.props.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU,
+                                                         getenv("XCDE_SHADER_WORKERS"), getenv("XCDE_SHADER_BACKGROUND"));
+#else
+        ShaderWorkerPolicy policy = shader_worker_policy(cpus, false, NULL, NULL);
+#endif
+        jobs_separate_refinement = policy.dedicated_refinement;
+        if (policy.invalid_worker_override) LOG("[vk] ignored invalid XCDE_SHADER_WORKERS (expected 1..16)\n");
+        if (policy.invalid_background_override) LOG("[vk] ignored invalid XCDE_SHADER_BACKGROUND (expected 0 or 1)\n");
+        int created = 0;
+        for (int i = 0; i < policy.normal_workers; i++) { pthread_t t; if (!big_stack_thread(&t, worker)) created++; }
+        if (!created) {
+            jobs_inline_fallback = true;
+            jobs_separate_refinement = false;
+            LOG("[vk] shader workers unavailable; required jobs run synchronously\n");
+        } else if (jobs_separate_refinement) {
+            pthread_t t;
+            if (big_stack_thread(&t, refinement_worker)) {
+                // Workers may already be waiting. Restore their low-queue access
+                // under the same lock and wake them; never strand refinements.
+                pthread_mutex_lock(&jobs_lock);
+                jobs_separate_refinement = false;
+                pthread_cond_broadcast(&jobs_cond);
+                pthread_mutex_unlock(&jobs_lock);
+                LOG("[vk] refinement worker unavailable; using existing shader pool\n");
+            }
+        }
+        LOG("[vk] %d shader workers (%d logical CPUs), refinement %s\n", created, cpus,
+            jobs_separate_refinement ? "dedicated (low-priority request)" : "shared");
     }
+    if (jobs_inline_fallback) { fn(arg); return; }
     Job *j = malloc(sizeof *j);
     j->fn = fn; j->arg = arg; j->next = NULL;
     atomic_fetch_add(&g_jobs_queued, 1);
     pthread_mutex_lock(&jobs_lock);
     if (jobs_tail) jobs_tail->next = j; else jobs_head = j;
     jobs_tail = j;
-    pthread_cond_signal(&jobs_cond);
+    if (jobs_separate_refinement) pthread_cond_broadcast(&jobs_cond); else pthread_cond_signal(&jobs_cond);
     pthread_mutex_unlock(&jobs_lock);
 }
 
 // [XCDE] T188: a job the workers take only when the normal queue is empty (nobody waits for it). Queued only from a
 // worker's own job, so the workers exist.
 static void run_job_low(void (*fn)(void *), void *arg) {
+    if (sync_shaders() || tl_inline_jobs || jobs_inline_fallback) { fn(arg); return; }
     Job *j = malloc(sizeof *j);
     j->fn = fn; j->arg = arg; j->next = NULL;
     pthread_mutex_lock(&jobs_lock);
     if (ljobs_tail) ljobs_tail->next = j; else ljobs_head = j;
     ljobs_tail = j;
-    pthread_cond_signal(&jobs_cond);
+    if (jobs_separate_refinement) pthread_cond_broadcast(&jobs_cond); else pthread_cond_signal(&jobs_cond);
     pthread_mutex_unlock(&jobs_lock);
 }
 
@@ -984,8 +1042,17 @@ static bool wait_ready(_Atomic int *state, void *arg) {
     while (atomic_load(state) == 0) {
         Job *j = take_job(&tjobs_head, &tjobs_tail, &tjobs_lock, arg);
         bool xl = j != NULL;
-        if (!j && (j = take_job(&jobs_head, &jobs_tail, &jobs_lock, arg))) atomic_fetch_sub(&g_jobs_queued, 1);
-        if (j) { j->fn(j->arg); if (xl) atomic_fetch_sub(&g_xlat_queued, 1); free(j); continue; }
+        bool tracked = false;
+        if (!j && (j = take_job(&jobs_head, &jobs_tail, &jobs_lock, arg))) {
+            if (jobs_separate_refinement) { atomic_fetch_add(&g_jobs_busy, 1); tracked = true; }
+            atomic_fetch_sub(&g_jobs_queued, 1);
+        }
+        if (j) {
+            j->fn(j->arg);
+            if (xl) atomic_fetch_sub(&g_xlat_queued, 1); else if (tracked) normal_job_completed();
+            free(j);
+            continue;
+        }
         if (pw_npending || pl_npending || lv_npending) prewarm_pump();  // (T163: a prewarmed pipeline waits there until its program is ready)
         sched_yield();
     }
@@ -3504,8 +3571,23 @@ static bool snap_ok[8];
 static const char *snap_why[8];
 static const char *snap_reason = "?";
 static void feedback_written(NvnTexture *t);
+static bool feedback_aliases_pending(void);
+// [XCDE] LINUX-126: optional interval counters, never per-copy logging. The
+// byte count is the logical uncompressed image footprint, not physical bus traffic.
+static struct {
+    uint64_t hits, shared_hits, misses, bytes, unknown_formats, pass_breaks;
+    uint64_t invalidated, boundaries, cold, image, visibility, frame, written;
+} feedback_stats;
+static bool feedback_profile(void) {
+    static int enabled=-1;
+    if(enabled<0)enabled=getenv("XCDE_FB_STATS")!=NULL;
+    return prof>0 || enabled;
+}
 static uint64_t feedback_visibility=1;
-void vk_feedback_boundary(void) { if(++feedback_visibility==0)feedback_visibility=1; }
+void vk_feedback_boundary(void) {
+    if(++feedback_visibility==0)feedback_visibility=1;
+    if(feedback_profile())feedback_stats.boundaries++;
+}
 static void snapshots_invalidate(NvnTexture *t) {
     if(!t)vk_feedback_boundary();else feedback_written(t);
     for (int i = 0; i < 8; i++) if ((!t || snap_tex[i] == t) && snap_ok[i]) { snap_ok[i] = false; snap_why[i] = snap_reason; }
@@ -3514,6 +3596,29 @@ static void snapshots_invalidate(NvnTexture *t) {
 typedef struct { NvnTexture *key; TexBackend copy; VkImage source; uint64_t source_identity,visibility,frame; bool read_only_valid; } Snap;
 static Snap snaps[16];
 static int nsnaps;
+// External writes end the visibility interval even for self-feedback. Ordinary
+// attachment writes below only clear read_only_valid: a self-writing draw must
+// keep its interval's original snapshot until a guest barrier/external write.
+void vk_feedback_image_written(TexBackend *image) {
+    // Depth-copy aliases can materialize or swap images. Keep the old global
+    // policy while any alias is live; narrowing that requires a separate proof.
+    if(!image || feedback_aliases_pending()){snapshots_invalidate(NULL);return;}
+    for(int i=0;i<8;i++)if(snap_ok[i] && snap_tex[i] && snap_tex[i]->backend==image) {
+        snap_ok[i]=false;snap_why[i]="external-image-write";
+    }
+    bool count=feedback_profile();
+    for(int i=0;i<nsnaps;i++) {
+        Snap *s=&snaps[i];
+        if((s->key && s->key->backend==image) ||
+                (image->image && s->source==image->image && s->source_identity==image->image_identity)) {
+            if(count && s->visibility)feedback_stats.invalidated++;
+            s->visibility=0;s->read_only_valid=false;
+        }
+    }
+}
+static void feedback_texture_written(NvnTexture *t) {
+    vk_feedback_image_written(t?t->backend:NULL);
+}
 static void feedback_written(NvnTexture *t) {
     for(int i=0;i<nsnaps;i++)if(snaps[i].key==t || (t && t->backend && snaps[i].key && snaps[i].key->backend==t->backend))snaps[i].read_only_valid=false;
 }
@@ -3539,9 +3644,19 @@ static bool is_attachment(NvnTexture *t) {
     return false;
 }
 
+// [XCDE] LINUX-126: distinct NVN views over the exact same backend have the
+// same full-image snapshot. Image/allocation/frame/visibility checks still gate
+// reuse; merely overlapping guest addresses are deliberately not sufficient.
+static Snap *feedback_snapshot(NvnTexture *t,TexBackend *src) {
+    Snap *shared=NULL;
+    for(int i=0;i<nsnaps;i++) {
+        if(snaps[i].key==t)return &snaps[i];
+        if(src && snaps[i].key && snaps[i].key->backend==src)shared=&snaps[i];
+    }
+    return shared;
+}
 static Snap *snapshot_image(NvnTexture *t, TexBackend *src) {
-    Snap *s=NULL;
-    for(int i=0;i<nsnaps;i++)if(snaps[i].key==t)s=&snaps[i];
+    Snap *s=feedback_snapshot(t,src);
     if(!s) { static unsigned rr; s=nsnaps<16?&snaps[nsnaps++]:&snaps[rr++%16];s->key=t;s->visibility=0; }
     TexBackend *d=&s->copy;
     if(d->image && (d->width!=src->width || d->height!=src->height || d->depth!=src->depth || d->layers!=src->layers ||
@@ -3712,6 +3827,7 @@ extern uint32_t vk_view_gen;
 static CopyAlias aliases[8];
 static int naliases;
 static uint64_t stat_alias_made, stat_alias_renamed, stat_alias_partial, stat_alias_copied;
+static bool feedback_aliases_pending(void) { return naliases!=0; }
 
 static int copy_opt(void) {
     static int on = -1;
@@ -3728,6 +3844,7 @@ static bool alias_valid(const CopyAlias *a) {
 static void alias_drop(int i) {
     aliases[i] = aliases[--naliases];
     vk_view_gen++;  // (exec.c's per-frame view memo: the destination's views change)
+    vk_feedback_boundary(); // [XCDE] LINUX-126: materialization/image swaps keep the conservative visibility boundary
 }
 
 // the real copy of the aspects asked for, into the destination's own image
@@ -3852,11 +3969,47 @@ static void fb_stat_add(const char *key) {
     if (n_fb_stats < 64) { snprintf(fb_stats[n_fb_stats].key, sizeof fb_stats[0].key, "%s", key); fb_stats[n_fb_stats++].n = 1; }
 }
 static void fb_stats_flush(void) {
-    if (!n_fb_stats) return;
-    LOG("[fbstats]");
-    for (int i = 0; i < n_fb_stats; i++) LOG(" | %s: %llu", fb_stats[i].key, (unsigned long long)fb_stats[i].n);
-    LOG("\n");
-    n_fb_stats = 0;
+    if(n_fb_stats) {
+        LOG("[fbstats]");
+        for (int i = 0; i < n_fb_stats; i++) LOG(" | %s: %llu", fb_stats[i].key, (unsigned long long)fb_stats[i].n);
+        LOG("\n");n_fb_stats=0;
+    }
+    if(feedback_profile() && (feedback_stats.hits || feedback_stats.misses || feedback_stats.boundaries || feedback_stats.invalidated)) {
+        LOG("[feedback] hits %llu (shared %llu), misses %llu, logical-copy %.3f MiB (%llu unknown-format copies), pass-breaks %llu, "
+            "target invalidations %llu, global boundaries %llu; miss reasons cold %llu image %llu visibility %llu frame %llu written %llu\n",
+            (unsigned long long)feedback_stats.hits,(unsigned long long)feedback_stats.shared_hits,
+            (unsigned long long)feedback_stats.misses,feedback_stats.bytes/1048576.0,
+            (unsigned long long)feedback_stats.unknown_formats,(unsigned long long)feedback_stats.pass_breaks,
+            (unsigned long long)feedback_stats.invalidated,(unsigned long long)feedback_stats.boundaries,
+            (unsigned long long)feedback_stats.cold,(unsigned long long)feedback_stats.image,
+            (unsigned long long)feedback_stats.visibility,(unsigned long long)feedback_stats.frame,(unsigned long long)feedback_stats.written);
+        memset(&feedback_stats,0,sizeof feedback_stats);
+    }
+}
+
+// [XCDE] LINUX-126: only count known uncompressed attachment formats. Unknown
+// formats are reported separately rather than guessing from the guest format
+// (for example RADV can widen a guest depth format). Compression/tiling and the
+// two separate depth/stencil commands do not turn this into measured bus bytes.
+static uint64_t feedback_copy_bytes(const TexBackend *src) {
+    unsigned bpp=0;
+    switch(src->format) {
+    case VK_FORMAT_R8_UNORM:case VK_FORMAT_R8_SNORM:case VK_FORMAT_R8_UINT:case VK_FORMAT_R8_SINT:case VK_FORMAT_S8_UINT:bpp=1;break;
+    case VK_FORMAT_R8G8_UNORM:case VK_FORMAT_R8G8_SNORM:case VK_FORMAT_R8G8_UINT:case VK_FORMAT_R8G8_SINT:
+    case VK_FORMAT_R16_UNORM:case VK_FORMAT_R16_SNORM:case VK_FORMAT_R16_UINT:case VK_FORMAT_R16_SINT:case VK_FORMAT_R16_SFLOAT:case VK_FORMAT_D16_UNORM:bpp=2;break;
+    case VK_FORMAT_R8G8B8A8_UNORM:case VK_FORMAT_R8G8B8A8_SNORM:case VK_FORMAT_R8G8B8A8_UINT:case VK_FORMAT_R8G8B8A8_SINT:case VK_FORMAT_R8G8B8A8_SRGB:
+    case VK_FORMAT_B8G8R8A8_UNORM:case VK_FORMAT_B8G8R8A8_SRGB:case VK_FORMAT_A2B10G10R10_UNORM_PACK32:case VK_FORMAT_A2R10G10B10_UNORM_PACK32:
+    case VK_FORMAT_B10G11R11_UFLOAT_PACK32:case VK_FORMAT_E5B9G9R9_UFLOAT_PACK32:
+    case VK_FORMAT_R16G16_UNORM:case VK_FORMAT_R16G16_SNORM:case VK_FORMAT_R16G16_UINT:case VK_FORMAT_R16G16_SINT:case VK_FORMAT_R16G16_SFLOAT:
+    case VK_FORMAT_R32_UINT:case VK_FORMAT_R32_SINT:case VK_FORMAT_R32_SFLOAT:case VK_FORMAT_X8_D24_UNORM_PACK32:case VK_FORMAT_D24_UNORM_S8_UINT:case VK_FORMAT_D32_SFLOAT:bpp=4;break;
+    case VK_FORMAT_R16G16B16A16_UNORM:case VK_FORMAT_R16G16B16A16_SNORM:case VK_FORMAT_R16G16B16A16_UINT:case VK_FORMAT_R16G16B16A16_SINT:case VK_FORMAT_R16G16B16A16_SFLOAT:
+    case VK_FORMAT_R32G32_UINT:case VK_FORMAT_R32G32_SINT:case VK_FORMAT_R32G32_SFLOAT:case VK_FORMAT_D32_SFLOAT_S8_UINT:bpp=8;break;
+    case VK_FORMAT_R32G32B32A32_UINT:case VK_FORMAT_R32G32B32A32_SINT:case VK_FORMAT_R32G32B32A32_SFLOAT:bpp=16;break;
+    default:return 0;
+    }
+    uint64_t bytes=0;
+    for(uint32_t level=0;level<src->levels;level++)bytes+=(uint64_t)level_extent(src->width,level)*level_extent(src->height,level)*level_extent(src->depth,level)*src->layers*src->samples*bpp;
+    return bytes;
 }
 
 // [XCDE] T161: a texture bound both as an attachment and for sampling is only a feedback loop when the sampled levels /
@@ -3930,11 +4083,24 @@ static void resolve_feedback(Prog *pr) {
         if(nfeedback==9)FATAL("feedback exceeds the nine attachment limit\n");
         // Finish native layouts before copies. Full source subresources are kept:
         // sampling a mip/array/stencil view must not silently become level0/2D.
-        Snap *snapshot=NULL;for(int k=0;k<nsnaps;k++)if(snaps[k].key==t)snapshot=&snaps[k];
+        Snap *snapshot=feedback_snapshot(t,src);
         bool self_write=(colors && writes) || (t==st.rt.depth && st.ds[0] && st.ds[1]);
         static int nosnap=-1;if(nosnap<0)nosnap=getenv("LARECOMP_NO_SNAPSHOT_REUSE")!=NULL;
         bool reuse=!nosnap && snapshot && ((self_write && simple) || snapshot->read_only_valid) && snapshot->copy.image && snapshot->source==src->image && snapshot->source_identity==src->image_identity &&
             snapshot->visibility==feedback_visibility && snapshot->frame==renderer_present_count();
+        if(feedback_profile()) {
+            if(reuse) {feedback_stats.hits++;if(snapshot->key!=t)feedback_stats.shared_hits++;}
+            else {
+                feedback_stats.misses++;uint64_t bytes=feedback_copy_bytes(src);
+                feedback_stats.bytes+=bytes;if(!bytes)feedback_stats.unknown_formats++;
+                if(in_pass)feedback_stats.pass_breaks++;
+                if(!snapshot || !snapshot->copy.image)feedback_stats.cold++;
+                else if(snapshot->source!=src->image || snapshot->source_identity!=src->image_identity)feedback_stats.image++;
+                else if(snapshot->visibility!=feedback_visibility)feedback_stats.visibility++;
+                else if(snapshot->frame!=renderer_present_count())feedback_stats.frame++;
+                else feedback_stats.written++;
+            }
+        }
         if(!reuse) {
             vk_end_pass();snapshot=snapshot_image(t,src);
             VkCommandBuffer cb=vk_cmd();vk_full_barrier(cb);
@@ -5032,7 +5198,6 @@ static CsProg *compute_program(NvnProgram *np) {
 }
 
 static void dispatch_compute(uint32_t gx, uint32_t gy, uint32_t gz) {
-    snap_reason = "compute"; snapshots_invalidate(NULL);
     if (getenv("XCDE_TRACE_CS")) {  // [XCDE] every compute dispatch the game issues, once per shader: is it skipped, and why
         static uint64_t seen[64]; static int ns;
         uint64_t a = st.program ? st.program->stages[5].code_addr : 0;
@@ -5051,6 +5216,9 @@ static void dispatch_compute(uint32_t gx, uint32_t gy, uint32_t gz) {
         if (skip == ~0ull) { const char *e = getenv("LARECOMP_SKIP_CS"); skip = e ? strtoull(e, NULL, 16) : 0; }
         if (skip && st.program->stages[5].code_addr == skip) { SKIPPED(); return; }
     }
+    // [XCDE] LINUX-126: unknown compute/guest-memory side effects remain global;
+    // a missing/empty/not-ready dispatch has not written anything to invalidate.
+    snap_reason = "compute"; snapshots_invalidate(NULL);
     if (cp->si->uses_gmem && getenv("LARECOMP_LOG_CS_SBUF")) {  // (debug) the storage buffers bound to gmem dispatches
         static uint64_t seen_cs[16];
         static int seen_n[16];
@@ -6218,9 +6386,9 @@ static void copy_region_dims(NvnTexture *t, const TexRefRec *ref, const FormatIn
 }
 
 static void copy_buffer_to_texture(uint64_t src, const TexRefRec *dst) {
-    snap_reason = "buf2tex"; snapshots_invalidate(NULL);
     NvnTexture *t = (NvnTexture *)(uintptr_t)dst->tex;
     if (!t || !src) return;
+    feedback_texture_written(t); // [XCDE] LINUX-126: only this destination, or global when aliasing is unknown
     alias_before_write(t, 0, "upload");
     vk_end_pass();
     const FormatInfo *fi;
@@ -6353,9 +6521,9 @@ static void writeback_texture(NvnTexture *t) {
 
 static void copy_texture(const TexRefRec *src, const TexRefRec *dst, uint64_t flags) {
     if (g_debug_frame) LOG("[copy] tex->tex %p (fmt %#x) -> %p (fmt %#x) flags %llx\n", (void *)(uintptr_t)src->tex, src->tex ? ((NvnTexture *)(uintptr_t)src->tex)->format : 0, (void *)(uintptr_t)dst->tex, dst->tex ? ((NvnTexture *)(uintptr_t)dst->tex)->format : 0, (unsigned long long)flags);
-    snap_reason = "tex2tex"; snapshots_invalidate(NULL);
     NvnTexture *st_ = (NvnTexture *)(uintptr_t)src->tex, *dt = (NvnTexture *)(uintptr_t)dst->tex;
     if (!st_ || !dt) return;
+    feedback_texture_written(dt); // [XCDE] LINUX-126
     vk_end_pass();
     if (dl_on == 2) renderer_flush();  // (LARECOMP_VK_DEVLOST_TRACE=2: each copy its own submission, waited on)
     gp_mark(vk_cmd(), "copy texture %ux%u -> %ux%u", st_->width, st_->height, dt->width, dt->height);
@@ -7066,8 +7234,8 @@ static void exec_list(uint64_t handle, int depth) {
             if ((uint32_t)r->x[0] && in_pass) { vk_end_pass(); st.rt_dirty = true; pass_untracked = !(mem_track_mode() & 2); }  // (T162: tracked)
             break;
         case CMD_CLEAR_COLOR: {
-            snap_reason = "clear-color"; snapshots_invalidate(NULL);
             int index = (int)r->x[0];
+            if(index>=0 && index<st.rt.ncolor && st.rt.color[index])feedback_texture_written(st.rt.color[index]); // [XCDE] LINUX-126
             if (getenv("LARECOMP_LOG_CLEARS") && index < st.rt.ncolor && st.rt.color[index])
                 LOG("[cclear] frame %llu idx %d %ux%u f%#x mask %#x @%llx obj %p img %p sc %d %d %d %d\n", (unsigned long long)renderer_present_count(), index,
                     st.rt.color[index]->width, st.rt.color[index]->height, st.rt.color[index]->format, (uint32_t)r->x[2],
@@ -7090,7 +7258,7 @@ static void exec_list(uint64_t handle, int depth) {
                 LOG("[clear-tex] (pass %d) %llx %ux%u f%#x view %d region %d %d %d %d mask %#x color %08x %08x\n", debug_pass_no,
                     (unsigned long long)t->addr, t->width, t->height, t->format, ct->has_view, ct->region[0], ct->region[1], ct->region[3],
                     ct->region[4], (uint32_t)r->x[4], ((const uint32_t *)ct->color)[0], ((const uint32_t *)ct->color)[1]);
-            snap_reason = "clear-texture"; snapshots_invalidate(NULL);
+            feedback_texture_written(t); // [XCDE] LINUX-126
             alias_before_write(t, 0, "clear");
             RtState saved = st.rt;
             int32_t sc[4];
@@ -7112,7 +7280,7 @@ static void exec_list(uint64_t handle, int depth) {
             break;
         }
         case CMD_CLEAR_DEPTH_STENCIL:
-            snap_reason = "clear-depth"; snapshots_invalidate(NULL);
+            if(st.rt.depth)feedback_texture_written(st.rt.depth); // [XCDE] LINUX-126
             if (ct_on() && st.rt.depth)
                 LOG("[ct] clear-depth %p d%d s%d sc %d %d %d %d\n", (void *)st.rt.depth, r->x[0] != 0, r->x[2] != 0, st.scissor[0][0],
                     st.scissor[0][1], st.scissor[0][2], st.scissor[0][3]);

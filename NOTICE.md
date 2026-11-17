@@ -12,7 +12,7 @@ to the full source repository.
 
 Reviewed source dependencies include Dear ImGui (MIT), SMAA and its upstream lookup
 tables (MIT-style), AMD FidelityFX API headers (MIT), NVIDIA Streamline headers
-(MIT), bcdec (MIT/Unlicense), and unmodified launcher DejaVu fonts (Bitstream Vera
+(MIT), bcdec (MIT/Unlicense), and unmodified launcher and FPS-overlay DejaVu fonts (Bitstream Vera
 license, DejaVu changes public domain). Full included notices accompany their
 source. Unused third-party example fonts and examples are omitted from source kits.
 SMAA.hlsl source encoding is normalized from upstream CP1252 to UTF-8; its license

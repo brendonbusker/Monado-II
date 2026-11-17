@@ -14,7 +14,7 @@
     },
     ".github/workflows/source-release.yml": {
       "bytes": 3090,
-      "sha256": "7cc44388570e8228a1654071c13e1f4153710857cdf06db238836694d1d76506"
+      "sha256": "7d8bdc2e478af810483762aa4b3afaf8c4bf83d8fb99eec4d79ddf7e76ce0735"
     },
     ".gitignore": {
       "bytes": 1053,
@@ -37,8 +37,8 @@
       "sha256": "fc908ddd148e06cb024ce9ea9f98307c32af7147bcba2504b8b6a726526197cc"
     },
     "CHANGELOG.md": {
-      "bytes": 50045,
-      "sha256": "a67d46f13b715ed98233f274f66651437f70cbea5a80b9b576e2b270812f4765"
+      "bytes": 52843,
+      "sha256": "7c6c8cd5e9f2a72fb6324a6d1123c915dd6862e616ebdb8fb01df7202974d175"
     },
     "CONTRIBUTING.md": {
       "bytes": 1798,
@@ -89,8 +89,8 @@
       "sha256": "f15076a14b594f71dad68413b094b74242f0f190c044bdbe03ccc56c39fb21ea"
     },
     "Monado_Linux/docs/UPSTREAM.md": {
-      "bytes": 60854,
-      "sha256": "7975052cbacfa9f3bdaa15bf239ae7bbda15208ece6ca92dd30be257a045a257"
+      "bytes": 63250,
+      "sha256": "55eedcbcbf8214158d5e56b3fcae99b003dfb5f945bcdbdc7ca848ab70a7037b"
     },
     "Monado_Linux/docs/adr/0001-base-lasrecomp.md": {
       "bytes": 910,
@@ -177,8 +177,8 @@
       "sha256": "5b5946195152a2e24d9e1feeed5160899add47f16802eda6dbf24614d25ccd6b"
     },
     "Monado_Linux/games/xcde/patches.py": {
-      "bytes": 60522,
-      "sha256": "49998cfd8a8981a6faa61fdd07dde53b7d07f74d7e2a3aa219db5cea31441921"
+      "bytes": 67905,
+      "sha256": "832fc5246d9da4618af4e606b278d1633c773789a9201531f291c086c9da8350"
     },
     "Monado_Linux/games/xcde/profile.json": {
       "bytes": 1299,
@@ -199,6 +199,10 @@
     "Monado_Linux/requirements-linux.lock": {
       "bytes": 773,
       "sha256": "f7ba58c8332d5956f87ec187e932771a05fe85abcc3d27cdb45afe1037ccfcc6"
+    },
+    "Monado_Linux/runtime/cheats_options.h": {
+      "bytes": 1242,
+      "sha256": "a6c99913185b90bab28c276e702bf6d3318e5469ebcf03348401880686d9c729"
     },
     "Monado_Linux/runtime/cpu.h": {
       "bytes": 10522,
@@ -273,20 +277,40 @@
       "sha256": "ee4e72ab0cc344debc226a41272b139931deb8c5bc04513b7a7ca323410f7af4"
     },
     "Monado_Linux/runtime/hle/cheats_combat.c": {
-      "bytes": 3623,
-      "sha256": "3eb5efe7e250d54f44c26f8f0f659c615a19ac605c6b2b4d38781543ea582e61"
+      "bytes": 3831,
+      "sha256": "ab4f7411dc11d6c09d8acd07e0eae5b74f57c560ada2aa3355655e6b028d56e8"
     },
     "Monado_Linux/runtime/hle/cheats_combat.h": {
       "bytes": 539,
       "sha256": "196d636195781595e53609afd9e1ba396083d95a2d9d2981daea31ee2393975a"
     },
+    "Monado_Linux/runtime/hle/cheats_enemy_health.c": {
+      "bytes": 12969,
+      "sha256": "eab551fc039b6b7f0716fe84f7f91956ab717ca608212682cc13706e31282fb3"
+    },
+    "Monado_Linux/runtime/hle/cheats_enemy_health.h": {
+      "bytes": 616,
+      "sha256": "bbf657ccd33b13823496bffeb507dbe19409dde39f874044b8868bfa5214a6e1"
+    },
     "Monado_Linux/runtime/hle/cheats_math.h": {
       "bytes": 720,
       "sha256": "7c925a21f645c039498e37477808a5589be767b051eebada2b4783ffd085cbae"
     },
+    "Monado_Linux/runtime/hle/cheats_movement.c": {
+      "bytes": 2603,
+      "sha256": "0cf5ae969ef0d9f394940257366a3a9c89420afa43451c46be733caa92557c31"
+    },
+    "Monado_Linux/runtime/hle/cheats_movement.h": {
+      "bytes": 151,
+      "sha256": "b307596e9295f948cbdfe00f824b5a5dcf469b9064df9b6b6c910caa2a540316"
+    },
+    "Monado_Linux/runtime/hle/cheats_options.c": {
+      "bytes": 1901,
+      "sha256": "f29cd283122052dba456138bd2d51ac383eb034135161a30e4a916e076146af5"
+    },
     "Monado_Linux/runtime/hle/cheats_rewards.c": {
-      "bytes": 4059,
-      "sha256": "7842ad23f3099de45e6ba5eef17bf833d13136a721b5707912938f52768f40ee"
+      "bytes": 4123,
+      "sha256": "198e8fd277f0f231f6a3631253de47a057a1a6725f134101b223331eb7917066"
     },
     "Monado_Linux/runtime/hle/cheats_rewards.h": {
       "bytes": 447,
@@ -505,16 +529,16 @@
       "sha256": "3365a00dfff89c544a645129ff69d22e2772636cc848646380193e33c02cc699"
     },
     "Monado_Linux/runtime/host/run_diagnostics_linux.h": {
-      "bytes": 10836,
-      "sha256": "8d6a330a4fd9223f866b8a9c9da6f23cf89fb516e41faa4032a708e7a3a22282"
+      "bytes": 11347,
+      "sha256": "8383bef7b7b13926c2497a46b7197691e861cf107a4de963e9897d05b4a1fd58"
     },
     "Monado_Linux/runtime/host/settings_boot.c": {
       "bytes": 794,
       "sha256": "39adfa5b92b64779fa898fd76a071be67c54bc021e3889bd3a6f82a45c2040c6"
     },
     "Monado_Linux/runtime/host/settings_ini.c": {
-      "bytes": 16599,
-      "sha256": "cf6d7e82e4433004f4404a4f8d506574bd02f4c0cda52575e52af4ff356f0b7f"
+      "bytes": 17981,
+      "sha256": "25e72b2bb74ec3380441e34d6ad37dc9a7701e296ddba6f9502654d4aff20bbf"
     },
     "Monado_Linux/runtime/host/stubs.c": {
       "bytes": 1314,
@@ -697,8 +721,8 @@
       "sha256": "025402d28fe388b8b8ff471671e8ed3cdcea97255125c9205de0459b30345b7d"
     },
     "Monado_Linux/runtime/nvn/vulkan/exec.c": {
-      "bytes": 446273,
-      "sha256": "a0a06cc051cbeda3a2d0dcfce681152c7053685b398dbf16a4ef3be3fd890a7a"
+      "bytes": 456376,
+      "sha256": "255b84e6406752739e822f3d289550146858aed27407b6979f31dd03a2915715"
     },
     "Monado_Linux/runtime/nvn/vulkan/framegen_linux.cpp": {
       "bytes": 19318,
@@ -772,6 +796,10 @@
       "bytes": 700,
       "sha256": "82ead052dd805f68191957dd034866319f6b5967d1afff34072ab34d5f01f99c"
     },
+    "Monado_Linux/runtime/nvn/vulkan/shader_worker_policy.h": {
+      "bytes": 1835,
+      "sha256": "ad3032fe289554c2fefc923ea63791098be9074fa0eb9a7044e19aa7bf2ed4a2"
+    },
     "Monado_Linux/runtime/nvn/vulkan/shaders.c": {
       "bytes": 47908,
       "sha256": "5f6eedfcb990a78eefbe7e8c52d5a5583338a2f6128105b0ff803b5e82157e77"
@@ -805,12 +833,12 @@
       "sha256": "d576bd291159fe25260dd4e64e52a45a6132ba7ff3f84b67095200a1b8f5f2c6"
     },
     "Monado_Linux/runtime/nvn/vulkan/textures.c": {
-      "bytes": 90242,
-      "sha256": "16105bc812325b36ce1ca48c7475ed645f9ea548ed214c93e8de29bf7e2d6b05"
+      "bytes": 90404,
+      "sha256": "af74e6cc3db2b679e073023fc4113e5342c12e8c0dd8c90c743cf114b1e74ba6"
     },
     "Monado_Linux/runtime/nvn/vulkan/vk.h": {
-      "bytes": 8514,
-      "sha256": "f82b94f8cd90a37c9b6b58dcbe8972280374de5a13735bbc67375516852d2bdf"
+      "bytes": 8727,
+      "sha256": "1dc4857cbc4b5e6599270bc1c00c1ab684377407ff21e5a6bf04964078d358bb"
     },
     "Monado_Linux/runtime/nvn/vulkan/vma.cpp": {
       "bytes": 370,
@@ -829,8 +857,8 @@
       "sha256": "6bf4de931e673658b58c43c56353f6cfc6829c364df1b3ad1320ed72225aa755"
     },
     "Monado_Linux/runtime/platform/linux.c": {
-      "bytes": 21433,
-      "sha256": "33802919f1a921bd7a70402e0824ce4a38830ac76f220431ea36a5fa799c0f97"
+      "bytes": 22259,
+      "sha256": "c58c95197220acaa8896f1bf101c6467fd962d0230742c87e0cab69e4ade3cee"
     },
     "Monado_Linux/runtime/platform/linux_activity.h": {
       "bytes": 1565,
@@ -929,8 +957,8 @@
       "sha256": "cda53f9d564132b8f85efc20481e1376e42c884502e0ed61cc83bac0d09b4b96"
     },
     "Monado_Linux/runtime/settings.h": {
-      "bytes": 8953,
-      "sha256": "9a5d6386ddb6aee6eae5d410b7302f8ed4db3fb34af7e8d8594afaeb88d9df2c"
+      "bytes": 10014,
+      "sha256": "102e1639846f8eef52c03cdc25da3530a8a831dee79e1b60893a72ddae08e42c"
     },
     "Monado_Linux/runtime/simd.h": {
       "bytes": 41985,
@@ -939,6 +967,10 @@
     "Monado_Linux/runtime/simd_fp.h": {
       "bytes": 14175,
       "sha256": "8377933589bb1c6f15ee877d773e2ba1de861ef4a2df711ddb1261666604504d"
+    },
+    "Monado_Linux/runtime/ui/cheats_controls_linux.h": {
+      "bytes": 3598,
+      "sha256": "ac2bae5a8700cefb7a962922636222527361d37cbfdae3eaf780062cecc0f5a7"
     },
     "Monado_Linux/runtime/ui/fps_meter.h": {
       "bytes": 4642,
@@ -949,8 +981,8 @@
       "sha256": "a87cfdf57006091044373bc58a48d61757b11c8728a871c8ffa68afefe8e97c0"
     },
     "Monado_Linux/runtime/ui/fps_overlay_draw.h": {
-      "bytes": 4397,
-      "sha256": "3bf018ec81c80b13c40e3acff1ce183c71a4e24b376ee1c5364fe947c242ecf3"
+      "bytes": 9427,
+      "sha256": "17ec98db411009f7e9a9992dae0880f15f6bd74da55a48f80890996d769cf1dd"
     },
     "Monado_Linux/runtime/ui/graphics_options.h": {
       "bytes": 903,
@@ -961,8 +993,8 @@
       "sha256": "86c9639914557c7ca3853ae78920471912a95acb4fa82851446a7bf249fbcd46"
     },
     "Monado_Linux/runtime/ui/menu_vk.cpp": {
-      "bytes": 27831,
-      "sha256": "fcd68b6cbc77f00dff4f2cbf0c0608dfdee6ba6566110424f8d44d79b1a28fb0"
+      "bytes": 30657,
+      "sha256": "c9881a96d95ebc8b0c5b17e329b896cf8202a5fd149b4bac09fa35d8d328a386"
     },
     "Monado_Linux/runtime/ui/quality_controls_linux.h": {
       "bytes": 4147,
@@ -989,8 +1021,8 @@
       "sha256": "5989e814a827628c1acb9fc6dd51e9a91102bb3b3ad421592c1f4475408d5e7d"
     },
     "Monado_Linux/scripts/build_linux.py": {
-      "bytes": 49469,
-      "sha256": "fcfc98e903b60fea82ca245ac40d5dc4d3a1f28632f62ca968a93afc32a88f89"
+      "bytes": 53125,
+      "sha256": "4367a5c86184b1488ad2b525df3b184025195f8f0b928ec80e4518947800d1e8"
     },
     "Monado_Linux/scripts/build_portable_dependencies.py": {
       "bytes": 22902,
@@ -1092,9 +1124,13 @@
       "bytes": 17077,
       "sha256": "4824c8bc0018e1f448e21321853a17e9f0161ac224ff75b400d8e59777584cfb"
     },
+    "Monado_Linux/scripts/launcher_idle_tests_linux.py": {
+      "bytes": 5532,
+      "sha256": "6f417e6b181a69219ab2f35260f9d9d60fe29993da0a8e74fc126d065aad4a59"
+    },
     "Monado_Linux/scripts/launcher_linux.py": {
-      "bytes": 35053,
-      "sha256": "46cdcc8f8ad9f2600a987e39e5f57a82e6cd3468073e8616939382ae1ba16410"
+      "bytes": 36624,
+      "sha256": "8c508ff168b184aadc97c597b2e4069e44b404aff668d2d283e4d7313e1896ac"
     },
     "Monado_Linux/scripts/launcher_precompile_integration_linux.py": {
       "bytes": 10793,
@@ -1201,8 +1237,8 @@
       "sha256": "e2ae47d9b791c41da3d775cc769377e97277dd160e8bea28595a521273724ffe"
     },
     "Monado_Linux/scripts/renderer_tests_linux.py": {
-      "bytes": 6015,
-      "sha256": "bf88ba90da6646541ab533fa0b259b26c26cfb4af3ff4f1b9e47c73683734790"
+      "bytes": 9092,
+      "sha256": "1b23c86abcffd0b81ac82a894e18f0f33963bb416fd6be359aff5e7e379a468c"
     },
     "Monado_Linux/scripts/repro_stability.sh": {
       "bytes": 1238,
@@ -1221,12 +1257,12 @@
       "sha256": "3326e658ae221388f06c5a7ccd647b54c1badc0e5ba885437516725226232bcf"
     },
     "Monado_Linux/scripts/run_linux.py": {
-      "bytes": 34647,
-      "sha256": "3fdb299ca5a96edf095faa9c5d51f39ae239c822e973fe4aec830ee6d10f3795"
+      "bytes": 34667,
+      "sha256": "862e7f293ed7f1555d6752399c6d068b32dd66458e76cb335d0293f4dd78b042"
     },
     "Monado_Linux/scripts/run_settings_log.py": {
-      "bytes": 15033,
-      "sha256": "2f57f9022152d0de4a7c4ea965106748fa8fc941e54d4404235345713aa5a820"
+      "bytes": 15214,
+      "sha256": "3b5ec5b0d6dc058dd8b3354191368ec81e411b58b07a620c4eacab8d7b7f02cb"
     },
     "Monado_Linux/scripts/save_tests_linux.py": {
       "bytes": 4319,
@@ -1309,16 +1345,24 @@
       "sha256": "1fde6df07788dfe6355062b38120cd6f90369a9ec016af49e1ec1a7c35f74b5c"
     },
     "Monado_Linux/tests/native/test_cheats_combat.c": {
-      "bytes": 5618,
-      "sha256": "7d8d49a142e740130dea8792efc06be2dc5d460316926972a0ed3ffec0a015a6"
+      "bytes": 6220,
+      "sha256": "e6a2bb918b5b2b636204704e8918b34a7ba89b35689803be8d3883cd4515a3d0"
+    },
+    "Monado_Linux/tests/native/test_cheats_enemy_health.c": {
+      "bytes": 13808,
+      "sha256": "5bc0039e02f017e866b6e054af9cc14b0614d45de4b5e280dd0711e544c9ece7"
+    },
+    "Monado_Linux/tests/native/test_cheats_movement.c": {
+      "bytes": 4938,
+      "sha256": "bb428a23b9f237871044209c6d4184bf4782f3a82b28c956a3ec2c20609a6d3d"
     },
     "Monado_Linux/tests/native/test_cheats_rewards.c": {
-      "bytes": 6850,
-      "sha256": "a34fa52f04228a945f567a3d9aa80470640a7a6320cca259dc17dfbfb9bc44ed"
+      "bytes": 6966,
+      "sha256": "993fb9202c6c549ca34ce14e5dd471edd1c5e603683541f07bf955d81e52058c"
     },
     "Monado_Linux/tests/native/test_cheats_settings.c": {
-      "bytes": 4101,
-      "sha256": "80893ecb098830b4cb41250a400b5d232f6f05bfb5c45e0c8692406be5d5a947"
+      "bytes": 4681,
+      "sha256": "bfa56f0d886f4c529facded9c48c47a8eec23e6b4400b0d548f0834c61f7750d"
     },
     "Monado_Linux/tests/native/test_condvar.c": {
       "bytes": 2904,
@@ -1435,6 +1479,10 @@
     "Monado_Linux/tests/native/test_kernel_fibers_linux.c": {
       "bytes": 10887,
       "sha256": "80c99241c1df3f9b6f43d201b318459818a39f652d9b48dfa0bd7c78aa88a9ad"
+    },
+    "Monado_Linux/tests/native/test_launcher_idle_linux.cpp": {
+      "bytes": 12422,
+      "sha256": "5db7b019f6126ee30a9b8aceb049fd6dc72068c03e14ff45a943bd64ec76619e"
     },
     "Monado_Linux/tests/native/test_launcher_precompile_integration_linux.cpp": {
       "bytes": 4269,
@@ -1560,9 +1608,25 @@
       "bytes": 8531,
       "sha256": "72202ec4c560ba310daeaad8c82b92df261838fd315f1f132ec1adc84987cb74"
     },
+    "Monado_Linux/tests/native/test_renderer_feedback_gpu_bridge.h": {
+      "bytes": 785,
+      "sha256": "a0dcfa447306ea62a7578cc66721683718e720b0de64c68bdf77fdec7815a891"
+    },
+    "Monado_Linux/tests/native/test_renderer_feedback_gpu_cases_linux.h": {
+      "bytes": 3539,
+      "sha256": "ec064ec588f1d680c7ee168a8e5147abcf8f9f380c4cfa4009e17188c65b24b8"
+    },
+    "Monado_Linux/tests/native/test_renderer_feedback_gpu_linux.cpp": {
+      "bytes": 4738,
+      "sha256": "f039095cd5d3761e66c5c483b8039453dff756c60bedc566eb6bf619f17ea065"
+    },
     "Monado_Linux/tests/native/test_renderer_feedback_linux.c": {
-      "bytes": 11239,
-      "sha256": "e8add28c7254b3196799adc8f2e5ac514a23d16cdd02d912c7b77fece73b77f5"
+      "bytes": 11846,
+      "sha256": "35d7962ea556fe2353e5c3cc69e5d40598ea29a8c3e21e0f2afd5d1a466014e4"
+    },
+    "Monado_Linux/tests/native/test_renderer_feedback_performance_linux.h": {
+      "bytes": 3844,
+      "sha256": "f0c12e4487ce708201d159f1f7c00af15562f35512ae7a897472754891367954"
     },
     "Monado_Linux/tests/native/test_renderer_gpu_linux.cpp": {
       "bytes": 16309,
@@ -2440,6 +2504,10 @@
       "bytes": 4550,
       "sha256": "48680b6d79bdbf446bf6c08c1e01c194edf9ecbb1983da6463eab7cdb561361e"
     },
+    "Monado_Linux/tools/gen_fps_fonts.py": {
+      "bytes": 4069,
+      "sha256": "0484b69f4145ca1efb913bbb626cf067441a95a3680d542eca1d63612790687f"
+    },
     "Monado_Linux/tools/gen_smaa_inc.py": {
       "bytes": 606,
       "sha256": "aa7fe094dc5fd0af07f860eed2770ee36a5f86cfcb09ee4d1e783153de25fb49"
@@ -2497,8 +2565,8 @@
       "sha256": "7a149e3f168996f26c71cc798a63f9f88fb595c0e4ca1941d130e2d06ff3a183"
     },
     "Monado_Linux/tools/launcher/launcher.cpp": {
-      "bytes": 125299,
-      "sha256": "c54b2728a9f9785d15cd90c0a64a49a73bb4e91582dff170e0c995e89705f989"
+      "bytes": 130618,
+      "sha256": "aaa2c5fec0698d85d2744247c9d779b3f66c4c192472da0619158c4106b3da5b"
     },
     "Monado_Linux/tools/launcher/linux_config_test.cpp": {
       "bytes": 8360,
@@ -2515,6 +2583,10 @@
     "Monado_Linux/tools/launcher/linux_host_test.cpp": {
       "bytes": 2845,
       "sha256": "e00c852eb97f6b90819cac02ec336cad51eb1437a9f307c1cc2ebea77f9557af"
+    },
+    "Monado_Linux/tools/launcher/linux_loop.h": {
+      "bytes": 1557,
+      "sha256": "847d11518e400a36f7efe0665d0d81a32d8109fadcf445adc4709a4a667cbea6"
     },
     "Monado_Linux/tools/launcher/linux_precompile.h": {
       "bytes": 8817,
@@ -5173,8 +5245,8 @@
       "sha256": "ee9f588283d6db03e1f1255c3d2992a2fe8f52d5a46f6d204adfd0a27a9d4fc5"
     },
     "NOTICE.md": {
-      "bytes": 7573,
-      "sha256": "a043af167e9ecf20a27bfcf4e5accb6b8e0fc3d49e36e3f22e7086a2ddcab142"
+      "bytes": 7589,
+      "sha256": "c2a8c2ad21a2e85b8e90a77956a03688b68ac5fee160f0c9c9745c2c8faecc7a"
     },
     "Play_Monado_II.bat": {
       "bytes": 208,
@@ -5185,8 +5257,8 @@
       "sha256": "111d3bdcc8b4dd86e9bc0b59a2431dd5439c4de0ba94c9bee96756ad5399a053"
     },
     "README.md": {
-      "bytes": 19499,
-      "sha256": "0d8368d271f937fd0510a9b9275679489fba453c7f023a8280e58f7075b62643"
+      "bytes": 19559,
+      "sha256": "7bf533ddfbe4111b550236bcdc072618f1e380386291dc67cf8592f44ecc2f46"
     },
     "Rollback_Monado_II.sh": {
       "bytes": 8873,
@@ -5221,20 +5293,24 @@
       "sha256": "cb577361e98f01b9183638f00eb286580f484e729c073d5104b0f0828933fc92"
     },
     "docs/CHEATS.md": {
-      "bytes": 3024,
-      "sha256": "510c569c854f928c52e2b6f5b08c0b272caa6ad524f4dc09b3e52eca3684514e"
+      "bytes": 4821,
+      "sha256": "d5100f5ea8e870d08c2d9becae9c6c6dda0eb2d0e785c9c38954b06167d7b83f"
     },
     "docs/FRAME_GENERATION.md": {
-      "bytes": 8568,
-      "sha256": "8e821b49d1eab57639d896f5f22b3474176953ff660aac3b8fddb2debf4a543b"
+      "bytes": 9186,
+      "sha256": "30e4ee82eb9777bfa554e1ebf1adb60e7570e0ba8c0c0930e4cd25936ed9cd3c"
     },
     "docs/GRAPHICAL_BUILDER.md": {
-      "bytes": 6971,
-      "sha256": "6b77242f728c2c155df930534561d119d5c1b8c292b34da549868e53042073fe"
+      "bytes": 7744,
+      "sha256": "2a2eb7e3a501674760c19a06b933f66b9de46b77f67b5c9326df37839894f0b4"
     },
     "docs/HANDHELD_CONTROLLERS.md": {
       "bytes": 4356,
       "sha256": "26abd117d0307aa954d851883874a709ea07b994abe69f248d71373100451739"
+    },
+    "docs/HANDHELD_PERFORMANCE.md": {
+      "bytes": 2496,
+      "sha256": "68d4cfc6d65398bdecec5c24e73a33b786f354eea60dccf343b6181c8ccc70df"
     },
     "docs/PLATFORM_STATUS.md": {
       "bytes": 8800,
@@ -5249,8 +5325,8 @@
       "sha256": "ce4c8d6a5ffb65a08a25abb6450235929887d2079cb63321c327261b123b1eec"
     },
     "docs/RELEASING.md": {
-      "bytes": 5301,
-      "sha256": "5d1b01158a66e040a9b85666889ae6edde6a7abb4590e53a4b7e2c7011dc3402"
+      "bytes": 5098,
+      "sha256": "1009d3999d800f28686c765bf70bba0e7f7bc78d291aef4ae153cb8636999e17"
     },
     "docs/WINDOWS_PARITY_INVENTORY.json": {
       "bytes": 233647,
@@ -5267,6 +5343,10 @@
     "publication-policy.json": {
       "bytes": 1336,
       "sha256": "2eb2b5f6b9c790220a137bb7917226890300bfc33c29370f4b264c48c0dbfbc3"
+    },
+    "tests/native/capture_fps_overlay.cpp": {
+      "bytes": 2834,
+      "sha256": "f7bb71b75e16d0edc3db02c052dfcb72a14700defda8da7c2dd563d017ccd7b9"
     },
     "tests/native/present_observer_module_fixture.c": {
       "bytes": 1238,
@@ -5320,6 +5400,10 @@
       "bytes": 4723,
       "sha256": "605a1992988c8a707484bd8f886646f3d108505ebf7903456d4e21b20ec1e01f"
     },
+    "tests/native/test_f1_cheats_menu.cpp": {
+      "bytes": 5563,
+      "sha256": "ed2d108891d4e5f33e4d2ae5980678ee7f5ddf1088b7da5fe3bfdd64739018aa"
+    },
     "tests/native/test_fps_meter.c": {
       "bytes": 9876,
       "sha256": "374ede22981d746b6f240fd230d5325da7cfc49084743239b94c11628db6473c"
@@ -5329,16 +5413,16 @@
       "sha256": "8463a2881f6d568d4795d57ba467a68647aaf86e9d1da48c3b59c53bccca8813"
     },
     "tests/native/test_fps_overlay_launcher.cpp": {
-      "bytes": 3384,
-      "sha256": "0703d8b8bc057780b1d075978683b72b140d43a696af0c84858a9d4b5b31c3b4"
+      "bytes": 5726,
+      "sha256": "746f2813afd7c4a4c4ac0632e94c77c7d8b26f33b4652ef7cf93c6901aacf823"
     },
     "tests/native/test_fps_overlay_settings.c": {
-      "bytes": 3037,
-      "sha256": "f3ac02aa49e7fabf34f8da52c37f79f420fcfad3a8ddef6b03d89bc0b57e1fcf"
+      "bytes": 5316,
+      "sha256": "b062b65f3ee04ad751d65593b6016a0068d449b4bfd56608476aebe4bbf2af62"
     },
     "tests/native/test_fps_overlay_ui.cpp": {
-      "bytes": 13174,
-      "sha256": "449475254f43f82256fc0024499ab0537316d9754663470a51b0ebb849570c45"
+      "bytes": 15809,
+      "sha256": "6c84e3159e0b02469a86a0f1f17876ad54ad23469f38ff17810fc0552ca8b905"
     },
     "tests/native/test_frame_threshold.c": {
       "bytes": 2148,
@@ -5400,6 +5484,10 @@
       "bytes": 23351,
       "sha256": "a2a20fb893d2a8a04b96f43d74c5a942616acf7179f77d62b03d178b90c7b6a6"
     },
+    "tests/native/test_launcher_idle_policy.cpp": {
+      "bytes": 1803,
+      "sha256": "efca73820b4ebe04f790248688f344678ac73cc54540686a9b06d9715546f234"
+    },
     "tests/native/test_launcher_input_recovery.cpp": {
       "bytes": 2506,
       "sha256": "1365c320ff157269e362afd2649d8bf40c2b67e8b768b1a4cbd3ad2445b2c6d4"
@@ -5407,6 +5495,14 @@
     "tests/native/test_launcher_updates_ipc.cpp": {
       "bytes": 4399,
       "sha256": "ffeb8a9a02eec4caff125d0e25a1595ea6db56f2bc4dead509e4761a72b32dc1"
+    },
+    "tests/native/test_live_cheats.c": {
+      "bytes": 4059,
+      "sha256": "b64ec2a6d63e84c41b34177e70ed45e5b280d571bd9f9acb1381bdf94457b23d"
+    },
+    "tests/native/test_live_cheats_ui.cpp": {
+      "bytes": 5371,
+      "sha256": "54de6f06a388100f75556c4a2cb49084a2cb199216b6c21e2856fcd00c7cc0db"
     },
     "tests/native/test_pad_modifier.c": {
       "bytes": 9352,
@@ -5437,8 +5533,8 @@
       "sha256": "ddf07a9c2c6762b6b13df369fb19e5e5aa9f4c2a23bb948186eed09da64e4412"
     },
     "tests/native/test_run_diagnostics.c": {
-      "bytes": 3335,
-      "sha256": "ac58f5c5bcb85175cfeb7ddaab6eb1521a1acbb29e5db40a81582936b30cc764"
+      "bytes": 3504,
+      "sha256": "6a36f31bcf10ed10227b0e5994e5ee42ab6a3b2e075cf41479573b380d2772b0"
     },
     "tests/native/test_sampler_cache.c": {
       "bytes": 4072,
@@ -5455,6 +5551,18 @@
     "tests/native/test_scaled_gather.c": {
       "bytes": 2873,
       "sha256": "511a147ccf3eb8a8c0abcf19c0328772b8d780ab31c373578c39fdc109cb1e75"
+    },
+    "tests/native/test_shader_worker_policy.c": {
+      "bytes": 1930,
+      "sha256": "48e321eea12db7f81b5090d282cba9bba14cbc57485df1d96f8d064cd5b02e17"
+    },
+    "tests/native/test_shader_worker_priority.c": {
+      "bytes": 2711,
+      "sha256": "7205f40591ee6391316879b2af8f7d2c15c507ef0a88abd323dfef1e868746a9"
+    },
+    "tests/native/test_shader_worker_queue.c": {
+      "bytes": 8808,
+      "sha256": "08e11251d1bdb83f1266dac7b8083d07e9093a46b535b9e07e2e5d614af94fca"
     },
     "tests/native/test_support_report.cpp": {
       "bytes": 302,
@@ -5485,8 +5593,8 @@
       "sha256": "4ab982b6bbb2c9a92611fc2922125dc7530a6db6716e05ba09e5e203552fc890"
     },
     "tests/test_aspect_output.py": {
-      "bytes": 3412,
-      "sha256": "39bd6ea0901d3c2d89e3aff84d538aad585317c543c94a0d51a88dffea81e708"
+      "bytes": 3456,
+      "sha256": "5199bdae1f4a353f799a38d806a12b06866fd0b9bcfcc7cf46a8fbb109018579"
     },
     "tests/test_boot_game_library_linux.py": {
       "bytes": 5762,
@@ -5516,6 +5624,10 @@
       "bytes": 14354,
       "sha256": "1bfd26443611b9e70b4577a8413ee2b05588b9529f45b6abb5a0cb1a078888f9"
     },
+    "tests/test_builder_paths_linux.py": {
+      "bytes": 8405,
+      "sha256": "dc916c68a551b96a01b41a57298eae921557882ff4ac338aab9b34d09faa82b4"
+    },
     "tests/test_builder_runtime_sources.py": {
       "bytes": 10505,
       "sha256": "5ce9710348b94ee0b6dcb2117b5da38929031d292f47956c24bb22561f68be66"
@@ -5525,20 +5637,28 @@
       "sha256": "2c9e60d84e6588e8f3e4f0655a7783277600ecb846313bada59b749020b0b34e"
     },
     "tests/test_cheats_combat.py": {
-      "bytes": 2009,
-      "sha256": "16f056356c8d73eeb801a638923cf318c9cb14473596ac269d4aa3d83ba84cc3"
+      "bytes": 2065,
+      "sha256": "03e7c17eb54627fb85d496cc853a239c73e73dfc6930e020388fc2c3346bcfa5"
+    },
+    "tests/test_cheats_enemy_health.py": {
+      "bytes": 2211,
+      "sha256": "0b68079a90602623cc814af57a88853b970910bd9edd50695b59ff2ab6c66aff"
+    },
+    "tests/test_cheats_movement.py": {
+      "bytes": 3811,
+      "sha256": "a7ad4f537cd3420889c813967ca0a3d22845046a9b346ed9e3937199bae3e1e6"
     },
     "tests/test_cheats_patches.py": {
-      "bytes": 21974,
-      "sha256": "fba680b8541601ce0e73aef014c414fe02758214a4d6ebc4212e4ee80a392904"
+      "bytes": 22645,
+      "sha256": "ab323e7d193ee35296a1f1d1f6c225b482f2c63ba45b41bf9d2a2f7573e087b5"
     },
     "tests/test_cheats_rewards.py": {
-      "bytes": 1752,
-      "sha256": "946f454e373e0cd2afb6a73bf05974fa35e9f3efa78c98df3ebdac687aad7bb8"
+      "bytes": 1808,
+      "sha256": "ca09ad2906d38f0722b1495f4d2533f56b1c60829ac22654adddd9507172a745"
     },
     "tests/test_cheats_settings.py": {
-      "bytes": 2012,
-      "sha256": "c1a78f75e2be0519816018d5129a7b97ca26ae9f27bf84ca5bd13a1efd95b76f"
+      "bytes": 2068,
+      "sha256": "fabd8d4881cd8e48a76449abe90a91ca6af342c957b7da0ca614fdae59aa4721"
     },
     "tests/test_controller_discovery.py": {
       "bytes": 5702,
@@ -5576,9 +5696,17 @@
       "bytes": 2455,
       "sha256": "6b6e1a28a13e7c598f6a90ac55bf2053ca27b9c938b82814e5ed30b4d4e90fd4"
     },
+    "tests/test_enemy_health_contract.py": {
+      "bytes": 17912,
+      "sha256": "e3a21c84d39c88c954c0d998b372d7068265cc90299b676ba285707731d22ddf"
+    },
     "tests/test_expanded_saves.py": {
       "bytes": 2581,
       "sha256": "510f2a910dae29978e7b70c9c8ccc3e0b2673c48ef2b7fd3af02f08edfe39ba9"
+    },
+    "tests/test_fps_font_resources.py": {
+      "bytes": 12567,
+      "sha256": "46ae05bf79d24f6d0c8366cad9535c6580f64b5d99d932e306686aae615dd74f"
     },
     "tests/test_fps_meter.py": {
       "bytes": 3975,
@@ -5589,12 +5717,12 @@
       "sha256": "ce3456a7082d3c13d757f790adaa06bb36604c7eb7390c2b08774c13051eb8b9"
     },
     "tests/test_fps_overlay_settings.py": {
-      "bytes": 3579,
-      "sha256": "a92c6bfe6be3f4ac081267667ff49820e77c0c97cc0337e86044121a25001ffe"
+      "bytes": 3635,
+      "sha256": "4e99931248aa03c0b43203ad9b877a91d8d5931e0ac451daca83531c35411962"
     },
     "tests/test_fps_overlay_ui.py": {
-      "bytes": 4718,
-      "sha256": "d36f83d5bba46ca1fa19d5e802ffdb1dddd86edcc7f550a2ac50247ad8eb1d29"
+      "bytes": 5192,
+      "sha256": "f8e573f0ef4ed5a0ccbee7adc91487833da356c08e747cf7e0978b09b75c06dd"
     },
     "tests/test_fps_present.py": {
       "bytes": 5088,
@@ -5617,16 +5745,16 @@
       "sha256": "d443ccbb23db40a865e2f62bb9aa0335af45400e9ee6b84dacb3c54e191dac84"
     },
     "tests/test_framegen_launch.py": {
-      "bytes": 17457,
-      "sha256": "d02443e9dc817c827ebd20d24841137e1210d06c5960ae87eec6dc4ae0c1f8e9"
+      "bytes": 17557,
+      "sha256": "796064e67c29b9b3eb0242eb53f934749404ecca7a087e4a26a00578a8a33d48"
     },
     "tests/test_framegen_refresh_policy.py": {
       "bytes": 1466,
       "sha256": "c9cd59ca253d2b98991bba9faccb875a03f18b9dd383d7860f17a97abc45850f"
     },
     "tests/test_framegen_settings.py": {
-      "bytes": 2609,
-      "sha256": "2b12698b8ceb21493814d22c20c0f8c818babb3f26d32a11c9ea4912b8daa6fb"
+      "bytes": 2665,
+      "sha256": "770b1da0909c4039d35e1818df21c5a6904deda37df0eb5cc0f77e25acddda8b"
     },
     "tests/test_fsr4_launcher_linux.py": {
       "bytes": 5346,
@@ -5653,8 +5781,8 @@
       "sha256": "1ecdb18ab710263d71b4144ae0fd2756fc6f166c3df276c285d8f5bdb5e48ebc"
     },
     "tests/test_graphics_quality.py": {
-      "bytes": 4041,
-      "sha256": "1b762e1cf8d4496a68c8fe2e1fd467a4d81ed0961466bcfc8f3fc891594c4046"
+      "bytes": 4085,
+      "sha256": "6dda8569afb6889eac6299c19280355d2d059f1372bbc33f67fcf0aa5269ef4d"
     },
     "tests/test_gui_build_mode.py": {
       "bytes": 3703,
@@ -5697,8 +5825,12 @@
       "sha256": "fa67c7592098bdfc982a210d3f236812540172b13ed9fc400df12be84fefedd8"
     },
     "tests/test_launcher_cheats.py": {
-      "bytes": 9623,
-      "sha256": "c3142da97e3a787cc6fd63999decd65321427341a5ff444f32bb48bebf2c35f2"
+      "bytes": 10313,
+      "sha256": "9939105703b550565a4303d2580ab1d6b7a79c59ed53d8e26120defa4214d212"
+    },
+    "tests/test_launcher_idle.py": {
+      "bytes": 1477,
+      "sha256": "11defe4620d501b233da220ee11475b9bdf0afb4db93b66d4f7eed07b50666ce"
     },
     "tests/test_launcher_input_recovery.py": {
       "bytes": 3562,
@@ -5760,6 +5892,10 @@
       "bytes": 8482,
       "sha256": "6497b8936bdfaef18a1c6c3d2cd3830386308ae6c33d64f2e395d59959ac36f1"
     },
+    "tests/test_live_cheats.py": {
+      "bytes": 4675,
+      "sha256": "44b21b81f659f87b43d3d17be4773a4b1c382e9959a9ea381841aa58731eab5b"
+    },
     "tests/test_managed_linux_build.py": {
       "bytes": 25898,
       "sha256": "b42b7f21be539a5c7b00434645e04d0fcb58792f6af8d02af40fe6d6c63e4167"
@@ -5809,8 +5945,8 @@
       "sha256": "7c5ac220aac7ae601a0e999aad02c53f117f8427051ac180c4f0f95e37eb06e2"
     },
     "tests/test_portable_runtime.py": {
-      "bytes": 5433,
-      "sha256": "a1a77eafe517dc7b4164f0fba52863c01dac0568c5c0cf80315f0ddb8c35987b"
+      "bytes": 12643,
+      "sha256": "e7df59d852ff73f0b58722c4abfb961c64d370ee5d8655887a5ae6b007e0ad24"
     },
     "tests/test_portable_source_cache.py": {
       "bytes": 3420,
@@ -5912,6 +6048,10 @@
       "bytes": 6043,
       "sha256": "3c8bc306d79e6b4516925015b59854fd924d656a4ab4669059839b1b247b23a1"
     },
+    "tests/test_renderer_compile_policy.py": {
+      "bytes": 6600,
+      "sha256": "738a427105a72ea3f914e5306b52b68cde18a57a52a82ccfea4cc5217fb65c22"
+    },
     "tests/test_reuse_gamecode_bridge.py": {
       "bytes": 9350,
       "sha256": "72effe1d81d3b156f9c9818d23a23cfd49261bbde1e8cbabbe237e12a93a2051"
@@ -5925,8 +6065,8 @@
       "sha256": "19da36f5761a9c970dee2c8e59bc58ab5c85d8ab2ef33143d7d837d2c8cc57bc"
     },
     "tests/test_run_settings_log.py": {
-      "bytes": 15394,
-      "sha256": "c802d99e6c7797b11733eea8e0c0f1da6d3b84135ee7cbbcb511501ca6567a1a"
+      "bytes": 16073,
+      "sha256": "58147e2f63f844652c8d803721b2d91f2105ffc00e1bd41d00b210e9f9e2a9b6"
     },
     "tests/test_sampler_filter_policy.py": {
       "bytes": 1258,
@@ -5935,6 +6075,10 @@
     "tests/test_shader_snapshots.py": {
       "bytes": 1539,
       "sha256": "0fb3f31a64e73885091ccab5d66db395a7e703b08f9166d3a2ae1f9d98d50852"
+    },
+    "tests/test_shader_worker_policy.py": {
+      "bytes": 6175,
+      "sha256": "7b2b9933599644aee291b7725da15ba479f2d82281b39b54256d39567cd8f8f4"
     },
     "tests/test_source_header_closure.py": {
       "bytes": 3241,
@@ -5952,6 +6096,10 @@
       "bytes": 11378,
       "sha256": "09d4818f9303d70a519251a346939424bbf38eb52155443054052104ec447655"
     },
+    "tests/test_startup_retention_lifecycle.py": {
+      "bytes": 8166,
+      "sha256": "d09e52b6cbaa97c45641ccc69f3f543462299519e10b4d33571d696554c1638b"
+    },
     "tests/test_support_report.py": {
       "bytes": 4136,
       "sha256": "8ae17d43966f4c776ec02a2aa90342a375ad5590eacec525adf9e3a4c822a147"
@@ -5965,8 +6113,8 @@
       "sha256": "07d6a9d169cf8dff9d20e97600356973f06fab75ec59b11dae50dccaac69765e"
     },
     "tests/test_update_linux.py": {
-      "bytes": 53311,
-      "sha256": "a145a29369311fe048ac802280101c82fe0b8f2730416b50a919c5a53c9e7fff"
+      "bytes": 53382,
+      "sha256": "667f7ddd2178e6cb33a3bc2cba7a0ddf4dd229b33d7687e198cdd0ae13a684ce"
     },
     "tests/test_update_release.py": {
       "bytes": 26088,
@@ -6088,6 +6236,10 @@
       "bytes": 1922,
       "sha256": "cb1d221642f9a1c165ce035c0a6b6ec4d8bce91b2167f184aff9b7b9f16cd148"
     },
+    "tests/test_workspace_helper_isolation.py": {
+      "bytes": 13159,
+      "sha256": "664b1c4defcc65acb3dfc361e2a6fa68cb825e1275d146a08a3631c823a1031d"
+    },
     "tests/test_xcde_aspect.py": {
       "bytes": 5996,
       "sha256": "c315a0c47e6620ce20a1651841b865fd0857fd9d98516caf8a9fa30860013d80"
@@ -6149,8 +6301,8 @@
       "sha256": "52d4cd757ecdeb757639314e60551aee15f29bd7da9538bee45a1de8cd15ea2a"
     },
     "tools/build_linux_app.py": {
-      "bytes": 51861,
-      "sha256": "5f5aa99a42c0b80d2a3c62bb928809af550db743a0ef49d310e70158f25f51e2"
+      "bytes": 52067,
+      "sha256": "e0b4650fde4ff429f25853054bd350b236fe490d1c6814421068b31ee51f3331"
     },
     "tools/builder_appimage/APPIMAGE_RUNTIME_NOTICES.txt": {
       "bytes": 2622,
@@ -6181,12 +6333,12 @@
       "sha256": "cfa50bde50cf1812157ebd681d09c33468676d4b120c0520d79eceec833d50ff"
     },
     "tools/builder_backend.py": {
-      "bytes": 45675,
-      "sha256": "87de4ef6b15f95da1fa40e0bf95482eafdd5621a2599e9f080a081fbc68395ff"
+      "bytes": 45685,
+      "sha256": "41f8caffd659c6f93ab7269df6bf5979e20fbce1482ee53ef32d23dd8293d17c"
     },
     "tools/builder_bootstrap.py": {
-      "bytes": 24374,
-      "sha256": "ee587c1ff75177fc83b1e703b471007b49d2dd2a6483ae8e196c7e1528506ce7"
+      "bytes": 25104,
+      "sha256": "b6281794a7ba5390fc6845690197a0b540398d85a7838b9d14afc86fed955a61"
     },
     "tools/export_windows_sources.py": {
       "bytes": 6490,
@@ -6217,8 +6369,8 @@
       "sha256": "2f4bc9d272816e4dcc9bdf2826faefd0041129d2b06fd699e1353709e32cdb57"
     },
     "tools/portable_runtime.py": {
-      "bytes": 13481,
-      "sha256": "58a9219a63f85e7be64486f9e44c6e6ddb42d82db7e7a9200ae3c4aa2a676524"
+      "bytes": 14131,
+      "sha256": "92ce459b0c2848f961c7306ecf392fd0477df0a70ef31b6891123a2e96e6cb97"
     },
     "tools/publication_guard.py": {
       "bytes": 15384,
@@ -6229,12 +6381,12 @@
       "sha256": "ab40a19e5b8fb3b63091d7f40f5e67b781273f26aeaae8f1edd4ff807d4783ed"
     },
     "tools/update_linux.py": {
-      "bytes": 66025,
-      "sha256": "d9e5b90bda9314bdbee4ea63766e12e2b56cb032fb017f3b705cb81dd294390e"
+      "bytes": 71009,
+      "sha256": "cfdb7512aef5b6625577db1d9eaca9f2003046c6d62ffa1820adc2580f4648a5"
     },
     "tools/update_release.py": {
-      "bytes": 20597,
-      "sha256": "bb47e389d0d9bca0473a5dce03d0540f94e57c45d9c837bcc7b733aedbc092a3"
+      "bytes": 22976,
+      "sha256": "9c1d171c09022f4ac62f0a81a3f5a349b64fce55fd3177b9a9648297a4ef0500"
     },
     "tools/update_retention.py": {
       "bytes": 30298,
@@ -6262,7 +6414,7 @@
     },
     "update-version.json": {
       "bytes": 58,
-      "sha256": "465403bf42f7680021478ea40ccd6240fad701dd442dbf0be9a42ddb4242e33e"
+      "sha256": "d4bef4a89cd0a393a183dcc987f82a8ed6f7a84f26102aa8efb643916f0f5681"
     }
   },
   "project": "Monado II",

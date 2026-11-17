@@ -25,7 +25,7 @@ class CheatsSettings(unittest.TestCase):
             binary = Path(directory) / 'settings'
             args = [cc, '-std=c11', '-O1', '-UNDEBUG', '-Wall', '-Wextra', '-Werror',
                     str(PORT / 'tests/native/test_cheats_settings.c'),
-                    str(PORT / 'runtime/host/settings_ini.c'), '-o', str(binary)]
+                    str(PORT / 'runtime/host/settings_ini.c'), str(PORT / 'runtime/hle/cheats_options.c'), '-pthread', '-o', str(binary)]
             if os.environ.get('MONADO_TEST_UBSAN') == '1':
                 args[1:1] = ['-fsanitize=undefined', '-fno-sanitize-recover=all']
                 env['UBSAN_OPTIONS'] = 'halt_on_error=1:print_stacktrace=1'

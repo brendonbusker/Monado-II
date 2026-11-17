@@ -42,7 +42,7 @@ class FpsOverlaySettings(unittest.TestCase):
                             str(ROOT/'tests/native/test_fps_overlay_launcher.cpp'),'-L'+str(libraries),
                             '-Wl,-rpath,'+str(libraries),'-lSDL3']
             else:
-                command += [str(ROOT/'tests/native/test_fps_overlay_settings.c'),str(PORT/'runtime/host/settings_ini.c')]
+                command += [str(ROOT/'tests/native/test_fps_overlay_settings.c'),str(PORT/'runtime/host/settings_ini.c'), str(PORT / 'runtime/hle/cheats_options.c'), '-pthread']
             command += ['-Wl,--gc-sections','-lm','-o',str(binary)]
             if os.environ.get('MONADO_TEST_UBSAN')=='1':
                 command[1:1]=['-fsanitize=undefined','-fno-sanitize-recover=all']

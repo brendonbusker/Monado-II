@@ -215,8 +215,10 @@ int main(void) {
             cxx = str(Path(cc).with_name('clang-cxx'))
         if not cc or not cxx:
             self.skipTest('Clang C/C++ required for launcher/runtime configuration interop')
+        # LINUX-129: exercise all8multipliers across launcher/runtime serializers;
+        # enemy health uses10..2000while the original7retain0..2000.
         source = (PORT / 'tools/launcher/launcher.cpp').read_text()
-        fields = '    bool cheat_enabled[6]' + source.split('    bool cheat_enabled[6]', 1)[1].split('    bool show_fps', 1)[0]
+        fields = '    bool cheat_enabled[8]' + source.split('    bool cheat_enabled[8]', 1)[1].split('    bool show_fps', 1)[0]
         helpers = source.split('// [XCDE] LINUX-072: launcher cheat configuration,', 1)[1]
         helpers = helpers[helpers.index('static const char *const k_cheat_ini'):]
         helpers = helpers.split('// [XCDE] LINUX-072: end launcher cheat configuration.', 1)[0]
@@ -240,27 +242,27 @@ struct Cfg {
 int main(int argc, char **argv) {
     assert(argc == 2 && !setenv("XCDE_INI", argv[1], 1));
     bool *enabled[] = {&g_settings.cheat_damage_dealt, &g_settings.cheat_damage_received,
-        &g_settings.cheat_exp, &g_settings.cheat_ap, &g_settings.cheat_sp, &g_settings.cheat_gold};
+        &g_settings.cheat_exp, &g_settings.cheat_ap, &g_settings.cheat_sp, &g_settings.cheat_gold, &g_settings.cheat_movement_speed, &g_settings.cheat_enemy_health};
     int *percent[] = {&g_settings.cheat_damage_dealt_percent, &g_settings.cheat_damage_received_percent,
-        &g_settings.cheat_exp_percent, &g_settings.cheat_ap_percent, &g_settings.cheat_sp_percent, &g_settings.cheat_gold_percent};
-    const int values[] = {0, 1, 100, 199, 2000, 567};
+        &g_settings.cheat_exp_percent, &g_settings.cheat_ap_percent, &g_settings.cheat_sp_percent, &g_settings.cheat_gold_percent, &g_settings.cheat_movement_speed_percent, &g_settings.cheat_enemy_health_percent};
+    const int values[] = {0, 1, 100, 199, 2000, 567, 1234, 10};
     cheats_reset();
-    for (int i = 0; i < 6; ++i) { g.cheat_enabled[i] = (i % 2) != 0; g.cheat_percent[i] = values[i]; }
+    for (int i = 0; i < 8; ++i) { g.cheat_enabled[i] = (i % 2) != 0; g.cheat_percent[i] = values[i]; }
     g.cheat_no_fall_damage = true;
     FILE *file = fopen(argv[1], "w"); assert(file); cheats_save(file);
     fputs("party_switch = 1\nquickstep_slot = 1\n", file); assert(!fclose(file));
     settings_load();
-    for (int i = 0; i < 6; ++i) { assert(*enabled[i] == g.cheat_enabled[i]); assert(*percent[i] == values[i]); }
+    for (int i = 0; i < 8; ++i) { assert(*enabled[i] == g.cheat_enabled[i]); assert(*percent[i] == values[i]); }
     assert(g_settings.cheat_no_fall_damage && g_party_switch && g_settings.quickstep_slot);
-    for (int i = 0; i < 6; ++i) { *enabled[i] = !(i % 2); *percent[i] = 2000 - values[i]; }
+    for (int i = 0; i < 8; ++i) { *enabled[i] = !(i % 2); *percent[i] = 2000 - values[i]; }
     g_settings.cheat_no_fall_damage = false;
     settings_save(); cheats_reset(); file = fopen(argv[1], "r"); assert(file);
     char line[512], key[96], value[128]; int recognized = 0;
     while (fgets(line, sizeof line, file)) if (sscanf(line, "%95s = %127s", key, value) == 2) {
         if (cheats_load(key, value)) { assert(is_cheat_key(key)); ++recognized; }
     }
-    assert(!ferror(file) && !fclose(file)); assert(recognized == 13);
-    for (int i = 0; i < 6; ++i) { assert(g.cheat_enabled[i] == *enabled[i]); assert(g.cheat_percent[i] == *percent[i]); }
+    assert(!ferror(file) && !fclose(file)); assert(recognized == 17);
+    for (int i = 0; i < 8; ++i) { assert(g.cheat_enabled[i] == *enabled[i]); assert(g.cheat_percent[i] == *percent[i]); }
     assert(!g.cheat_no_fall_damage && g_party_switch && g_settings.quickstep_slot);
     puts("launcher/runtime settings interop PASS");
 }
@@ -274,9 +276,10 @@ int main(int argc, char **argv) {
             env['UBSAN_OPTIONS'] = 'halt_on_error=1:print_stacktrace=1'
         with tempfile.TemporaryDirectory(prefix='monado-cheat-interop-') as directory:
             root = Path(directory); cpp = root / 'interop.cpp'; cpp.write_text(fixture)
-            obj = root / 'runtime-settings.o'; target = root / 'interop'
+            obj = root / 'runtime-settings.o'; state_obj = root / 'cheats-options.o'; target = root / 'interop'
             commands = [[cc, '-std=c11', *flags, '-c', str(PORT / 'runtime/host/settings_ini.c'), '-o', str(obj)],
-                        [cxx, '-std=c++17', *flags, '-I', str(PORT / 'runtime'), str(cpp), str(obj), '-o', str(target)]]
+                        [cc, '-std=c11', *flags, '-c', str(PORT / 'runtime/hle/cheats_options.c'), '-o', str(state_obj)],
+                        [cxx, '-std=c++17', *flags, '-I', str(PORT / 'runtime'), str(cpp), str(obj), str(state_obj), '-pthread', '-o', str(target)]]
             for command in commands:
                 result = subprocess.run(command, cwd=root, env=env, capture_output=True, text=True, timeout=120)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -310,6 +313,7 @@ int main(int argc, char **argv) {
 #include <sys/mman.h>
 #include "cpu.h"
 #include "settings.h"
+#include "cheats_options.h"
 // Generated chunks themselves do not include stdbool. Keep their adapter ABI honest.
 #undef bool
 #undef true
@@ -343,6 +347,7 @@ int main(void) {
         memset(&g_settings, 0, sizeof g_settings);
         g_settings.cheat_damage_dealt = mode != 0;
         g_settings.cheat_damage_dealt_percent = mode == 1 ? 100 : 200;
+        xcde_cheats_publish(&g_settings);
         Cpu expected = c; expected.x[8] = linked ? LD64(c.sp + 0x18) : expected_adrp;
         uint8_t memory[0x10000]; memcpy(memory, (const void *)(uintptr_t)base, sizeof memory);
         if (mode == 2) {
@@ -361,6 +366,7 @@ int main(void) {
             Cpu c; memset(&c, 0x5c, sizeof c);
             c.x[0] = (uintptr_t)fields; c.x[22] = forced; c.x[23] = kind;
             g_settings.cheat_no_fall_damage = on != 0;
+            xcde_cheats_publish(&g_settings);
             Cpu expected = c; expected.x[21] = 0x89abcdefu;
             int skip = on && kind == 2 && !(forced & 1);
             if (skip) { expected.x[22] = 0; expected.x[0] = 0; }
@@ -379,7 +385,7 @@ int main(void) {
             target = root / 'combat'
             command = [cc, '-std=gnu11', '-O1', '-UNDEBUG', '-Wall', '-Wextra', '-Werror',
                        '-fno-strict-aliasing', '-ffp-contract=off', '-I', str(PORT / 'runtime'),
-                       str(source), str(PORT / 'runtime/hle/cheats_combat.c'), '-o', str(target)]
+                       str(source), str(PORT / 'runtime/hle/cheats_combat.c'), str(PORT / 'runtime/hle/cheats_options.c'), '-pthread', '-o', str(target)]
             if os.environ.get('MONADO_TEST_UBSAN') == '1':
                 command[1:1] = ['-fsanitize=undefined', '-fno-sanitize-recover=all']
                 env['UBSAN_OPTIONS'] = 'halt_on_error=1:print_stacktrace=1'

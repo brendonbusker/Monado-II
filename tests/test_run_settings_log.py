@@ -44,7 +44,7 @@ class RunSettingsLog(unittest.TestCase):
     def path(self, result):
         return self.state / 'logs/game-runs' / ('run-' + result['run_id'] + '.json')
     def test_known_requested_snapshot_binary_identity_and_private_exclusion(self):
-        text = 'fps = 120\nupscaler = dlss\nupscale_quality = native\nframe_gen_smooth_motion = 1\nframe_gen_match_display = 1\nquickstep_slot = 1\ncheat_exp = 1\ncheat_exp_percent = 225\nbind_key_a = TOP_SECRET_BINDING\nmod_TOP_SECRET_PATH = 1\nframe_gen = SECRET_INVALID\nwindow = bad\n'
+        text = 'fps = 120\nfps_overlay_mode = detailed\nupscaler = dlss\nupscale_quality = native\nframe_gen_smooth_motion = 1\nframe_gen_match_display = 1\nquickstep_slot = 1\ncheat_exp = 1\ncheat_exp_percent = 225\ncheat_enemy_health = 1\ncheat_enemy_health_percent = 175\nbind_key_a = TOP_SECRET_BINDING\nmod_TOP_SECRET_PATH = 1\nframe_gen = SECRET_INVALID\nwindow = bad\n'
         self.ini.write_text(text); before = self.ini.read_bytes()
         result = self.record(); self.assertEqual(result['status'], 'recorded')
         raw = self.path(result).read_bytes(); row = json.loads(raw)
@@ -53,6 +53,9 @@ class RunSettingsLog(unittest.TestCase):
         self.assertEqual(row['source_manifest_sha256'], hashlib.sha256(self.manifest.read_bytes()).hexdigest())
         self.assertEqual(row['requested_settings']['source_sha256'], hashlib.sha256(before).hexdigest())
         self.assertIn('cheat_exp_percent = 225', row['requested_settings']['known_settings_ini'])
+        self.assertIn('cheat_enemy_health = 1', row['requested_settings']['known_settings_ini'])
+        self.assertIn('cheat_enemy_health_percent = 175', row['requested_settings']['known_settings_ini'])
+        self.assertIn('fps_overlay_mode = detailed', row['requested_settings']['known_settings_ini'])
         self.assertEqual(row['requested_settings']['redacted_invalid_values'], 2)
         for secret in (b'TOP_SECRET', b'SECRET_INVALID', b'/private', b'/not-recorded', b'bind_key', b'mod_TOP'):
             self.assertNotIn(secret, raw)
@@ -158,7 +161,7 @@ class NativeRunDiagnostics(unittest.TestCase):
             out = Path(temporary); binary = out / 'fixture'
             command = [compiler, '-std=c11', '-O1', '-UNDEBUG', '-DXCDE_LINUX_DLSS', '-DXCDE_LINUX_FRAMEGEN',
                        '-ffp-contract=off', '-fno-strict-aliasing', str(ROOT / 'tests/native/test_run_diagnostics.c'),
-                       str(PORT / 'runtime/host/settings_ini.c'), '-lm', '-o', str(binary)]
+                       str(PORT / 'runtime/host/settings_ini.c'), str(PORT / 'runtime/hle/cheats_options.c'), '-pthread', '-lm', '-o', str(binary)]
             if os.environ.get('MONADO_TEST_UBSAN') == '1': command[1:1] = ['-fsanitize=undefined', '-fno-sanitize-recover=all']
             environment = {k:v for k,v in os.environ.items() if not k.startswith(('XCDE_', 'LARECOMP_', 'MONADO_', 'NVPRESENT_'))}
             compiled = subprocess.run(command, cwd=out, env=environment, capture_output=True, text=True, timeout=120)
@@ -169,9 +172,11 @@ class NativeRunDiagnostics(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr); self.assertIn('PASS', result.stdout); outputs[scenario] = result.stderr
             self.assertIn('id=0123456789abcdef0123456789abcdef', outputs['parsed'])
             self.assertIn('event=settings-loaded method=fsr-requested', outputs['parsed'])
-            self.assertIn('configured_fps=120', outputs['parsed']); self.assertIn('policy_target_fps=90', outputs['parsed'])
+            self.assertIn('fps_overlay_mode=3', outputs['parsed']); self.assertIn('configured_fps=120', outputs['parsed']); self.assertIn('policy_target_fps=90', outputs['parsed'])
             self.assertIn('nominal_fps=120 measured_fps=no', outputs['parsed']); self.assertIn('nominal_fps=90 measured_fps=no', outputs['parsed'])
             self.assertIn('qualified_fg_cap=0 fg_ready=0', outputs['parsed']); self.assertIn('qualified_fg_cap=90 fg_ready=1', outputs['parsed'])
+            self.assertIn('cheat_enabled=0,0,1,0,0,0,0,0,1', outputs['parsed'])
+            self.assertIn('cheat_percent=100,100,225,100,100,100,100,175', outputs['parsed'])
             self.assertIn('configured_fps=30', outputs['missing']); self.assertIn('hidden=1', outputs['ignored'])
             self.assertIn('method=nvidia-external-requested', outputs['external']); self.assertIn('app_present=mailbox', outputs['external'])
             self.assertEqual(outputs['bounded'].count('event=effective-target '), 32)

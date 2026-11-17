@@ -15,12 +15,58 @@ from pathlib import Path, PurePosixPath
 import re
 import stat
 import tarfile
+import types
 import urllib.error
 import urllib.parse
 import urllib.request
 import zlib
 
-from publication_guard import MAX_FILE, path_problem, read_regular, verify_tree
+def _workspace_guard():
+    """Use the requesting source tree's policy, never a generic cached import."""
+    path = Path(__file__).resolve().parent / 'publication_guard.py'
+    if path.resolve() != path:
+        raise ValueError('publication helper path contains a link')
+    before = path.lstat()
+    limit = 8 * 1024 * 1024
+    if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or before.st_size > limit:
+        raise ValueError('publication helper must be an ordinary bounded single-link file')
+    def snapshot(info):
+        return (info.st_dev, info.st_ino, info.st_mode, info.st_nlink,
+                info.st_size, info.st_mtime_ns, info.st_ctime_ns,
+                getattr(info, 'st_birthtime_ns', None))
+    def same_object(left, right):
+        # Preserve the source guard's cross-platform lstat/fstat comparison.
+        def identity(info):
+            return (info.st_dev, info.st_ino, stat.S_IFMT(info.st_mode),
+                    info.st_nlink, info.st_size, info.st_mtime_ns)
+        births = (getattr(left, 'st_birthtime_ns', None), getattr(right, 'st_birthtime_ns', None))
+        return identity(left) == identity(right) and (None in births or births[0] == births[1])
+    fd = os.open(path, os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0) |
+                 getattr(os, 'O_NONBLOCK', 0) | getattr(os, 'O_BINARY', 0))
+    with os.fdopen(fd, 'rb') as stream:
+        opened = os.fstat(stream.fileno())
+        if not same_object(opened, before):
+            raise ValueError('publication helper identity changed before reading')
+        data = stream.read(limit + 1)
+        after = os.fstat(stream.fileno())
+    final = path.lstat()
+    if (snapshot(after) != snapshot(opened) or snapshot(final) != snapshot(before)
+            or not same_object(final, after)
+            or len(data) != before.st_size or len(data) > limit or path.resolve() != path):
+        raise ValueError('publication helper changed while reading')
+    name = '_monado_workspace_' + hashlib.sha256(os.fsencode(path)).hexdigest() + '_publication_guard'
+    module = types.ModuleType(name)
+    module.__file__ = str(path)
+    module.__package__ = ''
+    exec(compile(data, str(path), 'exec'), module.__dict__)
+    return module
+
+
+_publication_guard = _workspace_guard()
+MAX_FILE = _publication_guard.MAX_FILE
+path_problem = _publication_guard.path_problem
+read_regular = _publication_guard.read_regular
+verify_tree = _publication_guard.verify_tree
 
 REPOSITORY = 'brendonbusker/Monado-II'
 LATEST_URL = 'https://api.github.com/repos/' + REPOSITORY + '/releases/latest'

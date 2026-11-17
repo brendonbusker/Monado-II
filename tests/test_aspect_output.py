@@ -23,11 +23,11 @@ class AspectOutput(unittest.TestCase):
         cls.binary = Path(cls.temporary.name) / 'aspect-output'
         cls.environment = {'PATH': '/usr/bin:/bin', 'LANG': 'C.UTF-8', 'LC_ALL': 'C.UTF-8'}
         sources = [ROOT / 'tests/native/test_aspect_output.c',
-                   *[PORT / name for name in ('runtime/host/settings_ini.c', 'runtime/host/stubs_gfx.c',
+                   *[PORT / name for name in ('runtime/host/settings_ini.c', 'runtime/hle/cheats_options.c', 'runtime/host/stubs_gfx.c',
                                               'runtime/host/xcde_aspect.c', 'runtime/nvn/output_scale.c')]]
         command = [compiler, '-std=gnu11', '-O1', '-UNDEBUG', '-ffp-contract=off', '-fno-strict-aliasing',
                    '-ffunction-sections', '-fdata-sections', '-I', str(PORT / 'runtime'),
-                   *map(str, sources), '-Wl,--gc-sections', '-lm', '-o', str(cls.binary)]
+                   *map(str, sources), '-Wl,--gc-sections', '-pthread', '-lm', '-o', str(cls.binary)]
         if os.environ.get('MONADO_TEST_UBSAN') == '1':
             command[1:1] = ['-fsanitize=undefined', '-fno-sanitize-recover=all']
             cls.environment['UBSAN_OPTIONS'] = 'halt_on_error=1:print_stacktrace=1'

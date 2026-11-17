@@ -22,6 +22,7 @@
 #include "linux_gpu_probe.h" // [XCDE] LINUX-103: read-only GPU capability query
 #include "linux_report.h" // [XCDE] LINUX-103
 #include "linux_precompile.h"  // [XCDE] LINUX-018
+#include "linux_loop.h" // [XCDE] LINUX-126: idle painting, bounded service polling
 #include "input_recovery.h" // Native picker before profile, state or game initialization.
 #endif
 
@@ -119,11 +120,12 @@ struct Cfg {
     bool quickstep_slot = false; // [XCDE] LINUX-039: optional per-character gem slot
     bool party_switch = false;  // party mod: switch the controlled character (F2 / L2 + L1 / R1), runtime/hle/party.c
     // [XCDE] LINUX-072: independent opt-ins; integer percentages preserve 0.01x steps.
-    bool cheat_enabled[6] = {};
-    int cheat_percent[6] = {100, 100, 100, 100, 100, 100};
+    bool cheat_enabled[8] = {};
+    int cheat_percent[8] = {100, 100, 100, 100, 100, 100, 100, 100};
     bool cheat_no_fall_damage = false;
     bool show_fps = false;
-    bool show_fps_overlay = false; // [XCDE] LINUX-094: separate from the legacy title-bar preference
+    bool show_fps_overlay = false; // [XCDE] legacy mirror for older readers.
+    int fps_overlay_mode = FPS_OVERLAY_OFF; // [XCDE] LINUX-124: typed presentation dropdown.
     int fps = 0;  // index into k_fps_ini
     int menu_navigation_speed = 0;  // 0 normal (30 FPS style), 1 fast (60 FPS style)
     int volume = 100;
@@ -198,9 +200,10 @@ static bool quality_key(const char *key) {
 #endif
 
 // [XCDE] LINUX-072: launcher cheat configuration, shared key/units contract with settings_ini.c.
-static const char *const k_cheat_ini[] = {"damage_dealt", "damage_received", "exp", "ap", "sp", "gold"};
+// [XCDE] LINUX-129: Enemy health has an independent0.1x minimum; other ranges stay unchanged.
+static const char *const k_cheat_ini[] = {"damage_dealt", "damage_received", "exp", "ap", "sp", "gold", "movement_speed", "enemy_health"};
 static bool cheat_enabled_value(const char *v) { return !strcmp(v, "1") || !strcmp(v, "true"); }
-static int cheat_percent_value(const char *v) {
+static int cheat_percent_value(const char *v, int minimum = 0) {
     if (!*v) return 100;
     int value = 0;
     for (const char *p = v; *p; ++p) {
@@ -208,10 +211,10 @@ static int cheat_percent_value(const char *v) {
         value = value * 10 + (*p - '0');
         if (value > 2000) return 100; // bounded before another multiplication, including oversized input
     }
-    return value;
+    return value >= minimum ? value : 100;
 }
 static void cheats_reset() {
-    for (int i = 0; i < 6; ++i) { g.cheat_enabled[i] = false; g.cheat_percent[i] = 100; }
+    for (int i = 0; i < 8; ++i) { g.cheat_enabled[i] = false; g.cheat_percent[i] = 100; }
     g.cheat_no_fall_damage = false;
 }
 static bool is_cheat_key(const char *key) {
@@ -224,17 +227,17 @@ static bool is_cheat_key(const char *key) {
 }
 static bool cheats_load(const char *key, const char *value) {
     if (!strcmp(key, "cheat_no_fall_damage")) { g.cheat_no_fall_damage = cheat_enabled_value(value); return true; }
-    for (int i = 0; i < 6; ++i) {
+    for (int i = 0; i < 8; ++i) {
         const std::string base = std::string("cheat_") + k_cheat_ini[i];
         if (base == key) { g.cheat_enabled[i] = cheat_enabled_value(value); return true; }
-        if (base + "_percent" == key) { g.cheat_percent[i] = cheat_percent_value(value); return true; }
+        if (base + "_percent" == key) { g.cheat_percent[i] = cheat_percent_value(value, i == 7 ? 10 : 0); return true; }
     }
     return false;
 }
 static void cheats_save(FILE *file) {
-    for (int i = 0; i < 6; ++i) {
+    for (int i = 0; i < 8; ++i) {
         fprintf(file, "cheat_%s = %d\ncheat_%s_percent = %d\n", k_cheat_ini[i], g.cheat_enabled[i],
-                k_cheat_ini[i], std::clamp(g.cheat_percent[i], 0, 2000));
+                k_cheat_ini[i], g.cheat_percent[i] >= (i == 7 ? 10 : 0) && g.cheat_percent[i] <= 2000 ? g.cheat_percent[i] : 100);
     }
     fprintf(file, "cheat_no_fall_damage = %d\n", g.cheat_no_fall_damage);
 }
@@ -260,15 +263,17 @@ static const char *const k_en[][2] = {
     {"Trucos", "Cheats"}, {"Combate", "Combat"}, {"Recompensas", "Rewards"}, {"Exploración", "Exploration"},
     {"Daño causado por el grupo", "Party damage dealt"}, {"Daño recibido por el grupo", "Party damage received"},
     {"EXP obtenida", "EXP gained"}, {"AP obtenidos", "AP gained"}, {"SP obtenidos", "SP gained"},
-    {"Dinero obtenido", "Gold gained"}, {"Sin daño por caídas", "No fall damage"},
-    {"Cada truco se activa por separado y se aplica al iniciar el juego.",
-     "Each cheat is enabled separately and applies when the game starts."},
-    {"Multiplicadores: de 0x a 20x, en pasos de 0.01x (1%). 1x mantiene la cantidad original.",
-     "Multipliers: 0x to 20x, in 0.01x (1%) steps. 1x keeps the original amount."},
+    {"Vida de los enemigos", "Enemy health"}, {"Dinero obtenido", "Gold gained"}, {"Sin daño por caídas", "No fall damage"}, {"Velocidad de movimiento", "Movement speed"},
+    {"Cada truco se activa por separado y también se puede ajustar en el menú F1.",
+     "Each cheat is enabled separately and can also be adjusted in the F1 menu."},
+    {"Vida enemiga: de 0.1x a 20x. Otros: de 0x a 20x. Pasos: 0.01x (1%); 1x no cambia la cantidad.",
+     "Enemy health: 0.1x to 20x. Other multipliers: 0x to 20x. Steps: 0.01x (1%); 1x is unchanged."},
     {"Ctrl+clic para escribir un porcentaje. Con el control activo, Ctrl+flecha ajusta 1%.",
      "Ctrl-click to enter a percentage. With the slider active, Ctrl+arrow adjusts 1%."},
     {"La EXP, AP, SP y el dinero ganados permanecen en la partida al desactivar los trucos.",
      "EXP, AP, SP and gold already earned remain in your save after disabling cheats."},
+    {"La vida enemiga conserva el porcentaje de vida actual. Las barras pequeñas mantienen un mínimo de seguridad para las fases con guion.",
+     "Enemy health preserves the current HP percentage. Small health bars retain a safety minimum for scripted phases."},
     {"A (acción, usar arte, aceptar)", "A (action, use art, confirm)"}, {"B (saltar, atrás)", "B (jump, back)"},
     {"X (menú principal)", "X (main menu)"}, {"Y (mapa)", "Y (map)"}, {"Pulsar stick izq.", "Left stick press"},
     {"Pulsar stick der.", "Right stick press"}, {"L (objetivo anterior)", "L (previous target)"},
@@ -362,6 +367,8 @@ static const char *const k_en[][2] = {
      "Off: a sharp image (combine it with SMAA for the edges)."},
     {"Mostrar FPS en la barra de título", "Show FPS in the title bar"}, {"Velocidad", "Speed"},
     {"Mostrar FPS en pantalla", "Show FPS on screen"},
+    {"Desactivado", "Off"}, {"Solo número", "Number only"}, {"HUD compacto", "Compact HUD"},
+    {"Panel detallado", "Detailed panel"},
     {"Muestra los FPS reales del juego, también en pantalla completa.\nNo incluye imágenes generadas ni presentaciones repetidas.",
      "Shows rendered game FPS, including in fullscreen.\nExcludes generated frames and repeated presentations."},
     {"30 (como en Switch)", "30 (like Switch)"}, {"Sin límite", "Unlimited"},
@@ -539,7 +546,8 @@ static void load() {
     g.gpu_uuid[0]=0;
     g.menu_navigation_speed = 0;
     g.quickstep_slot = false; // [XCDE] LINUX-039: missing/invalid key resets OFF
-    g.show_fps_overlay = false; // [XCDE] LINUX-094: independent opt-in on every load
+    g.show_fps_overlay = false;
+    g.fps_overlay_mode = FPS_OVERLAY_OFF; // [XCDE] LINUX-124: explicit opt-in on every load.
     g.frame_gen = g.cut_fg = false;
     g.frame_gen_smooth_motion = g.frame_gen_match_display = false; // [XCDE] LINUX-097
 #ifdef __linux__
@@ -551,6 +559,7 @@ static void load() {
     FILE *f = fopen(path("xcde.ini").c_str(), "r");
     if (!f) return;
     int layout = 1;  // (bind_layout: an older file's keyboard lines are the old layout - the new defaults replace them)
+    bool overlay_mode_present = false;
 #ifdef __linux__
     bool quality_present = false; // [XCDE] LINUX-056: explicit choices survive reload, regardless of key order.
 #endif
@@ -589,6 +598,10 @@ static void load() {
         else if (!strcmp(k, "party_switch")) g.party_switch = atoi(v) != 0;
         else if (!strcmp(k, "show_fps")) g.show_fps = atoi(v) != 0;
         else if (!strcmp(k, "show_fps_overlay")) g.show_fps_overlay = !strcmp(v, "1") || !strcmp(v, "true");
+        else if (!strcmp(k, "fps_overlay_mode")) {
+            overlay_mode_present = true;
+            g.fps_overlay_mode = xcde_fps_overlay_mode_parse(v);
+        }
         else if (!strcmp(k, "fps")) { g.fps = 0; for (int j = 0; j < 6; j++) if (!strcmp(v, k_fps_ini[j])) g.fps = j; }
         else if (!strcmp(k, "menu_navigation_speed")) g.menu_navigation_speed = !strcmp(v, "fast") ? 1 : 0;
         else if (!strcmp(k, "quickstep_slot")) g.quickstep_slot = !strcmp(v, "1");
@@ -638,13 +651,15 @@ static void load() {
             if (find(extra, 5, v) >= 0) g_custom[k] = v;
         }
         const char *known[] = {"gpu_uuid","aspect_ratio","fullscreen","window","resolution","upscaler","upscale_quality","frame_gen","frame_gen_smooth_motion","frame_gen_match_display","antialias","depth_of_field",
-            "game_blur","vsync","cutscenes","party_switch","show_fps","show_fps_overlay","fps","menu_navigation_speed","quickstep_slot","volume","movie_audio","language","bind_layout",
+            "game_blur","vsync","cutscenes","party_switch","show_fps","show_fps_overlay","fps_overlay_mode","fps","menu_navigation_speed","quickstep_slot","volume","movie_audio","language","bind_layout",
             "mouse_look","mouse_sens","stick_deadzone","launcher_lang","mouse_invert","button_icons"};
         if (quality_key(k) || is_cheat_key(k)) g_extra.erase(k); // [XCDE] LINUX-072: never serialize stale duplicate cheat keys.
         else if (find(known, sizeof known / sizeof *known, k) < 0 && strncmp(k, "mod_", 4) && strncmp(k, "bind_", 5)) g_extra[k] = v;
 #endif
     }
     fclose(f);
+    if (!overlay_mode_present) g.fps_overlay_mode = g.show_fps_overlay ? FPS_OVERLAY_COMPACT : FPS_OVERLAY_OFF;
+    g.show_fps_overlay = g.fps_overlay_mode != FPS_OVERLAY_OFF;
 #ifdef __linux__
     { Settings q=quality_settings();xcde_quality_bounds(&q);quality_from_settings(q); }
 #endif
@@ -667,7 +682,9 @@ static bool save() {
     fprintf(f, "fullscreen = %d\nwindow = %s\nresolution = %s\nupscaler = %s\nantialias = %s\nshow_fps = %d\n", g.fullscreen,
             cfg_value("window", k_wins[g.win]), cfg_value("resolution", k_res_ini[g.res]), k_ups_ini[g.upscaler], g.smaa ? "smaa" : "off", g.show_fps);
     fprintf(f,"gpu_uuid = %s\n",*g.gpu_uuid?g.gpu_uuid:"auto");
-    fprintf(f, "show_fps_overlay = %d\n", g.show_fps_overlay); // [XCDE] LINUX-094
+    int overlay_mode = g.fps_overlay_mode >= FPS_OVERLAY_OFF && g.fps_overlay_mode < FPS_OVERLAY_COUNT ? g.fps_overlay_mode : FPS_OVERLAY_OFF;
+    fprintf(f, "show_fps_overlay = %d\nfps_overlay_mode = %s\n", overlay_mode != FPS_OVERLAY_OFF,
+            xcde_fps_overlay_mode_name(overlay_mode));
     fprintf(f, "upscale_quality = %s\nframe_gen = %d\n", k_uq_ini[g.uquality], g.frame_gen);
     fprintf(f, "frame_gen_smooth_motion = %d\nframe_gen_match_display = %d\n",
             g.frame_gen_smooth_motion && !g.frame_gen && !g.cut_fg, g.frame_gen_match_display); // [XCDE] LINUX-097
@@ -1161,7 +1178,10 @@ static void tab_graphics() {
                           "aplica para los 720p de la Switch: a 1080p o más suavizan toda la imagen.\n"
                           "Desactivado: imagen nítida (combínalo con SMAA para los bordes)."));
     launcher_theme::checkbox(T("Mostrar FPS en la barra de título"), &g.show_fps);
-    launcher_theme::checkbox(T("Mostrar FPS en pantalla"), &g.show_fps_overlay);
+    static const char *overlay_ui[] = {"Desactivado", "Solo número", "HUD compacto", "Panel detallado"};
+    if (launcher_theme::combo(T("Mostrar FPS en pantalla"), &g.fps_overlay_mode,
+                              TL(overlay_ui, FPS_OVERLAY_COUNT).p, FPS_OVERLAY_COUNT))
+        g.show_fps_overlay = g.fps_overlay_mode != FPS_OVERLAY_OFF;
 #ifdef __linux__
     ImGui::SetItemTooltip("Shows rendered Game FPS and measured Output FPS (accepted presentation requests).\nFrame-generation readings are also recorded in the game log while this display is hidden. Generated-only NVIDIA FPS is unavailable. Output is not physical scanout.");
 #else
@@ -1470,12 +1490,13 @@ static void tab_mods() {
 static void cheat_slider(int index, const char *label) {
     ImGui::PushID(index);
     launcher_theme::checkbox(T(label), &g.cheat_enabled[index]);
+    if (index == 7) ImGui::SetItemTooltip("%s", T("La vida enemiga conserva el porcentaje de vida actual. Las barras pequeñas mantienen un mínimo de seguridad para las fases con guion."));
     ImGui::BeginDisabled(!g.cheat_enabled[index]);
     const float number_width = ImGui::CalcTextSize("20.00x").x;
     const float available = ImGui::GetContentRegionAvail().x;
     const float width = ImMax(40.0f, ImMin(360 * g_scale, available - number_width - ImGui::GetStyle().ItemInnerSpacing.x));
     ImGui::SetNextItemWidth(width);
-    ImGui::SliderInt("##multiplier", &g.cheat_percent[index], 0, 2000, "%d%%", ImGuiSliderFlags_AlwaysClamp);
+    ImGui::SliderInt("##multiplier", &g.cheat_percent[index], index == 7 ? 10 : 0, 2000, "%d%%", ImGuiSliderFlags_AlwaysClamp);
     ImGui::SetItemTooltip("%s", T("Ctrl+clic para escribir un porcentaje. Con el control activo, Ctrl+flecha ajusta 1%."));
     ImGui::SameLine(0, ImGui::GetStyle().ItemInnerSpacing.x);
     ImGui::Text("%.2fx", g.cheat_percent[index] / 100.0);
@@ -1484,11 +1505,12 @@ static void cheat_slider(int index, const char *label) {
 }
 
 static void tab_cheats() {
-    ImGui::TextWrapped("%s", T("Cada truco se activa por separado y se aplica al iniciar el juego."));
-    ImGui::TextWrapped("%s", T("Multiplicadores: de 0x a 20x, en pasos de 0.01x (1%). 1x mantiene la cantidad original."));
+    ImGui::TextWrapped("%s", T("Cada truco se activa por separado y también se puede ajustar en el menú F1."));
+    ImGui::TextWrapped("%s", T("Vida enemiga: de 0.1x a 20x. Otros: de 0x a 20x. Pasos: 0.01x (1%); 1x no cambia la cantidad."));
     launcher_theme::section(T("Combate"));
     cheat_slider(0, "Daño causado por el grupo");
     cheat_slider(1, "Daño recibido por el grupo");
+    cheat_slider(7, "Vida de los enemigos");
     launcher_theme::section(T("Recompensas"));
     cheat_slider(2, "EXP obtenida");
     cheat_slider(3, "AP obtenidos");
@@ -1496,6 +1518,7 @@ static void tab_cheats() {
     cheat_slider(5, "Dinero obtenido");
     ImGui::TextWrapped("%s", T("La EXP, AP, SP y el dinero ganados permanecen en la partida al desactivar los trucos."));
     launcher_theme::section(T("Exploración"));
+    cheat_slider(6, "Velocidad de movimiento");
     launcher_theme::checkbox(T("Sin daño por caídas"), &g.cheat_no_fall_damage);
 }
 
@@ -1591,6 +1614,53 @@ static void linux_update_popup() {
 }
 #endif
 
+#ifdef __linux__
+// [XCDE] LINUX-122: begin launch-context validation.
+static void linux_launch_guidance() {
+    fprintf(stderr, "Open Monado-II-x86_64.AppImage or Play_Monado_II.sh in your installation to supply the verified launch context. Capture options are optional.\n");
+}
+static bool linux_launch_path(const char *flag, const char *value, std::string &out, bool directory) {
+    if (launcher_linux::canonical(value, out, directory)) return true;
+    if (!value || !*value) {
+        fprintf(stderr, "Missing required launcher argument: %s\n", flag);
+        linux_launch_guidance();
+    } else if (*value != '/') {
+        fprintf(stderr, "Invalid %s: expected an absolute %s path: %s\n", flag, directory ? "directory" : "file", value);
+    } else {
+        char resolved[PATH_MAX];
+        if (!realpath(value, resolved))
+            fprintf(stderr, "Invalid %s: cannot resolve %s: %s\n", flag, value, strerror(errno));
+        else if (strcmp(value, resolved))
+            fprintf(stderr, "Invalid %s: path is not canonical: %s (canonical path: %s)\n", flag, value, resolved);
+        else
+            fprintf(stderr, "Invalid %s: expected an existing ordinary %s: %s\n", flag, directory ? "directory" : "file", value);
+    }
+    return false;
+}
+static bool linux_launch_context(const char *project, const char *game_project, const char *input,
+                                 const char *game, const char *state, int shot_tab, int shot_frame) {
+    if (!linux_launch_path("--project-root", project, launcher_linux::project, true) ||
+        !linux_launch_path("--game-project-root", game_project ? game_project : project, launcher_linux::game_project, true) ||
+        !linux_launch_path("--input-root", input, launcher_linux::input, true) ||
+        !linux_launch_path("--game-executable", game, launcher_linux::game, false)) return false;
+    if (!state || !*state) {
+        fprintf(stderr, "Missing required launcher argument: --state-root\n");
+        linux_launch_guidance(); return false;
+    }
+    if (*state != '/') {
+        fprintf(stderr, "Invalid --state-root: expected an absolute private state directory: %s\n", state); return false;
+    }
+    if (shot_tab < 0 || shot_tab > 4) {
+        fprintf(stderr, "Invalid --shot-tab: expected a tab from 0 to 4\n"); return false;
+    }
+    if (shot_frame < 1 || shot_frame > 10000) {
+        fprintf(stderr, "Invalid --shot-frame: expected a frame from 1 to 10000\n"); return false;
+    }
+    return true;
+}
+// [XCDE] LINUX-122: end launch-context validation.
+#endif
+
 int main(int argc, char **argv) {
     int result = 0;
 #ifdef __linux__
@@ -1638,13 +1708,7 @@ int main(int argc, char **argv) {
         } else { fprintf(stderr, "Unknown launcher argument: %s\n", arg); return 2; }
     }
     if (!script && (exit_after_child || !launcher_linux::test_environment.empty())) { fprintf(stderr, "Test child controls require --ui-script\n"); return 2; }
-    if (!launcher_linux::canonical(project, launcher_linux::project, true) ||
-        !launcher_linux::canonical(game_project ? game_project : project, launcher_linux::game_project, true) ||
-        !launcher_linux::canonical(input, launcher_linux::input, true) ||
-        !launcher_linux::canonical(game, launcher_linux::game, false) || !state || state[0] != '/' ||
-        shot_tab < 0 || shot_tab > 4 || shot_frame < 1 || shot_frame > 10000) {
-        fprintf(stderr, "Supply canonical absolute project/input/game paths, absolute private state and valid capture options\n"); return 2;
-    }
+    if (!linux_launch_context(project, game_project, input, game, state, shot_tab, shot_frame)) return 2;
     if (update_channel >= 0 && (shot || script || !launcher_linux::update_adopt_fd(update_channel))) {
         fprintf(stderr, "Update IPC requires a valid host channel and an ordinary unscripted launcher\n"); return 2;
     }
@@ -1702,7 +1766,12 @@ int main(int argc, char **argv) {
     }
     if (!ren) return fail("Could not create a renderer for the launcher window (graphics driver?).");
     llog("renderer %s", SDL_GetRendererName(ren));
+#ifdef __linux__
+    // [XCDE] LINUX-126: software/unsupported VSync still gets an explicit UI cap.
+    if (!SDL_SetRenderVSync(ren, 1)) llog("Launcher VSync unavailable (%s); bounded UI pacing remains active", SDL_GetError());
+#else
     SDL_SetRenderVSync(ren, 1);
+#endif
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO &io = ImGui::GetIO();
@@ -1746,6 +1815,9 @@ int main(int argc, char **argv) {
     bool have_exe = exists("build/xcde.exe");
 #endif
     bool run = true, launched = false;
+#ifdef __linux__
+    launcher_linux::LoopPacing loop_pacing; // [XCDE] LINUX-126
+#endif
     if (shot_pc) pc_start(false);
     while (run) {
 #ifdef __linux__
@@ -1787,6 +1859,22 @@ int main(int argc, char **argv) {
             if (e.type == SDL_EVENT_GAMEPAD_ADDED || e.type == SDL_EVENT_GAMEPAD_REMOVED)
                 rt_input_inventory(g_llog, "launcher", e.type == SDL_EVENT_GAMEPAD_ADDED ? "gamepad added" : "gamepad removed");
         }
+#ifdef __linux__
+        // [XCDE] LINUX-126: service lifetime/progress even when there is no paint.
+        pc_poll();
+        if (g_pc_quit && !pc_running()) run = false;
+        if (!run) break;
+        // Capture/script fixtures retain their frame-indexed rendering contract.
+        if (!shot && !script) {
+            SDL_WindowFlags flags = SDL_GetWindowFlags(win);
+            bool visible = !(flags & (SDL_WINDOW_HIDDEN | SDL_WINDOW_MINIMIZED));
+            if (!loop_pacing.paint(SDL_GetTicksNS(), visible, (flags & SDL_WINDOW_INPUT_FOCUS) != 0, launcher_linux::game_pid != 0)) {
+                // NULL leaves a woken event queued for the ordinary handlers above.
+                SDL_WaitEventTimeout(nullptr, loop_pacing.wait_ms(SDL_GetTicksNS()));
+                continue;
+            }
+        }
+#endif
         ImGui_ImplSDLRenderer3_NewFrame();
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
@@ -1841,9 +1929,8 @@ int main(int argc, char **argv) {
 #endif
         ImGui::PopTextWrapPos();
         ImGui::EndChild();
+#ifndef __linux__
         pc_poll();
-#ifdef __linux__
-        if (g_pc_quit && !pc_running()) run = false;
 #endif
         if (pc_running()) {
             ImGui::SetCursorScreenPos(ImVec2(vp->WorkPos.x + layout.panel_x + 16 * scale,

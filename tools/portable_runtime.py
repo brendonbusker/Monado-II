@@ -25,9 +25,13 @@ HEX=re.compile(r'[0-9a-f]{64}\Z')
 MAX_TOTAL=1024*1024*1024
 MAX_FILES=128
 MAX_JSON=2*1024*1024
+# [XCDE] LINUX-126 R2: local compiler commands/log identities grow with authored
+# source/flags. Only export may read this larger owned build receipt; transported
+# documents and import keep their independent 2 MiB bound after sanitization.
+MAX_BUILD_RECEIPT=16*1024*1024
 EXCLUDED={'lasgame.so','lasgame.so.id'}
 PUBLIC_RESOURCES={'libmonado-fidelityfx.so','FidelityFX-MIT.txt','libmonado-fsr3.so',
-                  'AMD-FidelityFX-LICENSE.txt','libmonado-present-observer.so'}
+                  'AMD-FidelityFX-LICENSE.txt','libmonado-present-observer.so','DejaVu-font-license.txt'}
 
 
 def inspect_with_host_tool(argv):
@@ -54,8 +58,8 @@ def ordinary(path,maximum=MAX_TOTAL):
         raise ValueError('bundle member must be bounded ordinary owned file: '+str(p))
     return p
 
-def document(path):
-    return json.loads(ordinary(path,MAX_JSON).read_text())
+def document(path,maximum=MAX_JSON):
+    return json.loads(ordinary(path,maximum).read_text())
 
 def encoded(value):return (json.dumps(value,indent=2,sort_keys=True)+'\n').encode()
 
@@ -116,7 +120,7 @@ def inspect_runtime(binary,receipt):
 
 def export_bundle(executable,destination_archive,source_manifest_sha256,*,include_resources=None):
     if not HEX.fullmatch(source_manifest_sha256):raise ValueError('source manifest SHA256 required')
-    binary=ordinary(executable);receipt=document(binary.parent/'receipt.json');abi=inspect_runtime(binary,receipt)
+    binary=ordinary(executable);receipt=document(binary.parent/'receipt.json',MAX_BUILD_RECEIPT);abi=inspect_runtime(binary,receipt)
     target=fresh_destination(destination_archive)
     sources={'xcde-linux':binary};resources={};required={}
     all_local=include_resources=='all-local'
@@ -132,12 +136,14 @@ def export_bundle(executable,destination_archive,source_manifest_sha256,*,includ
     # Never embed game input/objects, generated-unit hashes or private build logs.
     clean={k:receipt[k] for k in ('schema','status','split_game','gamecode_abi','sources_before','sources_after',
         'dlss_enabled','fsr3_enabled','fsr4_enabled','framegen_enabled','assertions_enabled','precompile_protocol',
-        'cuda_task_metadata_protocol') if k in receipt}
+        'cuda_task_metadata_protocol','fps_font_resources','source_compile_policy',
+        'source_compile_policy_kind') if k in receipt}
     clean['executable']={'path':'xcde-linux','sha256':digest(binary)};clean['runtime_resources']=resources
     clean['runtime_link_objects']={name:{'source_sha256':row.get('source_sha256'),'object_sha256':row.get('object_sha256')}
         for name,row in receipt.get('objects',{}).items() if name not in receipt.get('generated',{}) and name!='runtime/host/gamelib_entry_linux.c'}
     if not clean['runtime_link_objects']:clean['runtime_link_objects']=receipt.get('runtime_link_objects',{})
     metadata=encoded(clean)
+    if len(metadata)>MAX_JSON:raise ValueError('cleaned runtime receipt exceeds transport JSON bound')
     files={name:{'bytes':p.stat().st_size,'sha256':digest(p),'mode':0o755 if name=='xcde-linux' or '.so' in name else 0o644}
            for name,p in sources.items()}
     files['receipt.json']={'bytes':len(metadata),'sha256':hashlib.sha256(metadata).hexdigest(),'mode':0o644}
@@ -145,6 +151,8 @@ def export_bundle(executable,destination_archive,source_manifest_sha256,*,includ
     manifest={'schema':1,'format':'monado-authored-runtime','abi_id':abi,'source_manifest_sha256':source_manifest_sha256,
               'files':files,'required_local_resources':required,'distribution':'local-development-not-a-redistribution-approval',
               'game_code_included':False,'features':{k:bool(receipt.get(k,False)) for k in ('dlss_enabled','fsr3_enabled','fsr4_enabled','framegen_enabled')}}
+    manifest_data=encoded(manifest)
+    if len(manifest_data)>MAX_JSON:raise ValueError('runtime manifest exceeds transport JSON bound')
     fd,temp=tempfile.mkstemp(prefix='.runtime-bundle-',dir=target.parent);os.close(fd)
     try:
         with tarfile.open(temp,'w:gz') as tar:
@@ -153,7 +161,7 @@ def export_bundle(executable,destination_archive,source_manifest_sha256,*,includ
                 if name=='receipt.json':tar.addfile(info,io.BytesIO(metadata))
                 else:
                     with sources[name].open('rb') as f:tar.addfile(info,f)
-            data=encoded(manifest);info=tarfile.TarInfo('manifest.json');info.size=len(data);info.mode=0o644;tar.addfile(info,io.BytesIO(data))
+            info=tarfile.TarInfo('manifest.json');info.size=len(manifest_data);info.mode=0o644;tar.addfile(info,io.BytesIO(manifest_data))
         # Detect changing build artifacts even if a concurrent writer raced tar.
         for name,p in sources.items():
             if digest(p)!=files[name]['sha256']:raise ValueError('runtime changed during export')

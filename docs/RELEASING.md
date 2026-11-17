@@ -6,7 +6,7 @@ labelled experimental in its identity, download instructions and release notes.
 Do not mark the whole release prerelease merely to label Windows experimental,
 since both current update clients check the ordinary latest release.
 
-## Linux0.1.27
+## Linux0.1.28
 
 Publish the reviewed standalone builder AppImage, Linux source/setup tarball,
 byte-identical legacy `-source.tar.gz` alias, AppImage runtime source/relink
@@ -14,7 +14,7 @@ companion and combinedSHA256SUMS. The internal legacy source-root name is retain
 for existing Linux updater compatibility. Source archives contain no binaries,
 input, generated code, game shaders/caches, saves, keys or vendor SDKs.
 
-The public0.1.27 standalone AppImage contains setup software and its reviewed
+The public0.1.28 standalone AppImage contains setup software and its reviewed
 private startup runtime. Game/runtime compilation remains local. Local migration
 images may also contain a verified authored runtime; that local transport is not
 a public binary redistribution approval. The
@@ -32,16 +32,13 @@ Retain private receipts, dependency identities and compiler commands separately.
 Check standalone self-test/hidden startup and actual old-client source discovery,
 checksum, extraction and rebuild classification before activation/publication.
 A migration AppImage must also fit the installed updater's64MiB bound.
-For this build-path hotfix, qualify the complete older-client preparation and
-activation route before publication, including cold dependency/Python caches and
-portable launcher packaging after runtime reuse. A source-discovery pass alone
-does not establish a successful update.
-The retained 0.1.26 route requires a genuine 0.1.24 existing split-game update that emits
-`--reuse-game-code`. Verify the candidate chooses complete generation, builds
-its own native game/library and launcher, passes artifact checks and activates
-with copied profile contents unchanged. A fresh build or a pre-split-game old
-client does not exercise this route. Never relabel a newer build as the old
-baseline or modify the immutable old updater to make the test pass.
+For 0.1.28, retain the earlier build-path regression fixtures and qualify an
+isolated existing-installation update, including full native game and launcher
+preparation and activation. Do not modify the immutable old updater or relabel a
+newer binary to make the test pass. Keep the accepted development source and
+manual 2x/20x Prison Island result separate from release packaging evidence.
+Historical 0.1.24-to-0.1.26 split-game regeneration evidence remains recorded;
+a source-discovery pass alone does not establish a successful update.
 
 ## WindowsExperimental0.1.0
 
@@ -80,7 +77,7 @@ component attribution; never upload game-derived data, private logs or user stat
 Source CI and packaging checks are separate from gameplay/full-game qualification.
 
 
-For 0.1.27, additionally require the packaged-Python OpenSSL collision
+Retain the 0.1.27 regression checks: the packaged-Python OpenSSL collision
 reproducer and the real pinned CMake/Zig negative/control linker fixture.
 Distinguish Fedora userspace component checks from a full Fedora/CachyOS
 installation. Keep the GLIBC ceiling, source checks and required SDL backends.

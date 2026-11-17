@@ -1,3 +1,4 @@
+// [XCDE] LINUX-129: Enemy health controls, positive bounds and live diagnostics.
 // [XCDE] LINUX-099: actual parser and passive local diagnostics, no game/SDL.
 #define _POSIX_C_SOURCE 200809L
 #include <assert.h>
@@ -15,7 +16,7 @@ int main(int argc, char **argv) {
     assert(!setenv("MONADO_RUN_ID", "0123456789abcdef0123456789abcdef", 1));
     assert(!setenv("XCDE_INI", path, 1));
     if (!strcmp(scenario, "parsed")) {
-        put(path, "fullscreen = 1\nwindow = 2560x1440\nupscaler = dlss\nupscale_quality = native\nfps = 120\nframe_gen = 1\nframe_gen_match_display = 1\nvsync = 1\ncutscenes = same\nshow_fps_overlay = 1\nquickstep_slot = 1\ncheat_exp = 1\ncheat_exp_percent = 225\n");
+        put(path, "fullscreen = 1\nwindow = 2560x1440\nupscaler = dlss\nupscale_quality = native\nfps = 120\nframe_gen = 1\nframe_gen_match_display = 1\nvsync = 1\ncutscenes = same\nshow_fps_overlay = 1\nfps_overlay_mode = detailed\nquickstep_slot = 1\ncheat_exp = 1\ncheat_exp_percent = 225\ncheat_enemy_health = 1\ncheat_enemy_health_percent = 175\n");
         run_diag_begin(false); settings_load();
         assert(g_settings.upscaler == UPSCALE_DLSS && g_settings.fps == 120);
         Settings before = g_settings;

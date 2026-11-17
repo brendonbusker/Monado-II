@@ -14,8 +14,8 @@ SOURCE = PORT / 'tools/launcher/launcher.cpp'
 
 def fixture_source():
     source = SOURCE.read_text()
-    fields = source.split('    bool cheat_enabled[6]', 1)[1].split('    bool show_fps', 1)[0]
-    fields = '    bool cheat_enabled[6]' + fields
+    fields = source.split('    bool cheat_enabled[8]', 1)[1].split('    bool show_fps', 1)[0]
+    fields = '    bool cheat_enabled[8]' + fields
     helpers = source.split('// [XCDE] LINUX-072: launcher cheat configuration,', 1)[1]
     helpers = helpers[helpers.index('static const char *const k_cheat_ini'):]
     helpers = helpers.split('// [XCDE] LINUX-072: end launcher cheat configuration.', 1)[0]
@@ -76,25 +76,25 @@ static void click(ImVec2 pos) {
     io.AddMouseButtonEvent(0, false); frame();
 }
 static void config_tests() {
-    for (int i = 0; i < 6; ++i) assert(!g.cheat_enabled[i] && g.cheat_percent[i] == 100);
+    for (int i = 0; i < 8; ++i) assert(!g.cheat_enabled[i] && g.cheat_percent[i] == 100);
     assert(!g.cheat_no_fall_damage);
     const char *invalid[] = {"", "-1", "+100", "1.5", "1x", "nan", "inf", "2001", "99999999999999999999999999999999999999", " 100", "100 ", "100%"};
     for (const char *value : invalid) assert(cheat_percent_value(value) == 100);
     for (const char *value : {"1", "true"}) assert(cheat_enabled_value(value));
     for (const char *value : {"0", "false", "2", "TRUE", "", "yes", "-1"}) assert(!cheat_enabled_value(value));
-    for (int i = 0; i < 6; ++i) {
+    for (int i = 0; i < 8; ++i) {
         const std::string key = std::string("cheat_") + k_cheat_ini[i];
         assert(is_cheat_key(key.c_str()) && is_cheat_key((key + "_percent").c_str()));
         assert(cheats_load(key.c_str(), "true") && g.cheat_enabled[i]);
         for (int value = 0; value <= 2000; ++value) {
             const std::string decimal = std::to_string(value);
             assert(cheats_load((key + "_percent").c_str(), decimal.c_str()));
-            assert(g.cheat_percent[i] == value);
+            assert(g.cheat_percent[i] == (i == 7 && value < 10 ? 100 : value));
         }
     }
     assert(!cheats_load("party_switch", "1") && !is_cheat_key("cheat_exp_percent_extra"));
     assert(cheats_load("cheat_no_fall_damage", "1") && g.cheat_no_fall_damage);
-    for (int i = 0; i < 6; ++i) { g.cheat_enabled[i] = i % 2; g.cheat_percent[i] = i * 400; }
+    for (int i = 0; i < 8; ++i) { g.cheat_enabled[i] = i % 2; g.cheat_percent[i] = i * 200; }
     FILE *file = tmpfile(); assert(file); cheats_save(file); rewind(file);
     cheats_reset();
     char line[128], key[80], value[32]; int count = 0;
@@ -102,11 +102,11 @@ static void config_tests() {
         assert(sscanf(line, "%79s = %31s", key, value) == 2);
         assert(cheats_load(key, value)); ++count;
     }
-    assert(!ferror(file) && count == 13); fclose(file);
-    for (int i = 0; i < 6; ++i) { assert(g.cheat_enabled[i] == (bool)(i % 2)); assert(g.cheat_percent[i] == i * 400); }
+    assert(!ferror(file) && count == 17); fclose(file);
+    for (int i = 0; i < 8; ++i) { assert(g.cheat_enabled[i] == (bool)(i % 2)); assert(g.cheat_percent[i] == i * 200); }
     assert(g.cheat_no_fall_damage);
     cheats_reset();
-    for (int i = 0; i < 6; ++i) assert(!g.cheat_enabled[i] && g.cheat_percent[i] == 100);
+    for (int i = 0; i < 8; ++i) assert(!g.cheat_enabled[i] && g.cheat_percent[i] == 100);
     assert(!g.cheat_no_fall_damage);
 }
 static void ui_tests() {
@@ -114,15 +114,15 @@ static void ui_tests() {
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     assert(io.Fonts->Build()); GImGui->TestEngineHookItems = true;
     frame(); frame();
-    auto controls = sliders(); assert(controls.size() == 6);
+    auto controls = sliders(); assert(controls.size() == 8);
     for (const Item &item : controls) assert(item.flags & ImGuiItemFlags_Disabled);
     click(named("Daño causado por el grupo").box.GetCenter());
     assert(g.cheat_enabled[0]); controls = sliders();
     assert(!(controls[0].flags & ImGuiItemFlags_Disabled));
-    for (int i = 1; i < 6; ++i) assert(controls[i].flags & ImGuiItemFlags_Disabled);
+    for (int i = 1; i < 8; ++i) assert(controls[i].flags & ImGuiItemFlags_Disabled);
     click(ImVec2(controls[0].box.Max.x - 1, controls[0].box.GetCenter().y)); assert(g.cheat_percent[0] == 2000);
     controls = sliders(); click(ImVec2(controls[0].box.Min.x + 1, controls[0].box.GetCenter().y)); assert(g.cheat_percent[0] == 0);
-    for (int i = 1; i < 6; ++i) assert(g.cheat_percent[i] == 100);
+    for (int i = 1; i < 8; ++i) assert(g.cheat_percent[i] == 100);
     // Activate the native widget directly in this backend-free fixture, then deliver real key events.
     // A normal UI uses keyboard navigation to expose/activate its focus cursor first.
     ImGui::ActivateItemByID(sliders()[0].id); frame();
@@ -131,10 +131,18 @@ static void ui_tests() {
     assert(g.cheat_percent[0] == 1);
     ImGui::ActivateItemByID(sliders()[0].id); frame();
     click(named("Sin daño por caídas").box.GetCenter()); assert(g.cheat_no_fall_damage);
-    frame(260); assert(!crossed_width); assert(sliders().size() == 6);
+    click(named("Vida de los enemigos").box.GetCenter()); assert(g.cheat_enabled[7]);
+    auto hp = sliders()[2]; click(ImVec2(hp.box.Max.x - 1, hp.box.GetCenter().y)); assert(g.cheat_percent[7] == 2000);
+    hp = sliders()[2]; click(ImVec2(hp.box.Min.x + 1, hp.box.GetCenter().y)); assert(g.cheat_percent[7] == 10);
+    ImGui::ActivateItemByID(sliders()[2].id); frame();
+    io.AddKeyEvent(ImGuiMod_Ctrl, true); io.AddKeyEvent(ImGuiKey_RightArrow, true); frame();
+    io.AddKeyEvent(ImGuiKey_RightArrow, false); io.AddKeyEvent(ImGuiMod_Ctrl, false); frame();
+    assert(g.cheat_percent[7] == 11);
+    ImGui::ActivateItemByID(sliders()[2].id); frame();
+    frame(260); assert(!crossed_width); assert(sliders().size() == 8);
     ImGui::DestroyContext();
 }
-int main() { config_tests(); ui_tests(); puts("launcher cheats: defaults, strict config, all 12006 percentage values, roundtrip, native widgets, enable gates and narrow layout PASS"); }
+int main() { config_tests(); ui_tests(); puts("launcher cheats: defaults, strict config, all 15998 valid percentage values, roundtrip, native widgets, enable gates and narrow layout PASS"); }
 '''
     return prefix + fields + middle + checkbox + '}\n' + helpers + widgets + suffix
 

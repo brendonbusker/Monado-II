@@ -2,6 +2,7 @@
 #pragma once
 #include <stdbool.h>
 #include <math.h>
+#include <string.h>
 #include "graphics_options.h"
 #include "grass_lod.h"
 #ifdef __cplusplus
@@ -28,6 +29,18 @@ enum { PROMPTS_AUTO = 0, PROMPTS_NINTENDO = 1, PROMPTS_XBOX = 2, PROMPTS_PLAYSTA
 enum { CHAOS_LETTERS_OFF = 0, CHAOS_LETTERS_EXPLORED = 1, CHAOS_LETTERS_MAP = 2 /* explored, all with the Map */ };
 // [XCDE] LINUX-014: held menu/arts navigation repeat; not animation or game speed.
 enum { MENU_NAV_NORMAL = 0, MENU_NAV_FAST = 1 };
+// [XCDE] LINUX-124: explicit output-space counter presentation. Off remains the default.
+enum { FPS_OVERLAY_OFF = 0, FPS_OVERLAY_NUMBER, FPS_OVERLAY_COMPACT,
+       FPS_OVERLAY_DETAILED, FPS_OVERLAY_COUNT };
+static inline const char *xcde_fps_overlay_mode_name(int mode) {
+    static const char *const values[FPS_OVERLAY_COUNT] = {"off", "number", "compact", "detailed"};
+    return values[mode >= FPS_OVERLAY_OFF && mode < FPS_OVERLAY_COUNT ? mode : FPS_OVERLAY_OFF];
+}
+static inline int xcde_fps_overlay_mode_parse(const char *value) {
+    for (int i = 0; value && i < FPS_OVERLAY_COUNT; ++i)
+        if (!strcmp(value, xcde_fps_overlay_mode_name(i))) return i;
+    return FPS_OVERLAY_OFF;
+}
 // System language served to the game (runtime/services/am.c GetDesiredLanguage, services/hid_set.c GetLanguageCode):
 // the game picks its text language from it, as it would from the Switch's own system setting. LANG_AUTO follows the
 // host locale ($LC_ALL / $LC_MESSAGES / $LANG); the rest are the codes of the languages the game has text for.
@@ -88,10 +101,14 @@ typedef struct {
     // These are runtime preferences; the native game save format is unchanged.
     bool cheat_damage_dealt, cheat_damage_received;
     bool cheat_exp, cheat_ap, cheat_sp, cheat_gold;
+    bool cheat_movement_speed; // [XCDE] LINUX-120: opt-in locomotion multiplier, live in F1.
+    bool cheat_enemy_health; // [XCDE] LINUX-129: opt-in enemy maximum HP, 0.1–20x, live in F1.
     int cheat_damage_dealt_percent, cheat_damage_received_percent;
     int cheat_exp_percent, cheat_ap_percent, cheat_sp_percent, cheat_gold_percent;
+    int cheat_movement_speed_percent, cheat_enemy_health_percent;
     bool cheat_no_fall_damage;
-    bool show_fps_overlay; // [XCDE] LINUX-094: opt-in rendered-game FPS on screen, including fullscreen
+    bool show_fps_overlay; // [XCDE] legacy visibility mirror; follows fps_overlay_mode != OFF.
+    int fps_overlay_mode; // [XCDE] LINUX-124: FPS_OVERLAY_* dropdown, independent of title FPS.
     // [XCDE] LINUX-103: new preferences preserve prior rendering when absent.
     int quality_preset; // metadata only on load; applying a preset is explicit
     int dynamic_min_height, dynamic_max_height; // 0: existing automatic bounds

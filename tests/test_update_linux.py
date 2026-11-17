@@ -14,7 +14,7 @@ import unittest
 from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
 import update_linux as u
-import update_release as r
+r = u.update_release
 if sys.platform=='linux':
     import fcntl
 
@@ -50,7 +50,8 @@ class Transactions(unittest.TestCase):
         (self.game.parent/'receipt.json').write_text('{"dlss_enabled":true,"framegen_enabled":true}')
         helper=(Path(__file__).resolve().parents[1]/'Monado_Linux/scripts/install_layout.py').read_bytes()
         self.files={'README.md':b'# Authored fixture\n','Build_Monado_II.sh':b'#!/bin/sh\nexit 1\n','Monado_Linux/scripts/install_layout.py':helper,'Monado_Linux/runtime/fixture.c':b'// authored runtime\n','Monado_Linux/tools/launcher/launcher.cpp':b'// old GUI\n','update-version.json':b'{"schema":1,"protocol":1,"version":"0.1.3"}'}
-        for name in ('Rollback_Monado_II.sh','tools/update_linux.py','tools/installation_version.py',
+        for name in ('Rollback_Monado_II.sh','tools/update_linux.py','tools/update_release.py',
+                     'tools/publication_guard.py','tools/installation_version.py',
                      'tools/update_retention.py','Monado_Linux/scripts/install_lease.py'):
             self.files[name]=(Path(__file__).resolve().parents[1]/name).read_bytes()
         manifest(self.owner,self.files);self.candidate=self.base/'candidate';self.candidate.mkdir()

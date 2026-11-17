@@ -120,7 +120,7 @@ class FramegenLaunch(unittest.TestCase):
             result,report=native.frame_generation_environment({'MONADO_PRESENT_OBSERVER':'1','MONADO_CUDA_TASK_METADATA':'1','VK_LAYER_PATH':'/old/unchanged'},self.ini(text),component_available=True)
             self.assertNotIn('MONADO_PRESENT_OBSERVER',result);self.assertFalse(report['observer_requested']);self.assertEqual(result['VK_LAYER_PATH'],'/old/unchanged')
     def test_driver_measurement_is_independent_of_overlay_visibility(self):
-        for overlay in ('', 'show_fps_overlay = 0\n', 'show_fps_overlay = 1\n', 'show_fps_overlay = false\n'):
+        for overlay in ('', 'show_fps_overlay = 0\n', 'show_fps_overlay = 1\n', 'show_fps_overlay = false\n', *('fps_overlay_mode = '+mode+'\n' for mode in ('off', 'number', 'compact', 'detailed', 'invalid'))):
             for available in (False, True):
                 _, report = native.frame_generation_environment({}, self.ini('frame_gen_smooth_motion = 1\n' + overlay), component_available=available)
                 self.assertEqual(report['observer_requested'], available)

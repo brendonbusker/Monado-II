@@ -1,7 +1,7 @@
 // [XCDE] LINUX-072: scale new awards once, retaining native eligibility, level-up,
 // bonus-EXP behavior, skill handling, notifications and caps. No balance edits.
 #include "../hle.h"
-#include "../settings.h"
+#include "../cheats_options.h"
 #include "cheats_math.h"
 #include "cheats_rewards.h"
 
@@ -22,11 +22,11 @@ static bool changed_setting(bool enabled, int percent) {
 }
 
 bool xcde_cheats_rewards_call(Cpu *c) {
-    const bool enabled[3] = {
-        changed_setting(g_settings.cheat_exp, g_settings.cheat_exp_percent),
-        changed_setting(g_settings.cheat_ap, g_settings.cheat_ap_percent),
-        changed_setting(g_settings.cheat_sp, g_settings.cheat_sp_percent),
-    };
+    const XcdeCheats options = xcde_cheats_snapshot();
+    const int percent[3] = {xcde_cheats_effective_percent(&options, XCDE_CHEAT_EXP),
+                            xcde_cheats_effective_percent(&options, XCDE_CHEAT_AP),
+                            xcde_cheats_effective_percent(&options, XCDE_CHEAT_SP)};
+    const bool enabled[3] = {percent[0] != 100, percent[1] != 100, percent[2] != 100};
     if (!enabled[0] && !enabled[1] && !enabled[2]) return false;
     uint64_t input = c->x[1];
     if (!range(input, REWARD_BYTES)) FATAL("[cheats] invalid native reward input\n");
@@ -35,8 +35,6 @@ bool xcde_cheats_rewards_call(Cpu *c) {
     uint16_t character = LD16(input);
     if (!(character >= 1 && character <= 8) && character != 14 && character != 15)
         return false;
-    const int percent[3] = {g_settings.cheat_exp_percent,
-                           g_settings.cheat_ap_percent, g_settings.cheat_sp_percent};
     const uint32_t cap[3] = {EXP_CAP, AP_CAP, SP_CAP};
     uint8_t record[REWARD_BYTES];
     memcpy(record, (const void *)(uintptr_t)input, sizeof record);
@@ -79,10 +77,12 @@ bool xcde_cheats_rewards_call(Cpu *c) {
 }
 
 void xcde_cheats_gold(Cpu *c) {
-    if (!changed_setting(g_settings.cheat_gold, g_settings.cheat_gold_percent)) return;
+    const XcdeCheats options = xcde_cheats_snapshot();
+    int percent = xcde_cheats_effective_percent(&options, XCDE_CHEAT_GOLD);
+    if (!changed_setting(true, percent)) return;
     uint32_t amount = (uint32_t)c->x[1];
     if (!amount || (amount & 0x80000000u)) return;
     // The native add path caps the resulting balance separately. Capping this
     // one gain first also prevents its 32-bit balance+award addition overflowing.
-    c->x[1] = xcde_cheat_scale(amount, g_settings.cheat_gold_percent, GOLD_CAP);
+    c->x[1] = xcde_cheat_scale(amount, percent, GOLD_CAP);
 }

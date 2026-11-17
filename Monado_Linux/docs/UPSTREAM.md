@@ -883,3 +883,38 @@ The SDL CMake recipe also disables optional linker-produced dependency files:
 host linker capability probes must not add flags unsupported by pinned Zig0.14.1.
 Normal compiler header dependency tracking and the actual shared-library link
 remain enabled and are exercised by the authored regression.
+
+[XCDE] LINUX-126 adds authored Linux launcher idle pacing, known-destination
+feedback invalidation/exact-backend snapshot reuse, optional interval counters,
+and a small-integrated-GPU refinement queue with scoped best-effort per-thread
+priority. Existing Peiikai/Monado notices and renderer correctness remain intact.
+The selective `exec.c`/`textures.c` O2 build-policy idea was checked against the
+MIT Monado-Reborn main at `9a8cc54b7b511a35bf1c05d593ebbae8d0b31009`; no FMA,
+recording queue or memory-budget implementation was imported. With our pinned
+Zig0.14.1, replayed O1/O2 production objects were byte-identical, so the explicit
+policy is not a claimed additional speedup. See [handheld development notes](../../docs/HANDHELD_PERFORMANCE.md)
+for scope and qualification limits. Tests use authored fixtures only.
+### LINUX-129 — live enemy health
+
+Authored optional Enemy health settings/UI and native adapters extend the existing
+cheat infrastructure. Checked DE2.0.0 lifecycle/stat hooks scale fresh enemy-only
+maximum HP and preserve remaining HP fraction on live preference transitions.
+Native phase/death protections remain; scoped arithmetic safeguards cover modified
+enemy HP consumers. No game-derived function bodies or assets are included.
+`runtime/settings.h`, `runtime/host/settings_ini.c`, `runtime/host/run_diagnostics_linux.h`,
+`runtime/cheats_options.h`, `runtime/hle/cheats_options.c`,
+`runtime/ui/cheats_controls_linux.h`, `tools/launcher/launcher.cpp`,
+`games/xcde/patches.py` and `scripts/build_linux.py` carry this integration;
+new `runtime/hle/cheats_enemy_health.*` is original Monado II code under MIT.
+Exact guards and authored lifecycle/arithmetic/UI tests accompany the changes.
+
+### LINUX-130 — enemy HP readiness during loading
+
+The authored Enemy health adapter now distinguishes construction from initialized
+HP. Native loading refreshes before base initialization are left unchanged. The
+transition to ready is bound to the checked post-base initializer call, with
+seven additional instruction-context guards. Existing checks for invalid live HP
+remain. Lifecycle/numeric fixtures and independent emitted-hook tests include the
+failing constructor-only refresh and intermediate initialization sequences.
+Changes: `runtime/hle/cheats_enemy_health.c`, `games/xcde/patches.py` and their
+authored tests. No generated game function body or asset was added.

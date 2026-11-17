@@ -480,6 +480,25 @@ void plat_thread_name(const char *name) {  // [XCDE] LINUX-003: Linux limits thr
     (void)pthread_setname_np(pthread_self(), short_name);
 }
 void plat_thread_background(void) {}
+// [XCDE] LINUX-126: only the dedicated shader-refinement worker calls this.
+// Linux nice is per TID; increase it once, without changing the process, audio,
+// urgent compile workers or the generic background API's existing callers.
+void plat_thread_shader_background(void) {
+    static _Thread_local bool attempted;
+    if (attempted) return;
+    attempted = true;
+    int saved = errno;
+    long tid = syscall(SYS_gettid);
+    if (tid > 0) {
+        errno = 0;
+        int current = getpriority(PRIO_PROCESS, (id_t)tid);
+        if (!(current == -1 && errno) && current < 5)
+            (void)setpriority(PRIO_PROCESS, (id_t)tid, 5);
+    }
+    // A sandbox may refuse even a priority reduction. Work still runs, and the
+    // queue policy still bounds refinement concurrency; never ask for privilege.
+    errno = saved;
+}
 void plat_thread_audio(void) {}
 int plat_cpu_count(void) {  // [XCDE] LINUX-003: respect the CPUs this thread may actually use.
     int count = 0;

@@ -1,3 +1,4 @@
+// [XCDE] LINUX-129: Enemy health controls, positive bounds and live diagnostics.
 // [XCDE] LINUX-099: bounded local run diagnostics. No paths or private controls
 // are accepted from the environment; a host-generated 32-hex ID joins records.
 #pragma once
@@ -48,10 +49,10 @@ static inline float run_diag_number(float value) { return isfinite(value) ? valu
 // view, separate from the requested source lines recorded by the host wrapper.
 typedef struct RunDiagSettings {
     int window_w, window_h, aspect, resolution, upscaler, quality, fps, antialias;
-    int fullscreen, vsync, fsr, smooth, external, match, cutscene, overlay;
+    int fullscreen, vsync, fsr, smooth, external, match, cutscene, overlay, overlay_mode;
     int dof, blur, navigation, quickstep, party, language, movie_audio;
     float volume;
-    int cheat_on[7], cheat_percent[6];
+    int cheat_on[9], cheat_percent[8];
     int period_override, interval_override, ini_override, hidden, precompile;
 } RunDiagSettings;
 static inline void run_diag_settings_snapshot(RunDiagSettings *row) {
@@ -65,7 +66,7 @@ static inline void run_diag_settings_snapshot(RunDiagSettings *row) {
     const char *external = getenv("NVPRESENT_ENABLE_SMOOTH_MOTION");
     row->external = external && !strcmp(external, "1");
     row->match = g_settings.frame_gen_match_display; row->cutscene = g_settings.cutscene_mode;
-    row->overlay = g_settings.show_fps_overlay; row->dof = !g_settings.dof_off;
+    row->overlay = g_settings.show_fps_overlay; row->overlay_mode = g_settings.fps_overlay_mode; row->dof = !g_settings.dof_off;
     row->blur = g_settings.game_blur; row->navigation = g_settings.menu_navigation_speed;
     row->quickstep = g_settings.quickstep_slot;
     extern bool g_party_switch;
@@ -78,6 +79,8 @@ static inline void run_diag_settings_snapshot(RunDiagSettings *row) {
     row->cheat_on[4] = g_settings.cheat_sp; row->cheat_percent[4] = g_settings.cheat_sp_percent;
     row->cheat_on[5] = g_settings.cheat_gold; row->cheat_percent[5] = g_settings.cheat_gold_percent;
     row->cheat_on[6] = g_settings.cheat_no_fall_damage;
+    row->cheat_on[7] = g_settings.cheat_movement_speed; row->cheat_percent[6] = g_settings.cheat_movement_speed_percent;
+    row->cheat_on[8] = g_settings.cheat_enemy_health; row->cheat_percent[7] = g_settings.cheat_enemy_health_percent;
     row->period_override = getenv("XCDE_FPS_PERIOD_SCALE") != NULL;
     row->interval_override = getenv("XCDE_FPS_INTERVAL") != NULL;
     row->ini_override = getenv("XCDE_INI") != NULL;
@@ -98,14 +101,14 @@ static inline void run_diag_settings(const char *event) {
     }
     ++rows;
     char safe_event[48]; run_diag_safe(safe_event, sizeof safe_event, event);
-    fprintf(stderr, "[run] id=%s utc_epoch=%llu event=%s method=%s window=%dx%d fullscreen=%d aspect=%d resolution=%d upscaler=%d quality=%d configured_fps=%d vsync=%d fsr=%d smooth_selected=%d smooth_driver_flag=%d match_display=%d cutscene_mode=%d fps_overlay=%d antialias=%d dof=%d game_blur=%d navigation=%d quickstep=%d party_switch=%d language=%d movie_audio=%d volume=%g cheat_enabled=%d,%d,%d,%d,%d,%d,%d cheat_percent=%d,%d,%d,%d,%d,%d period_override=%d interval_override=%d ini_override=%d hidden=%d precompile=%d\n",
+    fprintf(stderr, "[run] id=%s utc_epoch=%llu event=%s method=%s window=%dx%d fullscreen=%d aspect=%d resolution=%d upscaler=%d quality=%d configured_fps=%d vsync=%d fsr=%d smooth_selected=%d smooth_driver_flag=%d match_display=%d cutscene_mode=%d fps_overlay=%d fps_overlay_mode=%d antialias=%d dof=%d game_blur=%d navigation=%d quickstep=%d party_switch=%d language=%d movie_audio=%d volume=%g cheat_enabled=%d,%d,%d,%d,%d,%d,%d,%d,%d cheat_percent=%d,%d,%d,%d,%d,%d,%d,%d period_override=%d interval_override=%d ini_override=%d hidden=%d precompile=%d\n",
         run_diag_id(), run_diag_utc(), safe_event, run_diag_method(), row.window_w, row.window_h,
         row.fullscreen, row.aspect, row.resolution, row.upscaler, row.quality, row.fps, row.vsync,
-        row.fsr, row.smooth, row.external, row.match, row.cutscene, row.overlay, row.antialias,
+        row.fsr, row.smooth, row.external, row.match, row.cutscene, row.overlay, row.overlay_mode, row.antialias,
         row.dof, row.blur, row.navigation, row.quickstep, row.party, row.language, row.movie_audio,
         (double)row.volume, row.cheat_on[0], row.cheat_on[1], row.cheat_on[2], row.cheat_on[3],
-        row.cheat_on[4], row.cheat_on[5], row.cheat_on[6], row.cheat_percent[0], row.cheat_percent[1],
-        row.cheat_percent[2], row.cheat_percent[3], row.cheat_percent[4], row.cheat_percent[5],
+        row.cheat_on[4], row.cheat_on[5], row.cheat_on[6], row.cheat_on[7], row.cheat_on[8], row.cheat_percent[0], row.cheat_percent[1],
+        row.cheat_percent[2], row.cheat_percent[3], row.cheat_percent[4], row.cheat_percent[5], row.cheat_percent[6], row.cheat_percent[7],
         row.period_override, row.interval_override, row.ini_override, row.hidden, row.precompile);
 }
 // Render thread only. Event/mode/GPU strings are bounded and control-safe. A
