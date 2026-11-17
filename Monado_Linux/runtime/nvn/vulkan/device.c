@@ -44,21 +44,30 @@ static SDL_Window *window;
 static atomic_bool ui_ready;
 static VkDebugUtilsMessengerEXT messenger;
 
-// [XCDE] LINUX-093: retain enough normal-log evidence to distinguish output
-// placement from camera/composite decisions. Bounded and render-thread-only;
-// ordinary 16:9 users do not take this diagnostic path.
-static void aspect_output_note(const OutScale *o) {
+// [XCDE] LINUX-093/#12: record the rendered allocation and the actual sampled
+// extent and placement. Frame numbers also identify the composite decisions.
+static void aspect_output_note(uint64_t frame, const OutScale *o, const TexBackend *b, VkExtent2D sampled,
+                               float vx, float vy, float vw, float vh, const float crop[4]) {
     static unsigned notes;
     static int mode = -1;
-    static uint32_t width, height;
+    static uint32_t width, height, raw_w, raw_h;
+    static VkExtent2D last_sampled;
     static double shape, sx, sy;
-    if (!xcde_aspect_enabled() || notes >= 32) return;
+    static float last_rect[4], last_crop[4];
+    if (!xcde_aspect_enabled() || notes >= 32 || !sampled.width || !sampled.height) return;
+    const float rect[4] = {vx, vy, vw, vh};
     if (mode == g_settings.aspect && width == g_vk.sc_extent.width && height == g_vk.sc_extent.height &&
-        fabs(shape - o->shape) < 0.00001 && fabs(sx - o->sx) < 0.00001 && fabs(sy - o->sy) < 0.00001) return;
+        raw_w == b->width && raw_h == b->height && last_sampled.width == sampled.width && last_sampled.height == sampled.height &&
+        fabs(shape - o->shape) < 0.00001 && fabs(sx - o->sx) < 0.00001 && fabs(sy - o->sy) < 0.00001 &&
+        !memcmp(last_rect, rect, sizeof rect) && !memcmp(last_crop, crop, sizeof last_crop)) return;
     mode = g_settings.aspect; width = g_vk.sc_extent.width; height = g_vk.sc_extent.height;
     shape = o->shape; sx = o->sx; sy = o->sy;
-    LOG("[aspect] mode %d drawable %ux%u factor %.6f scale %.6f %.6f viewport %.1f %.1f %.1f %.1f\n",
-        mode, width, height, shape, sx, sy, o->vx, o->vy, o->vw, o->vh);
+    raw_w = b->width; raw_h = b->height; last_sampled = sampled;
+    memcpy(last_rect, rect, sizeof rect); memcpy(last_crop, crop, sizeof last_crop);
+    LOG("[aspect] present frame %llu mode %d drawable %ux%u factor %.6f next scale %.6f %.6f"
+        " source %ux%u scale %.6f %.6f sampled %ux%u viewport %.1f %.1f %.1f %.1f crop %.4f %.4f %.4f %.4f\n",
+        (unsigned long long)frame, mode, width, height, shape, sx, sy, raw_w, raw_h, b->sx, b->sy,
+        sampled.width, sampled.height, vx, vy, vw, vh, crop[0], crop[1], crop[2], crop[3]);
     if (++notes == 32) LOG("[aspect] further output transition diagnostics suppressed\n");
 }
 
@@ -1361,7 +1370,7 @@ void vk_save_png(const char *path, const uint8_t *rgba, uint32_t w, uint32_t h) 
 
 // ================================================================== game presentation (metal.m backend_present)
 // Draws the game's image into the window with the widescreen crop, then the overlay menu.
-extern void vk_present_draw(VkCommandBuffer cb, TexBackend *b, float vx, float vy, float vw, float vh, const float pv[8]);
+extern VkExtent2D vk_present_draw(VkCommandBuffer cb, TexBackend *b, float vx, float vy, float vw, float vh, const float pv[8]);
 void renderer_submit(void);
 void renderer_set_scale(float sx, float sy);
 uint64_t renderer_present_count(void);
@@ -1739,6 +1748,7 @@ void backend_present(NvnTexture *t) {
     }
     double vx = 0, vy = 0, vw = 0, vh = 0;  // the game image's placement in the window
     float crop[4] = {0, 0, 1, 1};           // uv origin and size
+    OutScale os;
     if (have || !want_window) {  // (headless frames still advance the scale / widescreen state as a presented one would)
         double dw = g_vk.sc_extent.width, dh = g_vk.sc_extent.height;
         extern void widescreen_frame_end(uint64_t frame);
@@ -1747,13 +1757,11 @@ void backend_present(NvnTexture *t) {
         extern bool widescreen_allowed(void);
         // render scale + placement in the window: runtime/nvn/output_scale.c (Video tab "Internal resolution");
         // no GPU timer here (-1): dynamic resolution goes by the frame time
-        OutScale os;
         // [XCDE] LINUX-103: explicit DRS bounds follow real native cadence,
         // including cinematic/qualified FG caps, never interpolated output FPS.
         extern float xcde_effective_present_fps(void);
         output_scale_set_native_fps(xcde_effective_present_fps());
         output_scale(dw, dh, widescreen_allowed(), SDL_GetTicksNS() / 1e9, -1, &os);
-        aspect_output_note(&os);
         double sx = os.sx, sy = os.sy, shape = os.shape;
         vx = os.vx, vy = os.vy, vw = os.vw, vh = os.vh;
         // interiors / dungeons: their 16:9 centre, or the part inside a room wider than one screen
@@ -1766,7 +1774,8 @@ void backend_present(NvnTexture *t) {
     if (have) {
         VkCommandBuffer cb = vk_cmd();
         float pv[8] = {renderer_origin_lower_left() ? 1.0f : 0.0f, 0, 0, 0, crop[0], crop[1], crop[2], crop[3]};
-        vk_present_draw(cb, b, (float)vx, (float)vy, (float)vw, (float)vh, pv);
+        VkExtent2D sampled = vk_present_draw(cb, b, (float)vx, (float)vy, (float)vw, (float)vh, pv);
+        aspect_output_note(total_frames, &os, b, sampled, (float)vx, (float)vy, (float)vw, (float)vh, crop);
         static long menu_at = -1;
         if (menu_at < 0) menu_at = getenv("LARECOMP_MENU_AT") ? atol(getenv("LARECOMP_MENU_AT")) : 0;
         if (menu_at && (long)total_frames + 1 == menu_at) { extern void menu_test_open(void); menu_test_open(); }

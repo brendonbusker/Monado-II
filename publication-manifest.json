@@ -685,8 +685,8 @@
       "sha256": "3ffdddf192e75a592646c6371fca9fba88bf116b936cb78bbe6af353fcc24093"
     },
     "Monado_Linux/runtime/nvn/vulkan/device.c": {
-      "bytes": 123910,
-      "sha256": "f559ce49362edf709ec615bc6bc71080eb42f8b60761988a833e40dfc19a3265"
+      "bytes": 124876,
+      "sha256": "3f94974cd8fed5f080bcaf89d9bfaf59f1205c7d5b6532f5f0e256c0a6cb2220"
     },
     "Monado_Linux/runtime/nvn/vulkan/dlss.cpp": {
       "bytes": 20801,
@@ -721,8 +721,8 @@
       "sha256": "025402d28fe388b8b8ff471671e8ed3cdcea97255125c9205de0459b30345b7d"
     },
     "Monado_Linux/runtime/nvn/vulkan/exec.c": {
-      "bytes": 456376,
-      "sha256": "255b84e6406752739e822f3d289550146858aed27407b6979f31dd03a2915715"
+      "bytes": 456657,
+      "sha256": "9fe4231d08a064ac59d5cfda42eed03bef2651643052b48f90ea7d19a9bbe55a"
     },
     "Monado_Linux/runtime/nvn/vulkan/framegen_linux.cpp": {
       "bytes": 19318,
@@ -945,8 +945,8 @@
       "sha256": "425a4a3385984c053a334593f21b4ba66e9eba4e8c2555fb8dfe6c31f181f243"
     },
     "Monado_Linux/runtime/services/romfs_virtual.c": {
-      "bytes": 23213,
-      "sha256": "6323402659670d5f1e3411035e2bb11d627df2394a924dafca6d2bed224c2ba5"
+      "bytes": 23419,
+      "sha256": "401fe7d9a928dd92934ce68e06fcf7ea021cab60606616853c969520eeda5784"
     },
     "Monado_Linux/runtime/services/romfs_virtual.h": {
       "bytes": 440,
@@ -5357,8 +5357,8 @@
       "sha256": "dcca5a991a73e1520a5367dba1f5b95225c19d9642048eaa33d9c95a2e20d93c"
     },
     "tests/native/test_aspect_guest_dynres.c": {
-      "bytes": 6643,
-      "sha256": "26eb41edd4ce85cd4bae54e2d616e4da692e6e573620b23ddbe3871065cfdd91"
+      "bytes": 9300,
+      "sha256": "29e3eeb4913cadf9485837a1b14fa97829cec3b17f6edada3f0930db8fdb312f"
     },
     "tests/native/test_aspect_output.c": {
       "bytes": 16282,
@@ -5589,8 +5589,8 @@
       "sha256": "c550d3dad3b0113d3215db68be7738b5377f7e0f9b270c847f9bb21668c12289"
     },
     "tests/test_aspect_guest_dynres.py": {
-      "bytes": 2755,
-      "sha256": "4ab982b6bbb2c9a92611fc2922125dc7530a6db6716e05ba09e5e203552fc890"
+      "bytes": 3039,
+      "sha256": "d5824bea03fb9465eb9b6d8e48be3ea70f2ca47913ff3b6fbe84065cdd2a29b0"
     },
     "tests/test_aspect_output.py": {
       "bytes": 3456,

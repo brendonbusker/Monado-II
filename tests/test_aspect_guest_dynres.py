@@ -33,7 +33,8 @@ class AspectGuestResolution(unittest.TestCase):
     def scenario(self, name):
         with tempfile.TemporaryDirectory(dir=self.directory.name) as work:
             env = os.environ.copy()
-            env.pop('XCDE_LIBNX', None)
+            for key in ('XCDE_LIBNX', 'XCDE_MODS_DIR', 'XCDE_NO_MODS'):
+                env.pop(key, None)
             result = subprocess.run([str(self.binary), name], cwd=work, env=env,
                                     capture_output=True, text=True, timeout=20)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -48,8 +49,14 @@ class AspectGuestResolution(unittest.TestCase):
     def test_mod_omitted_dynamic_key_is_explicitly_disabled_for_native_aspects(self):
         self.scenario('missing')
 
-    def test_mod_input_remains_immutable_and_original_preserves_its_policy(self):
+    def test_lowercase_virtual_overlay_and_exact_guest_path(self):
         self.scenario('mod')
+
+    def test_mixed_case_virtual_overlay_keeps_native_aspect_policy(self):
+        self.scenario('mod-mixed')
+
+    def test_mixed_case_virtual_overlay_and_original_input_remain_immutable(self):
+        self.scenario('mod-original')
 
     def test_native_aspect_correctness_owns_dynamic_key_and_preserves_other_overrides(self):
         self.scenario('override')

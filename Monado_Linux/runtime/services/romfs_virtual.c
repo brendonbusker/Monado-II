@@ -101,6 +101,13 @@ static void edit_ini(File *f, const char *edits) {
 failed:
     free(src);free(out);fprintf(stderr,"[romfs] could not allocate virtual graphics settings\n");
 }
+static bool ci_eq(const char *a, const char *b) {  // mod folders made on Windows may change case
+    for (; *a && *b; a++, b++) {
+        char x = *a >= 'A' && *a <= 'Z' ? *a + 32 : *a, y = *b >= 'A' && *b <= 'Z' ? *b + 32 : *b;
+        if (x != y) return false;
+    }
+    return *a == *b;
+}
 static void maybe_edit(File *f) {
     extern bool kbicons_wanted(const char *path), kbicons_init(void), settings_mod_enabled(const char *name);
     extern uint8_t *kbicons_make(const char *path, uint64_t *len);
@@ -112,9 +119,12 @@ static void maybe_edit(File *f) {
         if (m) free(f->mem), f->mem = m, f->size = n;
         return;
     }
-    size_t pl = strlen(f->path);
-    static const char lib[] = "monolib/shader/lib_nx.ini";
-    if (pl < sizeof lib - 1 || strcmp(f->path + pl - (sizeof lib - 1), lib)) return;
+    // [XCDE] #12: overlays keep the virtual entry's identity even when the
+    // replacement's host path uses different capitalization.
+    const Dir *shader = f->parent;
+    const Dir *monolib = shader->parent;
+    if (!ci_eq(f->name, "lib_nx.ini") || !monolib || !monolib->parent || monolib->parent->parent ||
+        !ci_eq(shader->name, "shader") || !ci_eq(monolib->name, "monolib")) return;
     static char edits[1024];
     edits[0] = 0;  // (a mod's lib_nx.ini is edited again after it replaces the game's)
     settings_load();  // (the romfs may be scanned before the window reads it; reading it twice is harmless)
@@ -176,13 +186,6 @@ static Dir *scan(const char *path, const char *name, Dir *parent, int depth) {
 // alphabetical order, so a later mod wins over an earlier one for the same file. Only data: code mods (exefs / NSO
 // patches, .pchtxt) don't apply to recompiled code. XCDE_MODS_DIR=<dir>: another folder; XCDE_NO_MODS=1: none.
 // The applied files are listed in the log ([mods] lines).
-static int ci_eq(const char *a, const char *b) {  // (case-insensitive: mod folders made on Windows may change case)
-    for (; *a && *b; a++, b++) {
-        char x = *a >= 'A' && *a <= 'Z' ? *a + 32 : *a, y = *b >= 'A' && *b <= 'Z' ? *b + 32 : *b;
-        if (x != y) return 0;
-    }
-    return *a == *b;
-}
 static void overlay(Dir *dst, const char *path, int depth, int *replaced, int *added) {
     if (depth > 32) return;
     DIR *d = opendir(path);

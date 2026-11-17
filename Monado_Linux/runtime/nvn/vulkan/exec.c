@@ -6839,8 +6839,9 @@ static VkImageView fsr1_sharpen(VkCommandBuffer cb,VkImageView input,uint32_t wi
     return post_view(output);
 }
 
-static VkImageView post_process(VkCommandBuffer cb, TexBackend *b, double ow_d, double oh_d) {
+static VkImageView post_process(VkCommandBuffer cb, TexBackend *b, double ow_d, double oh_d, VkExtent2D *sampled) {
     VkImageView v = raw_view(b);
+    *sampled = (VkExtent2D){b->width, b->height};  // raw and SMAA sample the original allocation size
     fg_scene = VK_NULL_HANDLE;
     bool smaa = g_settings.antialias == AA_SMAA;
     uint32_t ow = (uint32_t)lround(ow_d), oh = (uint32_t)lround(oh_d);
@@ -6872,7 +6873,7 @@ static VkImageView post_process(VkCommandBuffer cb, TexBackend *b, double ow_d, 
             t = post_view(hud);
         }
         vk_frame_resume();
-        if (t) return t;
+        if (t) { *sampled = (VkExtent2D){ow, oh}; return t; }
         smaa = false;
         fsr = ow > b->width + 1 || oh > b->height + 1;
     }
@@ -6899,6 +6900,7 @@ static VkImageView post_process(VkCommandBuffer cb, TexBackend *b, double ow_d, 
         post_pass(cb, "easu.frag", ei, 1, e, pe, false);
         v=post_view(e);
         v=fsr1_sharpen(cb,v,ow,oh);
+        *sampled = (VkExtent2D){ow, oh};
     }
     vk_full_barrier(cb);
     vk_frame_resume();
@@ -6916,9 +6918,10 @@ static VkImageView rp_src;  // (vk_present_redraw) the last final image and its 
 static VkViewport rp_vp;
 static float rp_pv[8];
 // Inside the window image's rendering (device.c vk_frame_begin): the game image into (vx, vy, vw, vh).
-void vk_present_draw(VkCommandBuffer cb, TexBackend *b, float vx, float vy, float vw, float vh, const float pv[8]) {
-    if (!b || !b->image || (b->aspect & ~VK_IMAGE_ASPECT_COLOR_BIT)) return;
-    VkImageView src = post_process(cb, b, pv[6] > 0 ? vw / pv[6] : vw, pv[7] > 0 ? vh / pv[7] : vh);
+VkExtent2D vk_present_draw(VkCommandBuffer cb, TexBackend *b, float vx, float vy, float vw, float vh, const float pv[8]) {
+    if (!b || !b->image || (b->aspect & ~VK_IMAGE_ASPECT_COLOR_BIT)) return (VkExtent2D){0, 0};
+    VkExtent2D sampled;
+    VkImageView src = post_process(cb, b, pv[6] > 0 ? vw / pv[6] : vw, pv[7] > 0 ? vh / pv[7] : vh, &sampled);
 #ifdef __linux__
     tmp_fg_set_rect(vx, vy, vw, vh); // [XCDE] LINUX-020: interpolate content, retain window bars outside its rectangle.
 #endif
@@ -6969,6 +6972,7 @@ void vk_present_draw(VkCommandBuffer cb, TexBackend *b, float vx, float vy, floa
     VkViewport full = {0, 0, (float)g_vk.sc_extent.width, (float)g_vk.sc_extent.height, 0, 1};
     vkCmdSetViewport(cb, 0, 1, &full);
     rp_src = src; rp_vp = vp; memcpy(rp_pv, pv, sizeof rp_pv);
+    return sampled;
 }
 
 // [XCDE] device.c repeat presents (FPS 30 with V-Sync on a 60 Hz monitor): the last frame's final image drawn again the
