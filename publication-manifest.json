@@ -2505,8 +2505,8 @@
       "sha256": "48680b6d79bdbf446bf6c08c1e01c194edf9ecbb1983da6463eab7cdb561361e"
     },
     "Monado_Linux/tools/gen_fps_fonts.py": {
-      "bytes": 4069,
-      "sha256": "0484b69f4145ca1efb913bbb626cf067441a95a3680d542eca1d63612790687f"
+      "bytes": 4520,
+      "sha256": "34814d93294e9fca1938995c4b02efb3d92b82c24654245c9bda8fd297da5349"
     },
     "Monado_Linux/tools/gen_smaa_inc.py": {
       "bytes": 606,
@@ -5705,8 +5705,8 @@
       "sha256": "510f2a910dae29978e7b70c9c8ccc3e0b2673c48ef2b7fd3af02f08edfe39ba9"
     },
     "tests/test_fps_font_resources.py": {
-      "bytes": 12567,
-      "sha256": "46ae05bf79d24f6d0c8366cad9535c6580f64b5d99d932e306686aae615dd74f"
+      "bytes": 15846,
+      "sha256": "757c9804b436afe36438e2db8f5eda86fcce6850aef279b11ff6d812a5a0cdcc"
     },
     "tests/test_fps_meter.py": {
       "bytes": 3975,
@@ -5893,8 +5893,8 @@
       "sha256": "6497b8936bdfaef18a1c6c3d2cd3830386308ae6c33d64f2e395d59959ac36f1"
     },
     "tests/test_live_cheats.py": {
-      "bytes": 4675,
-      "sha256": "44b21b81f659f87b43d3d17be4773a4b1c382e9959a9ea381841aa58731eab5b"
+      "bytes": 5341,
+      "sha256": "3504efe958f648c7175aca4bc4d8c8a88b07392e9fe84c5827b3393d29526847"
     },
     "tests/test_managed_linux_build.py": {
       "bytes": 25898,

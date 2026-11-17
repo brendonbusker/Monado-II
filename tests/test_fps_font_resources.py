@@ -6,9 +6,11 @@ import json
 import os
 import re
 import shutil
+import stat
 import sys
 import tempfile
 import threading
+from types import SimpleNamespace
 import unittest
 from unittest import mock
 
@@ -23,6 +25,12 @@ SPEC.loader.exec_module(generator)
 
 def identity(data):
     return dict(bytes=len(data), sha256=hashlib.sha256(data).hexdigest())
+
+
+def stat_fields(info, **changes):
+    fields = {name: getattr(info, name) for name in dir(info) if name.startswith('st_')}
+    fields.update(changes)
+    return SimpleNamespace(**fields)
 
 
 def native_recipe():
@@ -95,6 +103,63 @@ class FpsFontResources(unittest.TestCase):
             generator.generate(self.assets, self.output)
         self.assertEqual(requested, [('DejaVuSans.ttf', True),
             ('DejaVuSerif-Bold.ttf', True), ('LICENSE-DejaVu.txt', False)])
+
+    def test_stable_windows_path_and_descriptor_ctimes_can_differ(self):
+        # CPython3.14 Windows uses creation time for pathname ctime and change
+        # time for fstat ctime (python/cpython#157671). Both channels are stable.
+        real_fstat = os.fstat
+        def descriptor(fd):
+            info = real_fstat(fd)
+            return stat_fields(info, st_ctime_ns=info.st_ctime_ns + 1000000000)
+        with mock.patch.object(generator.os, 'fstat', side_effect=descriptor):
+            actual = generator.generate(self.assets, self.output)
+        reference_output = self.base / 'reference_fonts.h'
+        reference = generator.generate(self.assets, reference_output)
+        self.assertEqual(actual, reference)
+        self.assertEqual(self.output.read_bytes(), reference_output.read_bytes())
+
+    def test_ctime_change_on_either_channel_is_rejected_with_identical_size_and_mtime(self):
+        target = self.assets / 'DejaVuSans.ttf'
+        real_lstat, real_fstat = Path.lstat, os.fstat
+        for channel in ('pathname', 'descriptor'):
+            with self.subTest(channel=channel):
+                calls = 0
+                def pathname(path, *args, **kwargs):
+                    nonlocal calls
+                    info = real_lstat(path, *args, **kwargs)
+                    if path == target:
+                        calls += 1
+                        if calls == 2:
+                            info = stat_fields(info, st_ctime_ns=info.st_ctime_ns + 1)
+                    return info
+                def descriptor(fd):
+                    nonlocal calls
+                    info = real_fstat(fd)
+                    calls += 1
+                    if calls == 2:
+                        info = stat_fields(info, st_ctime_ns=info.st_ctime_ns + 1)
+                    return info
+                patch = (mock.patch.object(generator.Path, 'lstat', pathname)
+                         if channel == 'pathname' else
+                         mock.patch.object(generator.os, 'fstat', side_effect=descriptor))
+                with patch, self.assertRaisesRegex(ValueError, 'changed while reading'):
+                    generator.read_source(target, font=True)
+                self.assertEqual(calls, 2)
+                self.assertFalse(self.output.exists())
+
+    def test_open_descriptor_must_match_path_identity_links_size_mode_and_mtime(self):
+        target = self.assets / 'DejaVuSans.ttf'
+        original = target.lstat()
+        changes = {'st_dev': original.st_dev + 1, 'st_ino': original.st_ino + 1,
+            'st_mode': original.st_mode ^ stat.S_IXUSR, 'st_nlink': 2,
+            'st_size': original.st_size + 1, 'st_mtime_ns': original.st_mtime_ns + 1}
+        real_fstat = os.fstat
+        for name, value in changes.items():
+            with self.subTest(field=name):
+                def descriptor(fd):
+                    return stat_fields(real_fstat(fd), **{name: value})
+                with mock.patch.object(generator.os, 'fstat', side_effect=descriptor):
+                    self.reject_without_output()
 
     def test_missing_or_bad_font_never_creates_header(self):
         target = self.assets / 'DejaVuSerif-Bold.ttf'

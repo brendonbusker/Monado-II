@@ -10,16 +10,26 @@ class LiveCheats(unittest.TestCase):
         if not cc or (ui and not cxx): self.skipTest('native Clang C/C++ required')
         env={k:v for k,v in os.environ.items() if not k.startswith(('LD_','XCDE_','LARECOMP_','LASRECOMP_'))}
         env.pop('GLIBC_TUNABLES',None)
-        flags=['-O1','-UNDEBUG','-Wall','-Wextra','-Werror','-ffp-contract=off','-fno-strict-aliasing','-pthread']
+        flags=['-O1','-UNDEBUG','-ffp-contract=off','-fno-strict-aliasing','-pthread']
         if os.environ.get('MONADO_TEST_UBSAN')=='1':
             flags+=['-fsanitize=undefined','-fno-sanitize-recover=all'];env['UBSAN_OPTIONS']='halt_on_error=1'
         with tempfile.TemporaryDirectory(prefix='monado-live-cheats-') as t:
             d=Path(t); obj=d/'state.o'; binary=d/'fixture'
-            commands=[[cc,'-std=c11',*flags,'-c',str(PORT/'runtime/hle/cheats_options.c'),'-o',str(obj)]]
+            authored_flags=[*flags,'-Wall','-Wextra','-Werror']
+            commands=[[cc,'-std=c11',*authored_flags,'-c',str(PORT/'runtime/hle/cheats_options.c'),'-o',str(obj)]]
             if ui:
                 imgui=PORT/'third_party/imgui'
-                commands+=[[cxx,'-std=c++17',*flags,'-DIMGUI_ENABLE_TEST_ENGINE','-I',str(imgui),str(ROOT/'tests/native/test_live_cheats_ui.cpp'),str(obj),*[str(imgui/(n+'.cpp')) for n in ['imgui','imgui_draw','imgui_tables','imgui_widgets']],'-o',str(binary)]]
-            else: commands+=[[cc,'-std=c11',*flags,str(ROOT/'tests/native/test_live_cheats.c'),str(obj),'-o',str(binary)]]
+                ui_obj=d/'ui.o';vendor_objects=[]
+                commands.append([cxx,'-std=c++17',*authored_flags,'-DIMGUI_ENABLE_TEST_ENGINE','-I',str(imgui),
+                    '-c',str(ROOT/'tests/native/test_live_cheats_ui.cpp'),'-o',str(ui_obj)])
+                # Keep strict warnings on our code. Compile unmodified ImGui with
+                # the production warning policy, independently of Clang releases.
+                for name in ['imgui','imgui_draw','imgui_tables','imgui_widgets']:
+                    vendor_obj=d/(name+'.o');vendor_objects.append(vendor_obj)
+                    commands.append([cxx,'-std=c++17',*flags,'-DIMGUI_ENABLE_TEST_ENGINE','-I',str(imgui),
+                        '-c',str(imgui/(name+'.cpp')),'-o',str(vendor_obj)])
+                commands.append([cxx,*flags,str(ui_obj),str(obj),*map(str,vendor_objects),'-o',str(binary)])
+            else: commands+=[[cc,'-std=c11',*authored_flags,str(ROOT/'tests/native/test_live_cheats.c'),str(obj),'-o',str(binary)]]
             for cmd in commands:
                 p=subprocess.run(cmd,cwd=d,env=env,text=True,capture_output=True,timeout=180)
                 self.assertEqual(p.returncode,0,p.stdout+p.stderr)

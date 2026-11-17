@@ -33,11 +33,19 @@ def read_source(path, *, font=False):
         opened = os.fstat(stream.fileno())
         data = stream.read(MAX_ASSET + 1)
         after = os.fstat(stream.fileno())
+    final = path.lstat()
     def identity(info):
         return (info.st_dev, info.st_ino, info.st_mode, info.st_nlink,
-                info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+                info.st_size, info.st_mtime_ns)
+    def snapshot(info):
+        return identity(info) + (info.st_ctime_ns, getattr(info, 'st_birthtime_ns', None))
+    # [XCDE] LINUX-131: Windows CPython3.14 pathname ctime is creation time,
+    # while fstat ctime may be change time. Compare those timestamps within
+    # each API, retaining both metadata-race checks and cross-API file identity.
     if (identity(before) != identity(opened) or identity(opened) != identity(after)
-            or identity(after) != identity(path.lstat()) or len(data) != before.st_size
+            or identity(after) != identity(final)
+            or snapshot(before) != snapshot(final) or snapshot(opened) != snapshot(after)
+            or len(data) != before.st_size
             or path.resolve() != path):
         raise ValueError('FPS font source changed while reading')
     if font and (len(data) < 12 or data[:4] not in (b'\x00\x01\x00\x00', b'OTTO')):
