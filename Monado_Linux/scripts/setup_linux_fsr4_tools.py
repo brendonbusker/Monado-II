@@ -6,6 +6,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import signal
 import subprocess
@@ -18,6 +19,8 @@ import setup_linux_fsr4 as component
 
 ROOT = component.ROOT
 BASE = ROOT / '.deps/fsr4'
+DXIL_SOURCE_SHA256 = 'f4f65256e6f76ad0ba8d453c62689687079988ad23408414b42e3e7701dc9c1c'
+DXIL_PATCHED_SHA256 = '76d23c96a7ef8378e04dc0c704a4f5df3671b3e71ad3f61ac901ce19be9b1c84'
 
 def source_identity(lock):
     inputs={name:item for name,item in lock['files'].items() if name.startswith('third_party/fsr4cap/') and Path(name).suffix in ('.c','.h','.py','.patch')}
@@ -74,6 +77,34 @@ def unpack(archive, destination):
             seen.add(rel)
 
 
+def class_bindings_source(source, delta):
+    """Apply only the locked, single-file FSR4 class-bindings patch."""
+    if hashlib.sha256(source).hexdigest() != DXIL_SOURCE_SHA256:
+        raise ValueError('pinned dxil-spirv source changed before class-bindings patch')
+    hunks = re.split(rb'(?m)^@@ -([1-9][0-9]*),[0-9]+ \+[0-9]+,[0-9]+ @@[^\n]*\n', delta)
+    if len(hunks) != 11 or hunks[0].splitlines()[2:] != [b'--- a/dxil_spirv.cpp', b'+++ b/dxil_spirv.cpp']:
+        raise ValueError('unexpected dxil-spirv class-bindings patch layout')
+    original = source.splitlines(keepends=True)
+    patched = []
+    next_line = 0
+    for start, body in zip(hunks[1::2], hunks[2::2]):
+        offset = int(start) - 1
+        lines = body.splitlines(keepends=True)
+        if any(line[:1] not in (b' ', b'-', b'+') for line in lines):
+            raise ValueError('invalid dxil-spirv class-bindings hunk')
+        before = [line[1:] for line in lines if not line.startswith(b'+')]
+        if offset < next_line or not before or original[offset:offset + len(before)] != before:
+            raise ValueError('dxil-spirv class-bindings patch context changed')
+        patched.extend(original[next_line:offset])
+        patched.extend(line[1:] for line in lines if not line.startswith(b'-'))
+        next_line = offset + len(before)
+    patched.extend(original[next_line:])
+    result = b''.join(patched)
+    if hashlib.sha256(result).hexdigest() != DXIL_PATCHED_SHA256:
+        raise ValueError('dxil-spirv class-bindings patch produced unexpected source')
+    return result
+
+
 def build(output, jobs=4, offline=False):
     lock = component.verify_source()
     out = component.ordinary(output, BASE / 'tools', fresh=True)
@@ -115,8 +146,13 @@ def build(output, jobs=4, offline=False):
             p = source / destination
             if p.is_dir() and not any(p.iterdir()): p.rmdir()
             shutil.move(str(out / 'source' / name), p)
-        run('class-bindings-patch', ['patch', '--batch', '--forward', '--fuzz=0', '-p1', '-i',
-            ROOT / 'third_party/fsr4cap/dxil-spirv-class-bindings.patch'], cwd=source)
+        delta = component.ordinary(ROOT / 'third_party/fsr4cap/dxil-spirv-class-bindings.patch', ROOT)
+        target = component.ordinary(source / 'dxil_spirv.cpp', source)
+        target.write_bytes(class_bindings_source(target.read_bytes(), delta.read_bytes()))
+        receipt['source_patch'] = {'name': 'class-bindings-patch', 'patch': component.resource(delta),
+                                   'before_sha256': DXIL_SOURCE_SHA256, 'after': component.resource(target)}
+        (out / 'logs/class-bindings-patch.log').write_text('Applied and verified the pinned dxil-spirv class-bindings patch.\n')
+        save()
         tools = json.loads((ROOT / '.deps/build-tools/active-tools.json').read_text())
         for item in tools.values():
             if component.digest(component.ordinary(item['path'])) != item['sha256']:

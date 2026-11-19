@@ -1,4 +1,5 @@
 """Actual optional FSR4 setup/preparation boundary and identity checks."""
+import hashlib
 import importlib.util
 import io
 import json
@@ -101,6 +102,28 @@ class Fsr4Preparation(unittest.TestCase):
                 with mock.patch.object(tools, 'BASE', self.root), self.assertRaises(ValueError):
                     tools.unpack(archive, self.root / ('bad' + str(i)))
         self.assertFalse((self.root / 'escape').exists())
+
+    def test_locked_class_bindings_patch_applies_exact_hunks_without_host_tools(self):
+        source = b'intro\nold\ncontext\ntwo\nthree\nfour\nfive\ntail\n'
+        delta = (b'diff --git a/dxil_spirv.cpp b/dxil_spirv.cpp\nindex fixture\n'
+                 b'--- a/dxil_spirv.cpp\n+++ b/dxil_spirv.cpp\n'
+                 b'@@ -2,2 +2,3 @@ first\n-old\n+new\n+added\n context\n'
+                 b'@@ -4,1 +5,1 @@ second\n-two\n+2\n'
+                 b'@@ -5,1 +6,1 @@ third\n-three\n+3\n'
+                 b'@@ -6,1 +7,1 @@ fourth\n-four\n+4\n'
+                 b'@@ -7,1 +8,1 @@ fifth\n-five\n+5\n')
+        expected = b'intro\nnew\nadded\ncontext\n2\n3\n4\n5\ntail\n'
+        with mock.patch.multiple(tools, DXIL_SOURCE_SHA256=hashlib.sha256(source).hexdigest(),
+                                 DXIL_PATCHED_SHA256=hashlib.sha256(expected).hexdigest()):
+            self.assertEqual(tools.class_bindings_source(source, delta), expected)
+            with self.assertRaisesRegex(ValueError, 'source changed'):
+                tools.class_bindings_source(source + b'unexpected file modification\n', delta)
+            with self.assertRaisesRegex(ValueError, 'patch layout'):
+                tools.class_bindings_source(source, delta.replace(b'+++ b/dxil_spirv.cpp', b'+++ b/other.cpp'))
+            with self.assertRaisesRegex(ValueError, 'patch context changed'):
+                tools.class_bindings_source(source, delta.replace(b'-old\n', b'-unexpected\n'))
+            with self.assertRaisesRegex(ValueError, 'produced unexpected source'):
+                tools.class_bindings_source(source, delta.replace(b'+added\n', b'+unexpected\n'))
 
     def test_offline_download_never_contacts_network(self):
         item = {'path': 'test', 'commit': '123', 'archive_sha256': '00'}
