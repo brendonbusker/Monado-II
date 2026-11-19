@@ -21,6 +21,7 @@
 #include "host_import.h"  // [XCDE] LINUX-005: shared checked host-memory import
 #ifdef __linux__
 #include "driver_heap.h"  // [XCDE] LINUX-070: RADV driver-owned guest backing
+#include "../../host/xcde_aspect.h"
 #endif
 #include "temporal.h"
 void vk_watch(VkImage dst, const char *site);  // [XCDE] debugging: log writes to a watched image
@@ -6531,7 +6532,13 @@ static void copy_texture(const TexRefRec *src, const TexRefRec *dst, uint64_t fl
             dt->format, (void *)st_, (void *)dt);
     TexBackend *s = vk_tex(st_, false), *d = vk_tex(dt, true);
     renderer_mark_gpu_owned(dt);
-    if (renderer_texture_presented(dt) && st_->width == dt->width && st_->height == dt->height) renderer_texture_mark_presented(st_);
+    bool present_copy = renderer_texture_presented(dt) && st_->width == dt->width && st_->height == dt->height;
+#ifdef __linux__
+    bool aspect_copy = present_copy && xcde_aspect_enabled();
+#else
+    const bool aspect_copy = false;
+#endif
+    if (present_copy && !aspect_copy) renderer_texture_mark_presented(st_);
     renderer_texture_first_write(dt);
     renderer_texture_level_fresh(dt);
     const int32_t *sr = src->region, *dr = dst->region;
@@ -6570,7 +6577,7 @@ static void copy_texture(const TexRefRec *src, const TexRefRec *dst, uint64_t fl
     if (copy_opt() && sx0 == 0 && sy0 == 0 && dx0 == 0 && dy0 == 0 && sw == (int)s->width && sh == (int)s->height && dw == (int)d->width &&
         dh == (int)d->height && slv == 0 && dlv == 0 && sly == 0 && dly == 0 && alias_make(st_, dt, s, d)) {
         if (ct_on()) LOG("[ct] alias made %p -> %p\n", (void *)st_, (void *)dt);
-        return;
+        goto copied;
     }
     alias_before_write(dt, 0, "copy dst");
     if (naliases) s = alias_read(st_)->backend;
@@ -6581,14 +6588,14 @@ static void copy_texture(const TexRefRec *src, const TexRefRec *dst, uint64_t fl
         VkImageResolve rv = {.srcSubresource = {sa, slv, sly, 1}, .srcOffset = {sx0, sy0, 0}, .dstSubresource = {da, dlv, dly, 1},
                              .dstOffset = {dx0, dy0, 0}, .extent = {(uint32_t)sw, (uint32_t)sh, 1}};
         vk_watch(d->image, "exec.c:3436 vkCmdResolveImage"); vkCmdResolveImage(cb, s->image, VK_IMAGE_LAYOUT_GENERAL, d->image, VK_IMAGE_LAYOUT_GENERAL, 1, &rv);
-        return;
+        goto copied;
     }
     if (s->samples != d->samples) return;
     if (sw == dw && sh == dh && s->format == d->format) {
         VkImageCopy c = {.srcSubresource = {sa, slv, sly, 1}, .srcOffset = {sx0, sy0, 0}, .dstSubresource = {da, dlv, dly, 1},
                          .dstOffset = {dx0, dy0, 0}, .extent = {(uint32_t)sw, (uint32_t)sh, 1}};
         vk_watch(d->image, "exec.c:3443 vkCmdCopyImage"); vkCmdCopyImage(cb, s->image, VK_IMAGE_LAYOUT_GENERAL, d->image, VK_IMAGE_LAYOUT_GENERAL, 1, &c);
-        return;
+        goto copied;
     }
     // scaled / converting copy: the game builds its depth pyramid this way (nearest), colour copies filter if asked
     bool depth = (sa | da) & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT);
@@ -6624,6 +6631,25 @@ static void copy_texture(const TexRefRec *src, const TexRefRec *dst, uint64_t fl
     dl_note("  blit %p lv%u/%u %ux%u (%d,%d %dx%d) -> %p lv%u/%u %ux%u (%d,%d %dx%d) %s", (void *)s->image, slv, s->levels, s->width,
             s->height, sx0, sy0, sw, sh, (void *)d->image, dlv, d->levels, d->width, d->height, dx0, dy0, dw, dh, linear ? "linear" : "nearest");
     vk_watch(d->image, "exec.c:3456 vkCmdBlitImage"); vkCmdBlitImage(cb, s->image, VK_IMAGE_LAYOUT_GENERAL, d->image, VK_IMAGE_LAYOUT_GENERAL, 1, &bl, linear ? VK_FILTER_LINEAR : VK_FILTER_NEAREST);
+copied:
+    // [XCDE] #12: an adapted display's HUD transform applies to presented
+    // targets. Inherit that role only from a complete color transfer. Merely
+    // touching the window texture can otherwise fit offscreen world draws as UI.
+    if (!aspect_copy || s->aspect != VK_IMAGE_ASPECT_COLOR_BIT || d->aspect != VK_IMAGE_ASPECT_COLOR_BIT ||
+        !s->image || !d->image || s->image == d->image) return;
+    if (!slv && !dlv && !sly && !dly && s->base_type == VK_IMAGE_VIEW_TYPE_2D && d->base_type == VK_IMAGE_VIEW_TYPE_2D &&
+        aspect_composite_whole_copy_region(sr, st_->width, st_->height, sx0, sy0, sw, sh, s->width, s->height) &&
+        aspect_composite_whole_copy_region(dr, dt->width, dt->height, dx0, dy0, dw, dh, d->width, d->height)) {
+        renderer_texture_mark_presented(st_);
+    } else if (!renderer_texture_presented(st_)) {
+        static unsigned notes;
+        if (notes < 8) {
+            ++notes;
+            LOG("[aspect] copy kept source offscreen: logical %ux%u mip/layer %u/%u -> %u/%u region %d,%d %dx%d of %ux%u -> %d,%d %dx%d of %ux%u\n",
+                st_->width, st_->height, slv, sly, dlv, dly, sx0, sy0, sw, sh, s->width, s->height,
+                dx0, dy0, dw, dh, d->width, d->height);
+        }
+    }
 }
 
 // ================================================================== present helpers (device.c)

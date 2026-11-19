@@ -25,6 +25,17 @@ typedef enum {
     ASPECT_COMPOSITE_LEGACY_SINGLE
 } AspectCompositeRole;
 
+// A clipped or rounded partial request can cover the physical allocation.
+// Require the original guest region as well before inheriting display roles.
+static inline bool aspect_composite_whole_copy_region(const int32_t region[6], uint32_t guest_w, uint32_t guest_h,
+                                                       int x, int y, int w, int h, uint32_t image_w, uint32_t image_h) {
+    return !region[0] && !region[1] && !region[2] &&
+           (!region[3] || (uint32_t)region[3] == guest_w) &&
+           (!region[4] || (uint32_t)region[4] == guest_h) &&
+           (!region[5] || region[5] == 1) &&
+           !x && !y && (uint32_t)w == image_w && (uint32_t)h == image_h;
+}
+
 static inline bool aspect_composite_scene_source(const AspectCompositeDraw *draw, const AspectCompositeInput *input) {
     if (!input->scene_target || !input->gpu_written || !input->color_image || !input->separate_image ||
         !input->width || !input->height || !isfinite(input->sx) || !isfinite(input->sy) || input->sx <= 0 || input->sy <= 0)

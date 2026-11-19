@@ -69,6 +69,20 @@ static void inherited(void) {
     assert(aspect_composite_role(&d,&i,1)==ASPECT_COMPOSITE_NATIVE_SIZE);
     i.sx=i.sy=1;assert(aspect_composite_role(&d,&i,1)==ASPECT_COMPOSITE_HUD);
 }
+static void copy_regions(void) {
+    int32_t whole[] = {0, 0, 0, 1280, 720, 1};
+    int32_t implicit[6] = {0};
+    int32_t partial[] = {0, 0, 0, 1, 1, 1};
+    int32_t oversized[] = {0, 0, 0, 1281, 720, 1};
+    int32_t slice[] = {0, 0, 1, 1280, 720, 1};
+    assert(aspect_composite_whole_copy_region(whole, 1280, 720, 0, 0, 3440, 1440, 3440, 1440));
+    assert(aspect_composite_whole_copy_region(implicit, 1280, 720, 0, 0, 3440, 1440, 3440, 1440));
+    assert(!aspect_composite_whole_copy_region(partial, 1280, 720, 0, 0, 3, 2, 3440, 1440));
+    assert(!aspect_composite_whole_copy_region(oversized, 1280, 720, 0, 0, 3440, 1440, 3440, 1440));
+    assert(!aspect_composite_whole_copy_region(slice, 1280, 720, 0, 0, 3440, 1440, 3440, 1440));
+    assert(!aspect_composite_whole_copy_region(whole, 1280, 720, 1, 0, 3439, 1440, 3440, 1440));
+    assert(!aspect_composite_whole_copy_region(whole, 1280, 720, 0, 0, 3439, 1440, 3440, 1440));
+}
 int main(int argc,char **argv) {
     assert(argc==2);
     if(!strcmp(argv[1],"reduced"))reduced();
@@ -76,6 +90,7 @@ int main(int argc,char **argv) {
     else if(!strcmp(argv[1],"boundaries"))boundaries();
     else if(!strcmp(argv[1],"transitions"))transitions();
     else if(!strcmp(argv[1],"inherited"))inherited();
+    else if(!strcmp(argv[1],"copy-regions"))copy_regions();
     else assert(!"unknown scenario");
     puts("native aspect compositor: PASS");return 0;
 }

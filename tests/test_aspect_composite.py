@@ -37,5 +37,6 @@ class AspectComposite(unittest.TestCase):
     def test_fullscreen_scene_contract_rejects_unrelated_draws(self):self.scenario('boundaries')
     def test_scene_hud_and_resolution_transitions_do_not_carry_role(self):self.scenario('transitions')
     def test_retained_exact_size_classification(self):self.scenario('inherited')
+    def test_copy_role_requires_complete_guest_and_physical_regions(self):self.scenario('copy-regions')
 
 if __name__=='__main__':unittest.main()
