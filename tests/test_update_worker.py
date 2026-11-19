@@ -127,6 +127,32 @@ class UpdateWorker(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('--rollback', result.stdout)
 
+    def test_real_worker_relays_typed_progress_without_exposing_log_paths(self):
+        lines = ['[4/12] building-game-graphics-dependencies',
+                 '[4/12] building-game-verifying-graphics-packages [packages 7]',
+                 '[4/12] building-game-compiling-sdl [elapsed 15]',
+                 'ffmpeg-build: starting; log: /authored/private-path',
+                 '[4/12] building-game-compiling-sdl [elapsed untrusted]',
+                 '[6/12] building-game-native-fsr3-dependency',
+                 '[9/12] building-game-build-game',
+                 '[compile 31/50] done', '[compile 99/50] done',
+                 '[1/8] building-launcher-check-input']
+        self.script.write_text('#!/usr/bin/python3\nprint(' + repr('\n'.join(lines)) + ', flush=True)\n')
+        events = []
+        update.run_build([str(self.script)], self.workspace, self.log, events.append, lambda: False, lock_fd=self.fd)
+        self.assertEqual(self.log.read_text().splitlines(), lines)
+        self.assertEqual([event['message'] for event in events], [
+            'Building the game: Preparing graphics and audio libraries (4/12)',
+            'Building the game: Checking graphics packages (4/12) · 7 packages checked',
+            'Building the game: Compiling SDL (4/12) · 15s elapsed',
+            'Building the game: Preparing native FSR3 upscaling (6/12)',
+            'Building the game: Compiling native game files (9/12)',
+            'Building the game: Compiling native game files (9/12) · 31/50 compile jobs finished',
+            'Building the launcher: Checking game files (1/8)',
+        ])
+        self.assertEqual([event['fraction'] for event in events], [3/12, 3/12, 3/12, 5/12, 8/12, 8/12, 0])
+        self.assertTrue(all(event['phase'] == 'building' for event in events))
+
     def test_wrong_inherited_lock_cannot_execute_build_script(self):
         wrong = os.open(self.owner / 'wrong.lock', os.O_RDWR | os.O_CREAT, 0o600)
         try:

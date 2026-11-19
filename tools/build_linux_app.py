@@ -18,6 +18,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import selectors
 import shutil
 import signal
@@ -592,7 +593,52 @@ def stop_owned(child, *, grace=5, timeout=30):
         time.sleep(0.02)
 
 
-def execute(command, cwd, log, *, cancel_grace=5, cleanup_timeout=30):
+class GraphicsBuildProgress:
+    """Relay fixed labels for observed work to both generations of updater."""
+    package = re.compile(r'(?:verified |reused verified original-installation package )'
+                         r'([A-Za-z0-9][A-Za-z0-9+_.~%-]{0,254}\.deb)\Z')
+    component = re.compile(r'(sdl|ffmpeg)-(configure|build|install): '
+                           r'(?:starting; log: .+|still working \(([0-9]{1,4})s\))\Z')
+    operations = {'configure': 'configuring', 'build': 'compiling', 'install': 'installing'}
+
+    def __init__(self, stage):
+        self.stage = stage
+        self.pending = ''
+        self.packages = set()
+
+    def detail(self, line):
+        package = self.package.fullmatch(line)
+        if package and package[1] not in self.packages and len(self.packages) < 9999:
+            self.packages.add(package[1])
+            return f'verifying-graphics-packages [packages {len(self.packages)}]'
+        component = self.component.fullmatch(line)
+        if component:
+            label = self.operations[component[2]] + '-' + component[1]
+            return label + (f' [elapsed {component[3]}]' if component[3] else '')
+        return None
+
+    def write(self, text):
+        # Preserve the original console stream. Insert a compatibility record
+        # at a newline while the worker's per-stage log keeps the original text.
+        complete, newline, trailing = text.rpartition('\n')
+        if not newline:
+            pending = self.pending + text
+            self.pending = pending if len(pending) <= 4096 else '\0'
+            print(text, end='', flush=True)
+            return
+        latest = None
+        for line in (self.pending + complete).split('\n'):
+            if len(line) <= 4096:
+                latest = self.detail(line) or latest
+        self.pending = trailing if len(trailing) <= 4096 else '\0'
+        print(complete, flush=True)
+        if latest:
+            print(self.stage + latest, flush=True)
+        if trailing:
+            print(trailing, end='', flush=True)
+
+
+def execute(command, cwd, log, *, cancel_grace=5, cleanup_timeout=30, progress=None):
     if not 0 < cancel_grace <= cleanup_timeout <= 30:
         raise BuildError('build cleanup requires 0 < grace <= timeout <= 30 seconds')
     environment = {'PATH': BUILD_PATH, 'LANG': 'C.UTF-8', 'LC_ALL': 'C.UTF-8',
@@ -625,7 +671,10 @@ def execute(command, cwd, log, *, cancel_grace=5, cleanup_timeout=30):
                     if text:
                         output.write(text)
                         output.flush()
-                        print(text, end='', flush=True)
+                        if progress is None:
+                            print(text, end='', flush=True)
+                        else:
+                            progress.write(text)
                     if not data:
                         selector.unregister(key.fileobj)
         finally:
@@ -723,6 +772,9 @@ def build(root=ROOT, jobs=4, *, runner=execute, locker=build_lock, identity=None
               'Fresh build logs: ' + str(paths['run']), flush=True)
         backup = None
         total = len(commands) + (0 if game_only or no_appimage else 1)
+        # Old updaters display the first lowercase stage token from the child
+        # build log. Keep that protocol readable during this upgrade as well.
+        prefix = 'building-game-' if game_only else 'building-launcher-' if reuse_game is not None else ''
         runtime_fallback = False
         try:
             for number, (name, command) in enumerate(commands, 1):
@@ -733,9 +785,13 @@ def build(root=ROOT, jobs=4, *, runner=execute, locker=build_lock, identity=None
                 entry = dict(name=name, argv=command, cwd=str(paths['port']), log=str(log), status='running')
                 receipt['commands'].append(entry)
                 write_json(receipt_path, receipt)
-                print(f'[{number}/{total}] {name}', flush=True)
+                stage = f'[{number}/{total}] {prefix}'
+                print(stage + name, flush=True)
                 started = time.monotonic()
-                code = runner(command, paths['port'], log)
+                if name == 'graphics-dependencies' and prefix and runner is execute:
+                    code = runner(command, paths['port'], log, progress=GraphicsBuildProgress(stage))
+                else:
+                    code = runner(command, paths['port'], log)
                 entry.update(exit=code, seconds=time.monotonic() - started, status='passed' if code == 0 else 'failed')
                 if code == 3 and name == 'import-native-runtime':
                     runtime_fallback = True
@@ -760,7 +816,7 @@ def build(root=ROOT, jobs=4, *, runner=execute, locker=build_lock, identity=None
                 entry = dict(name='check-appimage', argv=command, cwd=str(paths['root']), log=str(log), status='running')
                 receipt['commands'].append(entry)
                 write_json(receipt_path, receipt)
-                print(f'[{len(commands) + 1}/{total}] check-appimage (no window or game)', flush=True)
+                print(f'[{len(commands) + 1}/{total}] {prefix}check-appimage (no window or game)', flush=True)
                 code = runner(command, paths['root'], log)
                 entry.update(exit=code, status='passed' if code == 0 else 'failed')
                 if code:

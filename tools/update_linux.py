@@ -959,6 +959,61 @@ def payload_result(workspace, build_id):
     return expected
 
 
+class BuildProgress:
+    """Translate bounded display records without forwarding raw build output."""
+    stage_record = re.compile(rb'\[([0-9]{1,3})/([0-9]{1,3})\] ([a-z][a-z0-9-]{0,95})'
+                              rb'(?: \[(packages|elapsed) ([0-9]{1,4})\]| \(no window or game\))?')
+    compile_record = re.compile(rb'\[compile ([0-9]{1,6})/([0-9]{1,6})\] (?:done|failed/skipped)')
+    labels = {'check-input': 'Checking game files',
+              'generate-game': 'Translating game files',
+              'build-game': 'Compiling native game files',
+              'build-launcher': 'Compiling launcher files',
+              'native-fsr3-dependency': 'Preparing native FSR3 upscaling',
+              'native-fsr4-dependency': 'Preparing the optional FSR4 module',
+              'graphics-dependencies': 'Preparing graphics and audio libraries',
+              'verifying-graphics-packages': 'Checking graphics packages',
+              'configuring-sdl': 'Configuring SDL',
+              'compiling-sdl': 'Compiling SDL',
+              'installing-sdl': 'Installing SDL',
+              'configuring-ffmpeg': 'Configuring FFmpeg',
+              'compiling-ffmpeg': 'Compiling FFmpeg',
+              'installing-ffmpeg': 'Installing FFmpeg'}
+    components = {'configuring-sdl', 'compiling-sdl', 'installing-sdl',
+                  'configuring-ffmpeg', 'compiling-ffmpeg', 'installing-ffmpeg'}
+
+    def __init__(self):
+        self.name = None
+        self.event = None
+
+    def read(self, line):
+        stage = self.stage_record.fullmatch(line)
+        if stage:
+            number, total = int(stage[1]), int(stage[2])
+            if not 0 < number <= total <= 100:
+                return None
+            name = stage[3].decode('ascii')
+            prefix = ''
+            if name.startswith(('building-game-', 'building-launcher-')):
+                _, target, name = name.split('-', 2)
+                prefix = f'Building the {target}: '
+            label = self.labels.get(name, name.replace('-', ' ').capitalize())
+            message = f'{prefix}{label} ({number}/{total})'
+            if stage[4] == b'packages' and name == 'verifying-graphics-packages':
+                message += f' · {int(stage[5])} packages checked'
+            elif stage[4] == b'elapsed' and name in self.components:
+                message += f' · {int(stage[5])}s elapsed'
+            self.name = name
+            self.event = {'phase': 'building', 'fraction': (number - 1) / total, 'message': message}
+            return self.event
+        if self.name == 'build-game':
+            compiled = self.compile_record.fullmatch(line)
+            if compiled:
+                done, total = int(compiled[1]), int(compiled[2])
+                if 0 < done <= total:
+                    return dict(self.event, message=self.event['message'] + f' · {done}/{total} compile jobs finished')
+        return None
+
+
 def run_build(command, workspace, log, emit, cancelled, *, lock_fd=None):
     """A separate trusted subreaper owns only build workers, including setsid jobs."""
     invocation = [sys.executable, '-I', '-B', str(ROOT / 'tools/update_linux.py'),
@@ -974,8 +1029,10 @@ def run_build(command, workspace, log, emit, cancelled, *, lock_fd=None):
         started = time.monotonic()
         offset = 0
         pending = b''
-        while child.poll() is None:
-            if (cancelled() or time.monotonic() - started > 3600) and interrupted is None:
+        progress = BuildProgress()
+        while True:
+            running = child.poll() is None
+            if running and (cancelled() or time.monotonic() - started > 3600) and interrupted is None:
                 child.send_signal(signal.SIGINT)
                 interrupted = time.monotonic()
             # Never forcibly kill the trusted cleanup owner. It retains its
@@ -985,17 +1042,16 @@ def run_build(command, workspace, log, emit, cancelled, *, lock_fd=None):
                     incoming.seek(offset)
                     data = incoming.read(65536)
                     offset += len(data)
-                pending += data
-                lines = pending.split(b'\n')
-                pending = lines.pop()[-4096:]
+                lines = (pending + data).split(b'\n')
+                pending = lines.pop()
+                if len(pending) > 4096:
+                    pending = b'\0'  # Ignore this unfinished oversized line through its delimiter.
                 for line in lines:
-                    stage = re.match(rb'\[(\d+)/(\d+)\] ([a-z-]+)', line)
-                    if stage:
-                        done, total = int(stage[1]), int(stage[2])
-                        if 0 < done <= total <= 100:
-                            emit({'phase': 'building', 'fraction': (done - 1) / total,
-                                  'message': stage[3].decode().replace('-', ' ').capitalize() +
-                                             f' ({done}/{total})'})
+                    event = progress.read(line)
+                    if event:
+                        emit(event)
+            if not running:
+                break
             time.sleep(0.1)
         code = child.wait()
     if interrupted is not None:
@@ -1165,6 +1221,7 @@ class Session:
         (payload / 'game_files').symlink_to((self.owner / 'game_files').resolve(strict=True), target_is_directory=True)
         build_id = 'game-' + identity.removeprefix('payload-')
         command = build_command(payload, self.game, True) + ['--game-only', '--build-id', build_id]
+        progress({'phase': 'building', 'message': 'Building the game locally. Saves stay in place.'})
         self._run(command, payload, transaction / 'build.log', progress, cancelled)
         if cancelled():
             raise update_release.UpdateCancelled('Update cancelled; current version remains selected.')
@@ -1243,8 +1300,7 @@ class Session:
         shared_input = (self.owner / 'game_files').resolve(strict=True)
         (workspace / 'game_files').symlink_to(shared_input, target_is_directory=True)
         command = build_command(workspace, game, False)
-        progress({'phase': 'building', 'message': 'Rebuilding the game and launcher locally. Saves stay in place.' if rebuild else
-                  'Updating the launcher; keeping the verified game build and saves.'})
+        progress({'phase': 'building', 'message': 'Building the launcher with the verified game build. Saves stay in place.'})
         self._run(command, workspace, transaction / 'build.log', progress, cancelled)
         if cancelled():
             raise update_release.UpdateCancelled('Update cancelled; previous version remains selected.')

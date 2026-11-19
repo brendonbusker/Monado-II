@@ -150,6 +150,38 @@ class LinuxBuildApp(unittest.TestCase):
         self.assertNotIn('published', document['paths'])
         self.assertEqual(before, inventory(self.root))
 
+    def test_update_build_labels_leave_command_and_receipt_stage_names_intact(self):
+        existing_game = self.port / 'authored-game-fixture'
+        existing_game.touch()
+        self.fail_stage = 'setup_linux_graphics.py'
+        for target, options in (('game', {'game_only': True}), ('launcher', {'reuse_game': existing_game})):
+            with self.subTest(target=target), mock.patch.object(build, 'validate_reused_game', return_value={}), \
+                    contextlib.redirect_stdout(io.StringIO()) as output:
+                with self.assertRaisesRegex(build.BuildError, 'graphics-dependencies failed'):
+                    build.build(self.root, runner=self.runner, locker=lambda port: contextlib.nullcontext(),
+                                identity='authored-' + target, dlss=False, **options)
+                self.assertRegex(output.getvalue(), rf'\[4/\d+\] building-{target}-graphics-dependencies\n')
+                receipt = json.loads((self.port / 'runs/local-build' / ('authored-' + target) / 'receipt.json').read_text())
+                self.assertEqual(receipt['commands'][-1]['name'], 'graphics-dependencies')
+
+    def test_graphics_progress_handles_split_lines_and_relays_only_known_work(self):
+        progress = build.GraphicsBuildProgress('[4/12] building-game-')
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            progress.write('verified authored-one.deb\nsdl-bui')
+            progress.write('ld: starting; log: /authored/private-path\n')
+            progress.write('reused verified original-installation package authored-one.deb\n')
+            progress.write('sdl-build: still working (15s)\n')
+            progress.write('ffmpeg-build: still working (fake text)\n')
+            progress.write('ffmpeg-install: starting; log: /authored/other-path\n')
+        self.assertIn('sdl-build: starting; log: /authored/private-path\n', output.getvalue())
+        markers = [line for line in output.getvalue().splitlines() if line.startswith('[4/12]')]
+        self.assertEqual(markers, [
+            '[4/12] building-game-verifying-graphics-packages [packages 1]',
+            '[4/12] building-game-compiling-sdl',
+            '[4/12] building-game-compiling-sdl [elapsed 15]',
+            '[4/12] building-game-installing-ffmpeg',
+        ])
+
     def test_game_only_refuses_reuse_and_unsafe_identity_before_build_commands(self):
         before = inventory(self.root)
         with self.assertRaisesRegex(build.BuildError, 'cannot reuse'):
