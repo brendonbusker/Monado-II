@@ -189,6 +189,10 @@ static uint64_t virtual_ns,acquire_ns,copy_ns,gpu_wait_ns,oversleep_ns,slept_ns,
 static uint64_t expected_half_ns,present_block_ns;
 static float measured_frame_ms;
 static int target_fps;
+static VkPresentModeKHR actual_present_mode;
+static float display_refresh;
+static unsigned display_refresh_queries;
+static float vk_display_hz(void){display_refresh_queries++;return display_refresh;}
 int xcde_present_fps(void){return target_fps;}
 float xcde_effective_present_fps(void){return scenario==43?29.97f:(float)target_fps;}
 bool tmp_frame_gen_wanted(void){return scenario!=45;}
@@ -331,6 +335,7 @@ static void reset(unsigned mode){
  overlay_enabled=false;overlay_draws=0;
  fg_second_deadline=g_blocked_ns=0;virtual_ns=4000000000ull;acquire_ns=copy_ns=gpu_wait_ns=oversleep_ns=slept_ns=0;
  measured_frame_ms=16.f;target_fps=60;expected_half_ns=8333333ull;
+ actual_present_mode=VK_PRESENT_MODE_MAILBOX_KHR;display_refresh=0.f;display_refresh_queries=0;
  memset(present_ns,0,sizeof present_ns);
  if(mode==3)acquire_ns=6000000ull;
  if(mode==11||mode==13||mode==14){acquire_ns=4000000ull;copy_ns=2000000ull;}
@@ -384,7 +389,7 @@ static void extended(unsigned mode,bool overlay,bool expect_fixed){
  if(mode==25)fps_game_output=false;
  if(mode==26)fps_repeated_output=true;
  if(mode==29)fg_acquire_seq[0]=fg_acquire_seq[1]=999;
- if(mode==30)g_vk.sc_count=2;
+ if(mode==30||mode==44)g_vk.sc_count=2;
  if(mode==31)sc_dirty=true;
  if(mode==35)copy_ns=12000000;
  if(mode==36)gpu_wait_ns=5000000;
@@ -392,6 +397,11 @@ static void extended(unsigned mode,bool overlay,bool expect_fixed){
  if(mode==38)present_block_ns=2000000;
  if(mode==39)oversleep_ns=3000000;
  if(mode==43){target_fps=30;expected_half_ns=(uint64_t)((double)(1000.f/29.97f)*500000.);}
+ if(mode==44||mode==48){
+  target_fps=0;actual_present_mode=VK_PRESENT_MODE_FIFO_KHR;
+  display_refresh=mode==44?90.f:59.94f;
+  expected_half_ns=(uint64_t)((double)(1000.f/(display_refresh*.5f))*500000.);
+ }
  if(mode==45)make_pair=false;
  vk_frame_end(NULL);
  if(mode>=46){
@@ -401,6 +411,8 @@ static void extended(unsigned mode,bool overlay,bool expect_fixed){
   assert(captured_job.image[0]==0&&captured_job.image[1]==1&&captured_job.sequence==2);
   assert(captured_job.done[0]==done_sem[0]&&captured_job.done[1]==done_sem[1]);
   assert(captured_ops.wait_ready&&captured_ops.present&&captured_ops.meter_now);
+  assert(display_refresh_queries==(mode==48?1u:0u));
+  if(mode==48)assert(captured_job.interval_ms==1000.f/29.97f);
   // A later render-thread collection receives captured, successful-only events.
   FgPresentResult completed={.valid=true,.job=captured_job,.result={VK_SUCCESS,mode==47?VK_ERROR_OUT_OF_DATE_KHR:VK_SUCCESS}};
   fps_game_output=false;
@@ -421,16 +433,17 @@ static void extended(unsigned mode,bool overlay,bool expect_fixed){
   if(mode==26)assert(output_repeated==(overlay?1u:0u)&&fg_submitted_repeated==1);
  }else{
   assert(presents==2&&submits==2&&records==1&&copies==1&&waits==1);
-  bool fallback=mode==23||mode==29||mode==30||mode==31||mode==34;
+  bool fallback=mode==23||mode==29||mode==30||mode==31||mode==34||mode==44;
   assert(fg_timing.ahead==(fallback?0u:1u)&&fg_timing.serial==(fallback?1u:0u));
   assert(acquires==(fallback?1u:0u));
-  if(mode!=29&&mode!=30&&mode!=31)assert(ahead_acquires==1);
+  if(mode!=29&&mode!=30&&mode!=31&&mode!=44)assert(ahead_acquires==1);
   else assert(!ahead_acquires);
   assert(present_colors[0]==1+(overlay?8u:0u)&&present_colors[1]==2+(overlay?8u:0u));
   assert(strchr(events,'W')<strchr(events,'P'));
   if(!fallback)assert(strrchr(events,'S')<strchr(events,'W'));
   if(mode!=27&&mode!=32){
    assert(present_ns[1]-present_ns[0]>=expected_half_ns);
+   if(mode==44)assert(present_ns[1]-present_ns[0]==expected_half_ns&&display_refresh_queries==1);
    if(overlay)assert(output_calls==2&&output_generated==1&&!output_repeated);
   }else if(overlay)assert(output_calls==1&&output_generated==(mode==27?1u:0u));
   assert(g_blocked_ns==slept_ns);
@@ -587,9 +600,9 @@ def main():
             harness = harness.replace('#include <stdio.h>', '#include <stdio.h>\n#include <stdlib.h>')
             (out / 'presentation.c').write_text(harness)
             run('compile-presentation', [cc, *flags, '-DXCDE_LINUX_FRAMEGEN', out / 'presentation.c', '-lm', '-o', out / 'presentation'], timeout=30)
-            for mode in [*range(22), *range(22, 44), 45,46,47]:
+            for mode in range(49):
                 print(run('presentation-' + str(mode), [out / 'presentation', str(mode)]), end='')
-            for mode in [*range(22), *range(22, 44), 45,46,47]:
+            for mode in range(49):
                 print(run('presentation-overlay-' + str(mode), [out / 'presentation', str(mode), '--overlay']), end='')
             if args.baseline_source:
                 baseline=args.baseline_source.read_text()

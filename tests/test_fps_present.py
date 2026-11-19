@@ -81,11 +81,11 @@ class FpsPresentation(unittest.TestCase):
             with self.subTest(mode=mode): self.scenario(False, mode, True)
 
     def test_disabled_framegen_retains_all_pacing_and_recovery_scenarios(self):
-        for mode in [*range(22), *range(22,44),45,46,47]:
+        for mode in range(49):
             with self.subTest(mode=mode): self.scenario(True, mode, False)
 
     def test_counter_follows_generation_with_clean_retained_input_and_both_outputs(self):
-        for mode in [*range(22), *range(22,44),45,46,47]:
+        for mode in range(49):
             with self.subTest(mode=mode): self.scenario(True, mode, True)
 
 

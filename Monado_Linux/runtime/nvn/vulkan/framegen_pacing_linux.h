@@ -11,9 +11,12 @@ static uint64_t fg_pacing_now(void) {
     if (clock_gettime(CLOCK_MONOTONIC, &now)) return 0;
     return (uint64_t)now.tv_sec * 1000000000ull + (uint64_t)now.tv_nsec;
 }
-// Pacing has a target budget; the SDK still receives the actual measured delta.
-// Do not turn invalid measurements into valid intervals or guess an uncapped FPS.
-static float fg_pacing_interval_ms(float measured_ms, float target_fps) {
+// The SDK still receives the measured delta. In uncapped FIFO, that delta
+// includes any wait for the previous pair. Feeding it back as the next pair
+// period can apply a growing delay. Use the display's two-output period instead.
+static float fg_pacing_interval_ms(float measured_ms, float target_fps, bool fifo, float display_hz) {
+    if (target_fps == 0.f && fifo && isfinite(display_hz) && display_hz >= 30.f && display_hz <= 1000.f)
+        target_fps = display_hz * .5f;
     if (!isfinite(measured_ms) || measured_ms < 1.f || measured_ms > 100.f || (!isfinite(target_fps) || target_fps <= 0)) return measured_ms;
     float target_ms = 1000.f / (float)target_fps;
     // [XCDE] LINUX-097: a known cap defines a stable output clock. The

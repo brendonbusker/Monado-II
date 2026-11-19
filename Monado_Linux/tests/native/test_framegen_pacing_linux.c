@@ -50,6 +50,25 @@ static int mock_wait(clockid_t clock, int flags, const struct timespec *deadline
 #ifdef FRAMEGEN_PACING_REAL_CLOCK
 static volatile sig_atomic_t caught;
 static void alarm_handler(int signum) { if(signum==SIGALRM)caught++; }
+#else
+static uint64_t replay_uncapped_producer(bool fifo) {
+    FgPacingClock schedule = {0};
+    uint64_t ready = 1000000000ull, previous = ready - 33000000ull;
+    for (unsigned i = 0; i < 64; ++i) {
+        FgPacingPlan plan;
+        float measured_ms = (float)(ready - previous) / 1e6f;
+        float interval = fg_pacing_interval_ms(measured_ms, 0.f, fifo, 89.89f);
+        assert(fg_pacing_schedule(&schedule, ready, interval, &plan));
+        // Model the real bounded publication barrier and 0.2 ms scheduling
+        // oversleep per output. The next measured wall interval includes it.
+        fg_pacing_observe(&schedule, plan.generated_ns + 200000ull);
+        uint64_t real = fg_pacing_output_deadline(&schedule, plan.real_ns) + 200000ull;
+        fg_pacing_observe(&schedule, real);
+        previous = ready;
+        ready = real + 11000000ull;
+    }
+    return ready - previous;
+}
 #endif
 int main(void) {
     unsigned cases=0;uint64_t deadline=77;
@@ -94,26 +113,39 @@ int main(void) {
     const int targets[]={30,60,120,165};
     const uint64_t halves[]={16666666ull,8333333ull,4166666ull,3030303ull};
     for(unsigned i=0;i<sizeof targets/sizeof*targets;i++) {
-        float measured=40.f,interval=fg_pacing_interval_ms(measured,targets[i]);
+        float measured=40.f,interval=fg_pacing_interval_ms(measured,targets[i],true,90.f);
         assert(measured==40.f&&fg_pacing_deadline(1000,interval,&deadline)&&deadline==1000+halves[i]);cases++;
-        assert(fg_pacing_interval_ms(4.f,targets[i])==1000.f/targets[i]);cases++;
+        assert(fg_pacing_interval_ms(4.f,targets[i],true,90.f)==1000.f/targets[i]);cases++;
     }
-    float world=fg_pacing_interval_ms(40.f,165),cutscene=fg_pacing_interval_ms(40.f,30);
-    assert(cutscene>world&&fg_pacing_interval_ms(40.f,165)==world);cases++;
-    assert(fg_pacing_interval_ms(40.f,0)==40.f&&fg_pacing_interval_ms(40.f,-60)==40.f);cases++;
+    float world=fg_pacing_interval_ms(40.f,165,true,90.f),cutscene=fg_pacing_interval_ms(40.f,30,true,90.f);
+    assert(cutscene>world&&fg_pacing_interval_ms(40.f,165,true,90.f)==world);cases++;
+    assert(fg_pacing_interval_ms(40.f,0,false,90.f)==40.f&&fg_pacing_interval_ms(40.f,-60,true,90.f)==40.f);cases++;
+    assert(fg_pacing_interval_ms(40.f,0,true,90.f)==1000.f/45.f);cases++;
+    assert(fg_pacing_interval_ms(40.f,0,true,59.94f)==1000.f/29.97f);cases++;
+    assert(fg_pacing_interval_ms(40.f,0,true,40.f)==50.f);cases++;
+    const float unknown_refresh[]={0.f,-1.f,NAN,INFINITY,29.f,1001.f};
+    for(unsigned i=0;i<sizeof unknown_refresh/sizeof *unknown_refresh;i++) {
+        assert(fg_pacing_interval_ms(40.f,0,true,unknown_refresh[i])==40.f);cases++;
+    }
+    uint64_t old_uncapped = replay_uncapped_producer(false), fixed_uncapped = replay_uncapped_producer(true);
+    assert(old_uncapped>50000000ull&&fixed_uncapped>22000000ull&&fixed_uncapped<23500000ull);cases++;
+    printf("synthetic uncapped producer last wall period %llu -> %llu ns\n",
+        (unsigned long long)old_uncapped,(unsigned long long)fixed_uncapped);
     for(unsigned i=0;i<sizeof invalid/sizeof*invalid;i++) {
-        float interval=fg_pacing_interval_ms(invalid[i],60);
+        float interval=fg_pacing_interval_ms(invalid[i],60,true,90.f);
+        assert(isnan(invalid[i])?isnan(interval):interval==invalid[i]);
+        interval=fg_pacing_interval_ms(invalid[i],0,true,90.f);
         assert(isnan(invalid[i])?isnan(interval):interval==invalid[i]);
         deadline=77;assert(!fg_pacing_deadline(1000,interval,&deadline)&&deadline==77);cases++;
     }
-    float interval=fg_pacing_interval_ms(40.f,60);
+    float interval=fg_pacing_interval_ms(40.f,60,false,0.f);
     assert(fg_pacing_deadline(UINT64_MAX-8333333ull,interval,&deadline)&&deadline==UINT64_MAX);cases++;
     deadline=77;assert(!fg_pacing_deadline(UINT64_MAX-8333332ull,interval,&deadline)&&deadline==77);cases++;
-    assert(fg_pacing_interval_ms(40.f,INT_MIN)==40.f);cases++;
-    interval=fg_pacing_interval_ms(40.f,INT_MAX);assert(isfinite(interval)&&interval>0&&interval<1.f);cases++;
+    assert(fg_pacing_interval_ms(40.f,INT_MIN,false,0.f)==40.f);cases++;
+    interval=fg_pacing_interval_ms(40.f,INT_MAX,false,0.f);assert(isfinite(interval)&&interval>0&&interval<1.f);cases++;
     double old_period=16.,bounded_period=16.;
     for(unsigned i=0;i<32;i++) {
-        float paced=fg_pacing_interval_ms((float)bounded_period,60);
+        float paced=fg_pacing_interval_ms((float)bounded_period,60,false,0.f);
         assert(paced==1000.f/60.f);
         old_period=12.+old_period*.5;bounded_period=12.+paced*.5;
     }

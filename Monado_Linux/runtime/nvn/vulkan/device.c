@@ -1079,10 +1079,17 @@ void vk_framegen_drain(void) {
     FgPresentResult result={0};
     if(fg_presenter_inspect(&fg_presenter,true,&result))fg_result_require(&result);
 }
+static float fg_output_interval_ms(float measured_ms) {
+    extern float xcde_effective_present_fps(void);
+    float target = xcde_effective_present_fps();
+    bool fifo = actual_present_mode == VK_PRESENT_MODE_FIFO_KHR;
+    // This runs on the render thread. The worker only uses the captured period.
+    float refresh = target == 0.f && fifo ? vk_display_hz() : 0.f;
+    return fg_pacing_interval_ms(measured_ms, target, fifo, refresh);
+}
 static bool fg_enqueue_pair(Frame generated,Frame real,uint64_t sequence,VkSwapchainKHR chain,float frame_ms,bool suboptimal) {
     const FgPresentOps ops={fg_pacing_now,SDL_GetTicksNS,fg_worker_wait,fg_worker_ready,fg_worker_present};
     if(!fg_presenter_start(&fg_presenter,&ops))return false;
-    extern float xcde_effective_present_fps(void);
     VkQueue queue=g_vk.fg_queue[0]?g_vk.fg_queue[0]:g_vk.queue;
     static bool worker_reported;
     if(!worker_reported) {
@@ -1092,7 +1099,7 @@ static bool fg_enqueue_pair(Frame generated,Frame real,uint64_t sequence,VkSwapc
     }
     FgPresentJob job={.device=g_vk.dev,.queue=queue,.swapchain=chain,.timeline=g_vk.timeline,
         .done={done_sem[generated.image],done_sem[real.image]},.image={generated.image,real.image},
-        .sequence=sequence,.interval_ms=fg_pacing_interval_ms(frame_ms,xcde_effective_present_fps()),
+        .sequence=sequence,.interval_ms=fg_output_interval_ms(frame_ms),
         .present=sc_present,.shared_queue=queue==g_vk.queue,.suboptimal=suboptimal};
     FgPresentResult previous={0};uint64_t start=fg_pacing_now();
     bool enqueued=fg_presenter_enqueue(&fg_presenter,&job,&previous);
@@ -1223,9 +1230,8 @@ void vk_frame_end(const char *shot_path) {
         vk_wait_seq(ahead ? prepared_sequence : seq);
         uint64_t now = fg_pacing_now();
         if (now >= before) fg_timing.gpu_wait_ns += now - before;
-        extern float xcde_effective_present_fps(void);
         FgPacingPlan plan;
-        float interval = fg_pacing_interval_ms(frame_ms, xcde_effective_present_fps());
+        float interval = fg_output_interval_ms(frame_ms);
         if (fg_pacing_schedule(&fg_output_clock, now, interval, &plan)) {
             deadline = plan.real_ns;
             fg_timing.rebases += plan.rebased;
